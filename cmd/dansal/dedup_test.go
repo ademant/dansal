@@ -26,8 +26,8 @@ func setupDedupTestDB(t *testing.T) *sql.DB {
 		t.Fatalf("createTables: %v", err)
 	}
 	migrateDB()
-	if berlinLoc == nil {
-		berlinLoc, _ = time.LoadLocation("Europe/Berlin")
+	if instanceTimezone == nil {
+		instanceTimezone, _ = time.LoadLocation("Europe/Berlin")
 	}
 	return conn
 }

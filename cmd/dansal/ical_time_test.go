@@ -205,12 +205,12 @@ END:VCALENDAR`))
 }
 
 // withInstanceZone points the instance zone at Europe/Berlin for the test.
-// berlinLoc is normally populated from config during start-up.
+// instanceTimezone is normally populated from config during start-up.
 func withInstanceZone(t *testing.T) {
 	t.Helper()
-	prev := berlinLoc
-	berlinLoc = berlin()
-	t.Cleanup(func() { berlinLoc = prev })
+	prev := instanceTimezone
+	instanceTimezone = berlin()
+	t.Cleanup(func() { instanceTimezone = prev })
 }
 
 // The regression itself: parseICalToRequests (preview) and parseICalBody

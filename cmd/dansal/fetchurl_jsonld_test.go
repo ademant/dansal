@@ -38,8 +38,8 @@ func futureDate(daysFromNow int, withTime bool) string {
 }
 
 func TestParseJSONLDBodyBareEvent(t *testing.T) {
-	if berlinLoc == nil {
-		berlinLoc, _ = time.LoadLocation("Europe/Berlin")
+	if instanceTimezone == nil {
+		instanceTimezone, _ = time.LoadLocation("Europe/Berlin")
 	}
 	body := jsonldPage(fmt.Sprintf(`{
 		"@context": "https://schema.org",
@@ -90,8 +90,8 @@ func TestParseJSONLDBodyBareEvent(t *testing.T) {
 }
 
 func TestParseJSONLDBodyGraphWrapper(t *testing.T) {
-	if berlinLoc == nil {
-		berlinLoc, _ = time.LoadLocation("Europe/Berlin")
+	if instanceTimezone == nil {
+		instanceTimezone, _ = time.LoadLocation("Europe/Berlin")
 	}
 	body := jsonldPage(fmt.Sprintf(`{
 		"@context": "https://schema.org",
@@ -111,8 +111,8 @@ func TestParseJSONLDBodyGraphWrapper(t *testing.T) {
 }
 
 func TestParseJSONLDBodyItemListWrapper(t *testing.T) {
-	if berlinLoc == nil {
-		berlinLoc, _ = time.LoadLocation("Europe/Berlin")
+	if instanceTimezone == nil {
+		instanceTimezone, _ = time.LoadLocation("Europe/Berlin")
 	}
 	body := jsonldPage(fmt.Sprintf(`{
 		"@context": "https://schema.org",
@@ -153,8 +153,8 @@ func TestParseJSONLDBodyNoScriptAtAll(t *testing.T) {
 }
 
 func TestParseJSONLDBodyISO8601Duration(t *testing.T) {
-	if berlinLoc == nil {
-		berlinLoc, _ = time.LoadLocation("Europe/Berlin")
+	if instanceTimezone == nil {
+		instanceTimezone, _ = time.LoadLocation("Europe/Berlin")
 	}
 	body := jsonldPage(fmt.Sprintf(`{
 		"@context": "https://schema.org", "@type": "Event", "name": "Atelier",
@@ -176,8 +176,8 @@ func TestParseJSONLDBodyISO8601Duration(t *testing.T) {
 }
 
 func TestParseJSONLDBodyDateOnlyStartDateFlagsFallback(t *testing.T) {
-	if berlinLoc == nil {
-		berlinLoc, _ = time.LoadLocation("Europe/Berlin")
+	if instanceTimezone == nil {
+		instanceTimezone, _ = time.LoadLocation("Europe/Berlin")
 	}
 	body := jsonldPage(fmt.Sprintf(`{
 		"@context": "https://schema.org", "@type": "Event", "name": "Stage",
@@ -205,8 +205,8 @@ func TestParseJSONLDBodyDateOnlyStartDateFlagsFallback(t *testing.T) {
 }
 
 func TestParseJSONLDBodyPastEventFilteredOut(t *testing.T) {
-	if berlinLoc == nil {
-		berlinLoc, _ = time.LoadLocation("Europe/Berlin")
+	if instanceTimezone == nil {
+		instanceTimezone, _ = time.LoadLocation("Europe/Berlin")
 	}
 	body := jsonldPage(`{"@context": "https://schema.org", "@type": "Event", "name": "Old", "startDate": "2020-01-01T20:00:00+01:00", "endDate": "2020-01-01T23:00:00+01:00"}`)
 	reqs, err := parseJSONLDBody(body, FetchSource{URL: "https://example.org/p"}, nil)
@@ -219,8 +219,8 @@ func TestParseJSONLDBodyPastEventFilteredOut(t *testing.T) {
 }
 
 func TestParseJSONLDBodyFreeOffer(t *testing.T) {
-	if berlinLoc == nil {
-		berlinLoc, _ = time.LoadLocation("Europe/Berlin")
+	if instanceTimezone == nil {
+		instanceTimezone, _ = time.LoadLocation("Europe/Berlin")
 	}
 	body := jsonldPage(fmt.Sprintf(`{
 		"@context": "https://schema.org", "@type": "Event", "name": "Bal gratuit",
@@ -237,8 +237,8 @@ func TestParseJSONLDBodyFreeOffer(t *testing.T) {
 }
 
 func TestParseJSONLDBodyPaidOffer(t *testing.T) {
-	if berlinLoc == nil {
-		berlinLoc, _ = time.LoadLocation("Europe/Berlin")
+	if instanceTimezone == nil {
+		instanceTimezone, _ = time.LoadLocation("Europe/Berlin")
 	}
 	body := jsonldPage(fmt.Sprintf(`{
 		"@context": "https://schema.org", "@type": "Event", "name": "Concert",
@@ -259,8 +259,8 @@ func TestParseJSONLDBodyPaidOffer(t *testing.T) {
 // "location" is a bare {"@id": "..."} pointing at a Place node factored out
 // elsewhere in @graph, rather than an inline object.
 func TestParseJSONLDBodyLocationByIDReference(t *testing.T) {
-	if berlinLoc == nil {
-		berlinLoc, _ = time.LoadLocation("Europe/Berlin")
+	if instanceTimezone == nil {
+		instanceTimezone, _ = time.LoadLocation("Europe/Berlin")
 	}
 	body := jsonldPage(fmt.Sprintf(`{
 		"@context": "https://schema.org",
@@ -302,8 +302,8 @@ func TestParseJSONLDBodyLocationByIDReference(t *testing.T) {
 // a location that inlines real fields alongside its own @id must be used
 // as-is, not replaced by a (possibly different) indexed node.
 func TestParseJSONLDBodyInlineLocationNotOverriddenByID(t *testing.T) {
-	if berlinLoc == nil {
-		berlinLoc, _ = time.LoadLocation("Europe/Berlin")
+	if instanceTimezone == nil {
+		instanceTimezone, _ = time.LoadLocation("Europe/Berlin")
 	}
 	body := jsonldPage(fmt.Sprintf(`{
 		"@context": "https://schema.org", "@type": "Event", "name": "Bal",

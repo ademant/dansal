@@ -230,7 +230,7 @@ func eventBannerDateTime(event Event) string {
 	if err != nil {
 		return ""
 	}
-	return t.In(berlinLoc).Format("2 Jan 2006 · 15:04")
+	return t.In(instanceTimezone).Format("2 Jan 2006 · 15:04")
 }
 
 // truncateRunes shortens s to at most max runes, appending an ellipsis if it

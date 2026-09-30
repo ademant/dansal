@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"gopkg.in/yaml.v2"
 )
@@ -125,6 +126,23 @@ type ServerConfig struct {
 	// let an instance serving a different dance/event community ship its own
 	// vocabulary without a code fork. Mirrors dansal_web's i18n_file override.
 	TagsFile string `yaml:"tags_file"`
+
+	// Timezone (#1394) is the IANA zone name (e.g. "America/New_York") every
+	// timezone-less event input is parsed in and every stored epoch is
+	// rendered in — the authoritative instance-wide event-display zone.
+	// events.start_time/end_time are stored as timezone-neutral Unix epochs,
+	// so this setting is what turns one back into a wall-clock time, not a
+	// per-row column. Defaults to "Europe/Berlin" for backwards
+	// compatibility with every instance that predates this setting.
+	// Explicit RFC3339 offsets and UTC timestamps in event input are
+	// unaffected — they carry their own absolute instant regardless of this
+	// setting; only naive/floating input is anchored here. See instanceLoc
+	// in ical_time.go, which every parsing/rendering call site already goes
+	// through. Validated with time.LoadLocation at startup — an invalid
+	// value fails startup outright rather than silently falling back, since
+	// serving requests with a silently-wrong zone would misdisplay every
+	// event without any indication something is off.
+	Timezone string `yaml:"timezone"`
 }
 
 type SMTPConfig struct {
@@ -196,6 +214,19 @@ func applyEnvOverrides(cfg *Config) {
 	}
 }
 
+// validateInstanceTimezone parses server.timezone (#1394) as an IANA zone
+// name, wrapping the error with the setting name so it's actionable wherever
+// it surfaces — a bare time.LoadLocation error ("unknown time zone Foo")
+// doesn't say which config key is wrong. Shared by main()'s startup check
+// (fatal) and reloadConfig's SIGHUP check (logged, keeps the previous zone).
+func validateInstanceTimezone(name string) (*time.Location, error) {
+	loc, err := time.LoadLocation(name)
+	if err != nil {
+		return nil, fmt.Errorf("server.timezone %q is not a valid IANA time zone name: %w", name, err)
+	}
+	return loc, nil
+}
+
 func applyDefaults(cfg *Config) {
 	if cfg.Server.Port == 0 {
 		cfg.Server.Port = 8000
@@ -238,6 +269,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.ImageFormat == "" {
 		cfg.Server.ImageFormat = "avif"
+	}
+	if cfg.Server.Timezone == "" {
+		cfg.Server.Timezone = "Europe/Berlin"
 	}
 	if cfg.Server.AdminSocket == "" {
 		cfg.Server.AdminSocket = "./dansal.sock"

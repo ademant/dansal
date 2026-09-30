@@ -33,6 +33,7 @@ type socketRequest struct {
 	MatrixUsername        string `json:"matrix_username,omitempty"`
 	MatrixPassword        string `json:"matrix_password,omitempty"`
 	HeartbeatIntervalMins int    `json:"heartbeat_interval_mins,omitempty"`
+	Timezone              string `json:"timezone,omitempty"`
 }
 
 type socketResponse struct {

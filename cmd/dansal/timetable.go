@@ -221,7 +221,7 @@ func fetchTimetable(q querier, eventID int) ([]TimetableEntry, error) {
 	// start time. Re-sort treating "no date" as the event's own start date.
 	var startEpoch int64
 	if err := q.QueryRow("SELECT start_time FROM events WHERE id = ?", eventID).Scan(&startEpoch); err == nil && startEpoch > 0 {
-		sortTimetableEntries(entries, time.Unix(startEpoch, 0).In(berlinLoc).Format("2006-01-02"))
+		sortTimetableEntries(entries, time.Unix(startEpoch, 0).In(instanceTimezone).Format("2006-01-02"))
 	}
 	return entries, nil
 }

@@ -177,3 +177,28 @@ func cmdHeartbeatSet(args []string) {
 	}
 	fmt.Printf("Heartbeat interval set to %d minutes.\n", *interval)
 }
+
+func cmdTimezoneShow(_ []string) {
+	resp := send(socketPath, request{Cmd: "timezone-get"})
+	if !resp.OK {
+		die("%s", resp.Error)
+	}
+	var data map[string]string
+	json.Unmarshal(resp.Data, &data)
+	fmt.Printf("Timezone: %s\n", data["timezone"])
+}
+
+func cmdTimezoneSet(args []string) {
+	fs := flag.NewFlagSet("timezone-set", flag.ExitOnError)
+	fs.Usage = func() { fmt.Println(commandHelp["timezone-set"]) }
+	tz := fs.String("tz", "", "IANA time zone name")
+	fs.Parse(args)
+	if *tz == "" {
+		die("--tz is required")
+	}
+	resp := send(socketPath, request{Cmd: "timezone-set", Timezone: *tz})
+	if !resp.OK {
+		die("%s", resp.Error)
+	}
+	fmt.Printf("Timezone set to %s.\n", *tz)
+}

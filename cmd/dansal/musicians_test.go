@@ -25,7 +25,7 @@ func TestGetMusiciansWithEventCountsNextEventAt(t *testing.T) {
 	}
 	musID, _ = res.LastInsertId()
 
-	now := time.Now().In(berlinLoc)
+	now := time.Now().In(instanceTimezone)
 	pastID, _, _, err := insertEvent(db, EventInput{
 		Title: "Past Gig", StartTime: now.Add(-48 * time.Hour).Unix(), EndTime: now.Add(-47 * time.Hour).Unix(), IsPublished: true,
 	})

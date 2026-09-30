@@ -457,7 +457,7 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 	// Compute dates from recurrence only when start_date is provided.
 	var dates []time.Time
 	if req.StartDate != "" {
-		startDate, err := time.ParseInLocation("2006-01-02", req.StartDate, berlinLoc)
+		startDate, err := time.ParseInLocation("2006-01-02", req.StartDate, instanceTimezone)
 		if err != nil {
 			writeError(w, "invalid start_date: "+err.Error(), http.StatusBadRequest)
 			return
@@ -467,7 +467,7 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 			interval = 14
 		}
 		if req.EndDate != "" {
-			endDate, err := time.ParseInLocation("2006-01-02", req.EndDate, berlinLoc)
+			endDate, err := time.ParseInLocation("2006-01-02", req.EndDate, instanceTimezone)
 			if err != nil {
 				writeError(w, "invalid end_date", http.StatusBadRequest)
 				return
@@ -780,7 +780,7 @@ func addSeriesDate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "date is required", http.StatusBadRequest)
 		return
 	}
-	d, err := time.ParseInLocation("2006-01-02", req.Date, berlinLoc)
+	d, err := time.ParseInLocation("2006-01-02", req.Date, instanceTimezone)
 	if err != nil {
 		writeError(w, "invalid date", http.StatusBadRequest)
 		return
@@ -957,7 +957,7 @@ func combineDateAndTime(d time.Time, timeStr string) int64 {
 		h, _ = strconv.Atoi(parts[0])
 		m, _ = strconv.Atoi(parts[1])
 	}
-	t := time.Date(d.Year(), d.Month(), d.Day(), h, m, 0, 0, berlinLoc)
+	t := time.Date(d.Year(), d.Month(), d.Day(), h, m, 0, 0, instanceTimezone)
 	return t.Unix()
 }
 

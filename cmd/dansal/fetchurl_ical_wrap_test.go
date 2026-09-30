@@ -78,8 +78,8 @@ func TestExtractVCalendarBody(t *testing.T) {
 }
 
 func TestParseICalBodyToleratesHTMLWrapper(t *testing.T) {
-	if berlinLoc == nil {
-		berlinLoc, _ = time.LoadLocation("Europe/Berlin")
+	if instanceTimezone == nil {
+		instanceTimezone, _ = time.LoadLocation("Europe/Berlin")
 	}
 	entries, err := parseICalBody([]byte(typo3WrappedICalFixture), FetchSource{Type: "ical", URL: "https://www.hessen-szene.de/"}, nil)
 	if err != nil {

@@ -10,19 +10,21 @@ import (
 	ics "github.com/arran4/golang-ical"
 )
 
-// instanceLoc returns the zone every event time is anchored to.
+// instanceLoc returns the zone every event time is anchored to — the
+// configured server.timezone (#1394; defaults to Europe/Berlin), loaded into
+// instanceTimezone at startup and re-validated on a config reload (main.go).
 //
 // events.start_time is an INTEGER epoch and epochToLocal renders it through
 // this zone, so an event always displays as its instance-local wall clock.
 // Making the anchoring zone a package-level variable keeps it injectable in
-// tests instead of forcing every helper to dereference a nil berlinLoc.
+// tests instead of forcing every helper to dereference a nil instanceTimezone.
 var instanceLoc = func() *time.Location {
-	if berlinLoc != nil {
-		return berlinLoc
+	if instanceTimezone != nil {
+		return instanceTimezone
 	}
-	// berlinLoc is populated from config during start-up. Fall back to UTC so
-	// helpers stay safe (and testable) when they run before that or in a
-	// bare test binary.
+	// instanceTimezone is populated from config during start-up. Fall back
+	// to UTC so helpers stay safe (and testable) when they run before that
+	// or in a bare test binary.
 	return time.UTC
 }
 

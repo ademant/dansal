@@ -22,6 +22,58 @@ import (
 var siteConfigLangs = []string{"de", "en", "fr", "nl", "it", "es", "br"}
 var siteAssetExts = []string{".svg", ".avif", ".jpg", ".gif"}
 
+// commonTimezones is a curated list of IANA zone names covering every
+// continent, for the server.timezone dropdown (#1394). Go's time package
+// exposes no portable way to enumerate every zone the host's tzdata carries
+// (that needs walking a filesystem path that varies by OS/packaging), and a
+// full ~400-entry IANA list would dwarf the handful an instance actually
+// needs — one representative zone per UTC-offset-and-DST-rule region is
+// enough for an admin to find theirs, and buildTimezoneOptions below always
+// keeps the current value selectable even if it isn't in this list.
+var commonTimezones = []string{
+	"UTC",
+	"Europe/London", "Europe/Dublin", "Europe/Lisbon",
+	"Europe/Berlin", "Europe/Paris", "Europe/Madrid", "Europe/Rome", "Europe/Amsterdam",
+	"Europe/Brussels", "Europe/Vienna", "Europe/Zurich", "Europe/Warsaw", "Europe/Prague",
+	"Europe/Budapest", "Europe/Stockholm", "Europe/Oslo", "Europe/Copenhagen",
+	"Europe/Helsinki", "Europe/Athens", "Europe/Bucharest", "Europe/Sofia",
+	"Europe/Kyiv", "Europe/Moscow", "Europe/Istanbul",
+	"America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
+	"America/Anchorage", "America/Sao_Paulo", "America/Argentina/Buenos_Aires",
+	"America/Mexico_City", "America/Bogota", "America/Toronto", "America/Vancouver",
+	"Pacific/Honolulu", "Pacific/Auckland", "Pacific/Fiji",
+	"Asia/Jerusalem", "Asia/Dubai", "Asia/Karachi", "Asia/Kolkata", "Asia/Dhaka",
+	"Asia/Bangkok", "Asia/Jakarta", "Asia/Shanghai", "Asia/Hong_Kong", "Asia/Tokyo",
+	"Asia/Seoul", "Asia/Singapore", "Asia/Manila",
+	"Africa/Cairo", "Africa/Lagos", "Africa/Johannesburg", "Africa/Nairobi",
+	"Australia/Perth", "Australia/Adelaide", "Australia/Sydney", "Australia/Brisbane",
+}
+
+// buildTimezoneOptions returns commonTimezones with current inserted in
+// alphabetical position if it isn't already one of them, so a select built
+// from this list can always show the true effective value as selected
+// instead of silently falling back to whatever option happens to be first.
+func buildTimezoneOptions(current string) []string {
+	for _, z := range commonTimezones {
+		if z == current {
+			return commonTimezones
+		}
+	}
+	out := make([]string, 0, len(commonTimezones)+1)
+	inserted := false
+	for _, z := range commonTimezones {
+		if !inserted && current != "" && current < z {
+			out = append(out, current)
+			inserted = true
+		}
+		out = append(out, z)
+	}
+	if !inserted && current != "" {
+		out = append(out, current)
+	}
+	return out
+}
+
 type dance struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
@@ -216,13 +268,22 @@ type siteConfigData struct {
 	RescheduledBadgeDays string
 	DateFormat           string // "" locale-based, "de" DD.MM.YYYY
 	TimeFormatSite       string // "" web.yaml default, "24h", "12h"
-	SameAs               string // one external profile URL per line (#1296)
-	HomeIntroYAML        string // #1298: lang -> homepage intro paragraph, as YAML text
-	DescBallYAML         string // #1290: lang -> default event description for a ball/fest-noz-tagged event, as YAML text
-	DescWorkshopYAML     string // #1290: lang -> default event description for a workshop-tagged event, as YAML text
-	DescFestivalYAML     string // #1290: lang -> default event description for a festival-tagged event, as YAML text
-	NoDB                 bool
-	NoImagesDir          bool
+	// Timezone and TimezoneOptions (#1394) are authoritative in the API's
+	// own config.yaml (server.timezone), not a site_settings value like
+	// DateFormat/TimeFormatSite above — read/written via the admin socket
+	// (timezone-get/timezone-set), never through db. TimezoneOptions is a
+	// curated common-zone list with the current effective value always
+	// present even if it isn't one of the curated options.
+	Timezone         string
+	TimezoneOptions  []string
+	TimezoneError    string
+	SameAs           string // one external profile URL per line (#1296)
+	HomeIntroYAML    string // #1298: lang -> homepage intro paragraph, as YAML text
+	DescBallYAML     string // #1290: lang -> default event description for a ball/fest-noz-tagged event, as YAML text
+	DescWorkshopYAML string // #1290: lang -> default event description for a workshop-tagged event, as YAML text
+	DescFestivalYAML string // #1290: lang -> default event description for a festival-tagged event, as YAML text
+	NoDB             bool
+	NoImagesDir      bool
 }
 
 func siteConfigPageHandler(cfg *Config, tmpls *Templates, db *sql.DB) http.HandlerFunc {
@@ -233,6 +294,20 @@ func siteConfigPageHandler(cfg *Config, tmpls *Templates, db *sql.DB) http.Handl
 			Flash:          r.URL.Query().Get("flash"),
 			ImpressumLangs: siteConfigLangs,
 		}
+
+		// #1394: authoritative in the API's own config.yaml, fetched over the
+		// admin socket — independent of web_db_path, so this runs even when
+		// db is nil (unlike every field below, which needs the web DB).
+		var tzData struct {
+			Timezone string `json:"timezone"`
+		}
+		if err := getSocketData(cfg.AdminSocket, "timezone-get", &tzData); err != nil {
+			data.TimezoneError = err.Error()
+		} else {
+			data.Timezone = tzData.Timezone
+		}
+		data.TimezoneOptions = buildTimezoneOptions(data.Timezone)
+
 		if db == nil {
 			data.NoDB = true
 			d.Data = data
@@ -450,5 +525,35 @@ func siteConfigRelayRedeliverHandler(cfg *Config) http.HandlerFunc {
 		}
 		resp.Body.Close()
 		http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Re-delivering events to relay followers in the background"), http.StatusSeeOther)
+	}
+}
+
+// siteConfigTimezoneHandler sets server.timezone via the admin socket
+// (#1394) — kept as its own form/handler, separate from siteConfigSaveHandler,
+// the same way relay-assets and relay-redeliver are: a change here is
+// authoritative in the API's own config.yaml, not a site_settings value, and
+// the confirmation prompt in the template (data-confirm) is specific to the
+// real consequence of this one field (every existing event's displayed
+// wall-clock time changes) rather than the generic "settings saved" of the
+// rest of the page.
+func siteConfigTimezoneHandler(cfg *Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Error: bad request"), http.StatusSeeOther)
+			return
+		}
+		tz := strings.TrimSpace(r.FormValue("timezone"))
+		var callerID int
+		if u := getSessionUser(r); u != nil {
+			callerID = u.ID
+		}
+		if _, ok := socketFlashRedirect(w, r, cfg, "/site-config", "Timezone update failed", socketRequest{
+			Cmd:      "timezone-set",
+			Timezone: tz,
+		}); !ok {
+			return
+		}
+		log.Printf("audit: server.timezone set to %s by user=%d", tz, callerID)
+		http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Timezone set to "+tz+" — applied immediately, no restart needed"), http.StatusSeeOther)
 	}
 }

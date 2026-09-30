@@ -4,6 +4,49 @@
 {{with .Data}}
 {{if .Flash}}<div class="alert alert-ok">{{.Flash}}</div>{{end}}
 
+<!-- Event timezone (#1394) is authoritative in the API's own config.yaml via
+     the admin socket, not a site_settings value — so unlike everything below
+     it never needs web_db_path and must not live inside the NoDB-gated form
+     (nesting a second <form> inside the main settings form would also be
+     invalid HTML). -->
+<div style="max-width:680px;margin-bottom:1rem">
+<div class="card">
+  <div class="card-title">Event timezone</div>
+  {{if .TimezoneError}}
+  <div class="hint" style="color:var(--danger,#c0392b)">Could not read the current timezone: {{.TimezoneError}}</div>
+  {{else}}
+  <div class="form-group">
+    <label>Effective timezone: <strong>{{.Timezone}}</strong></label>
+    <div class="hint">
+      Every timezone-less event time (naive input, and floating iCal feed times) is interpreted in this
+      zone, and every stored event time is displayed in it. This is the API's own <code>server.timezone</code>
+      setting (config.yaml) — not a display preference like the date/time notation below.
+    </div>
+  </div>
+  <form method="POST" action="/site-config/timezone">
+    <div class="form-group">
+      <label for="timezone-input">Change to</label>
+      <input type="text" id="timezone-input" name="timezone" list="timezone-list" value="{{.Timezone}}"
+        placeholder="e.g. Europe/Berlin, America/New_York">
+      <datalist id="timezone-list">
+        {{range .TimezoneOptions}}<option value="{{.}}">{{end}}
+      </datalist>
+      <div class="hint">
+        Any IANA time zone name is accepted — start typing for suggestions, or enter one directly if
+        yours isn't listed. <strong>Changing this on a populated instance changes every existing event's
+        displayed wall-clock time.</strong> It does not rewrite any stored data, only how the same
+        underlying timestamp is interpreted and rendered. Applied immediately; no restart needed.
+      </div>
+    </div>
+    <button type="submit" class="btn btn-secondary"
+      data-confirm="Change the instance timezone? Every existing event's displayed date/time will change to match the new zone. This does not rewrite any stored data, only how it is displayed.">
+      Set timezone
+    </button>
+  </form>
+  {{end}}
+</div>
+</div>
+
 {{if .NoDB}}
 <div class="alert alert-danger">
   <strong>web_db_path not configured.</strong>

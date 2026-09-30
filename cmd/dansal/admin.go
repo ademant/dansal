@@ -48,6 +48,7 @@ type adminRequest struct {
 	MatrixPassword        string `json:"matrix_password,omitempty"`
 	HeartbeatIntervalMins int    `json:"heartbeat_interval_mins,omitempty"`
 	EventID               int    `json:"event_id,omitempty"`
+	Timezone              string `json:"timezone,omitempty"`
 }
 
 type adminResponse struct {
@@ -123,6 +124,7 @@ var mutatingAdminCmds = map[string]bool{
 	"matrix-set":               true,
 	"matrix-login":             true,
 	"heartbeat-set":            true,
+	"timezone-set":             true,
 	"fetch-all":                true,
 	"prune-images":             true,
 	"mail-bounces":             true,
@@ -157,6 +159,8 @@ func adminAuditTarget(req adminRequest) string {
 		return fmt.Sprintf("matrix_homeserver=%s matrix_username=%s", req.MatrixHomeserver, req.MatrixUsername)
 	case "heartbeat-set":
 		return fmt.Sprintf("interval_mins=%d", req.HeartbeatIntervalMins)
+	case "timezone-set":
+		return "timezone=" + req.Timezone
 	case "delete-event":
 		return fmt.Sprintf("event_id=%d", req.EventID)
 	default:
@@ -262,6 +266,10 @@ func dispatchAdminCmdInner(req adminRequest) adminResponse {
 		return adminHeartbeatGet()
 	case "heartbeat-set":
 		return adminHeartbeatSet(req)
+	case "timezone-get":
+		return adminTimezoneGet()
+	case "timezone-set":
+		return adminTimezoneSet(req)
 	case "fetch-all":
 		return adminFetchAll()
 	case "prune-images":

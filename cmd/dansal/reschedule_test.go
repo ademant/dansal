@@ -53,8 +53,8 @@ func TestInsertEventRecordsReschedule(t *testing.T) {
 		t.Fatalf("createTables: %v", err)
 	}
 	migrateDB()
-	if berlinLoc == nil {
-		berlinLoc, _ = time.LoadLocation("Europe/Berlin")
+	if instanceTimezone == nil {
+		instanceTimezone, _ = time.LoadLocation("Europe/Berlin")
 	}
 
 	const origStart = int64(1_800_000_000)

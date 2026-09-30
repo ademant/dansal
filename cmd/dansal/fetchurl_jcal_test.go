@@ -63,8 +63,8 @@ func jcalFixtureFromDansal(t *testing.T, events []Event) []byte {
 }
 
 func TestParseBodyToRequestsJcal(t *testing.T) {
-	if berlinLoc == nil {
-		berlinLoc, _ = time.LoadLocation("Europe/Berlin")
+	if instanceTimezone == nil {
+		instanceTimezone, _ = time.LoadLocation("Europe/Berlin")
 	}
 	// Truncated to whole seconds: iCal's DTSTART/DTEND carry only second
 	// precision, so an untruncated start/end would never round-trip equal.

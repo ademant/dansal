@@ -368,15 +368,21 @@ func resolveLocationID(q querier, locID *int, loc EventLocationRequest) (int64, 
 
 // ── package-level state ────────────────────────────────────────────────────
 
-var berlinLoc *time.Location
+// instanceTimezone is the configured server.timezone (#1394), loaded by
+// time.LoadLocation in main() before anything serves requests and
+// re-validated on a SIGHUP config reload. See instanceLoc (ical_time.go),
+// which every parsing/rendering call site goes through instead of reading
+// this directly.
+var instanceTimezone *time.Location
 
 func epochToLocal(epoch int64) string {
-	return time.Unix(epoch, 0).In(berlinLoc).Format(time.RFC3339)
+	return time.Unix(epoch, 0).In(instanceTimezone).Format(time.RFC3339)
 }
 
 // parseTimeToUnix converts a time string to a Unix epoch. RFC3339 strings
-// carry their own offset; naive layouts have no zone and are treated as local
-// (Berlin) time to match how events are displayed. The layouts come from
+// carry their own offset; naive layouts have no zone and are treated as the
+// configured instance zone (server.timezone, #1394; instanceTimezone despite the
+// name) to match how events are displayed. The layouts come from
 // strutil.TimeLayouts (shared with the web frontend, #1035).
 func parseTimeToUnix(s string) (int64, error) {
 	for _, layout := range strutil.TimeLayouts {
@@ -385,7 +391,7 @@ func parseTimeToUnix(s string) (int64, error) {
 				return t.Unix(), nil
 			}
 		} else {
-			if t, err := time.ParseInLocation(layout, s, berlinLoc); err == nil {
+			if t, err := time.ParseInLocation(layout, s, instanceTimezone); err == nil {
 				return t.Unix(), nil
 			}
 		}
@@ -3926,7 +3932,7 @@ func bulkSetEventTime(w http.ResponseWriter, r *http.Request) {
 		if err := db.QueryRow("SELECT start_time, end_time FROM events WHERE id=?", id).Scan(&startEpoch, &endEpoch); err != nil {
 			continue
 		}
-		d := time.Unix(startEpoch, 0).In(berlinLoc)
+		d := time.Unix(startEpoch, 0).In(instanceTimezone)
 		newStart, newEnd := startEpoch, endEpoch
 		if req.StartTime != "" {
 			newStart = combineDateAndTime(d, req.StartTime)

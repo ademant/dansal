@@ -4476,6 +4476,19 @@ func reloadConfig(path string) {
 		log.Printf("Warning: port, db_path and admin_socket changes require a restart to take effect")
 	}
 
+	// #1394: unlike the startup path, an invalid zone here must not take the
+	// whole process down — log and keep the previous (already-valid) zone,
+	// same as loadConfig's own "keep running on a bad reload" philosophy.
+	if newCfg.Server.Timezone != config.Server.Timezone {
+		if loc, err := validateInstanceTimezone(newCfg.Server.Timezone); err != nil {
+			log.Printf("Config reload: %v — keeping %q", err, config.Server.Timezone)
+			newCfg.Server.Timezone = config.Server.Timezone
+		} else {
+			instanceTimezone = loc
+			log.Printf("server.timezone changed to %q — every event now displays in this zone", newCfg.Server.Timezone)
+		}
+	}
+
 	config = newCfg
 	rateLimiter = NewRateLimiter(config.Server.RateLimit, time.Minute)
 	loginRateLimiter = NewRateLimiter(config.Server.LoginRateLimit, time.Minute)
@@ -4508,11 +4521,6 @@ func main() {
 
 	var err error
 
-	berlinLoc, err = time.LoadLocation("Europe/Berlin")
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	configFilePath = *configPath
 	config, err = loadConfig(*configPath)
 	if err != nil {
@@ -4520,6 +4528,17 @@ func main() {
 		config = &Config{}
 	}
 	applyDefaults(config)
+
+	// #1394: server.timezone is the authoritative instance-wide zone every
+	// timezone-less event input is parsed in and every stored epoch is
+	// rendered in (see instanceTimezone/instanceLoc, ical_time.go). Validated
+	// here, before anything starts serving: an invalid IANA name fails
+	// startup outright rather than silently misdisplaying every event with
+	// no indication anything is wrong.
+	instanceTimezone, err = validateInstanceTimezone(config.Server.Timezone)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	if config.Server.InternalSharedSecret == "" {
 		log.Printf("warning: server.internal_shared_secret is unset — dansal-web's loopback API calls are NOT exempt from RateLimitMiddleware/ConnLimitMiddleware and share the same per-IP budget as all public traffic (rate_limit=%d/min, max_conns_per_ip=%d); set it to match dansal-web's internal_shared_secret (see #1118)", config.Server.RateLimit, config.Server.MaxConnsPerIP)

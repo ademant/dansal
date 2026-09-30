@@ -42,6 +42,19 @@ server:
   # for the file format and field meanings.
   # tags_file: /etc/dansal/tags.yaml
 
+  # IANA time zone name (e.g. "America/New_York") every timezone-less event
+  # input is parsed in and every stored event timestamp is rendered in.
+  # events.start_time/end_time are stored as timezone-neutral Unix epochs,
+  # so this is an instance-wide interpretation/display setting, not
+  # per-event. Explicit RFC3339 offsets and UTC ("Z") timestamps in event
+  # input keep their own absolute instant regardless of this setting; only
+  # naive/floating input (no offset) is anchored here. Defaults to
+  # "Europe/Berlin". An invalid zone name fails startup rather than silently
+  # misdisplaying every event. Changing this on a populated instance changes
+  # every existing event's displayed wall-clock time — it does not rewrite
+  # stored data, only how the same epoch is interpreted/rendered.
+  timezone: Europe/Berlin
+
   # --- Authentication ---
 
   # Session token lifetime in hours.

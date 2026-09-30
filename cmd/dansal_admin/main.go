@@ -67,6 +67,7 @@ type request struct {
 	MatrixPassword        string `json:"matrix_password,omitempty"`
 	HeartbeatIntervalMins int    `json:"heartbeat_interval_mins,omitempty"`
 	EventID               int    `json:"event_id,omitempty"`
+	Timezone              string `json:"timezone,omitempty"`
 }
 
 type response struct {
@@ -230,6 +231,10 @@ func main() {
 		cmdHeartbeatShow(rest)
 	case "heartbeat-set":
 		cmdHeartbeatSet(rest)
+	case "timezone-show":
+		cmdTimezoneShow(rest)
+	case "timezone-set":
+		cmdTimezoneSet(rest)
 	case "fetch-all":
 		cmdFetchAll()
 	case "prune-images":
@@ -329,6 +334,10 @@ Matrix:
 Heartbeat:
   heartbeat-show                                     Show notification channel status
   heartbeat-set --interval N                         Set heartbeat check interval (minutes)
+
+Timezone:
+  timezone-show                                      Show the instance's effective event timezone
+  timezone-set --tz IANA_NAME                         Set the instance timezone (applies immediately, no restart)
 
   backup             [--output PATH]                 Business-data backup (db + images)
   incremental-backup --since RFC3339 [--output PATH] Backup only files changed since time
@@ -548,6 +557,24 @@ Set the heartbeat check interval.
 
 Flags:
   --interval  Check interval in minutes (required, must be > 0)`,
+
+	"timezone-show": `Usage: dansal_admin timezone-show
+
+Show the instance's effective event timezone (server.timezone in config.yaml).
+Every timezone-less event input is parsed in this zone, and every stored
+event timestamp is rendered in it.`,
+
+	"timezone-set": `Usage: dansal_admin timezone-set --tz IANA_NAME
+
+Set the instance's event timezone and apply it immediately — no restart or
+reload needed. Rejected if the name is not a valid IANA time zone.
+
+Changing this on a populated instance changes every existing event's
+displayed wall-clock time; it does not rewrite any stored data, only how the
+same underlying timestamp is interpreted and rendered.
+
+Flags:
+  --tz  IANA time zone name, e.g. America/New_York (required)`,
 
 	"export": `Usage: dansal_admin export --table TABLE [--output FILE] [--db PATH]
 

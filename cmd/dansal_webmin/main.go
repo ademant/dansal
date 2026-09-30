@@ -84,6 +84,7 @@ func main() {
 		mux.HandleFunc("POST /site-config", requireLogin(cfg, siteConfigSaveHandler(cfg, webDB)))
 		mux.HandleFunc("POST /site-config/relay/assets", requireLogin(cfg, siteConfigRelayAssetsHandler(cfg)))
 		mux.HandleFunc("POST /site-config/relay/redeliver", requireLogin(cfg, siteConfigRelayRedeliverHandler(cfg)))
+		mux.HandleFunc("POST /site-config/timezone", requireLogin(cfg, siteConfigTimezoneHandler(cfg)))
 		mux.HandleFunc("GET /bot-stats", requireLogin(cfg, botStatsPageHandler(cfg, tmpls)))
 		return mux
 	}

@@ -5,9 +5,9 @@
   "@context": "https://schema.org",
   "@type": "Place",
   "@id": "https://{{$.Domain}}/location/{{.ID}}",
-  "name": "{{.Location | js}}",
+  "name": "{{.Location}}",
   "url": "https://{{$.Domain}}/location/{{.ID}}"
-  {{- with .Address}}, "address": {"@type": "PostalAddress", "streetAddress": "{{. | js}}"{{with $.Data.Location.Town}}, "addressLocality": "{{. | js}}"{{end}}{{with $.Data.Location.Zipcode}}, "postalCode": "{{. | js}}"{{end}}{{with $.Data.Location.DisplayRegion}}, "addressRegion": "{{. | js}}"{{end}}{{with $.Data.Location.DisplayCountry}}, "addressCountry": "{{. | js}}"{{end}}}{{end}}
+  {{- with .Address}}, "address": {"@type": "PostalAddress", "streetAddress": "{{.}}"{{with $.Data.Location.Town}}, "addressLocality": "{{.}}"{{end}}{{with $.Data.Location.Zipcode}}, "postalCode": "{{.}}"{{end}}{{with $.Data.Location.DisplayRegion}}, "addressRegion": "{{.}}"{{end}}{{with $.Data.Location.DisplayCountry}}, "addressCountry": "{{.}}"{{end}}}{{end}}
   {{- if and .Latitude .Longitude}}, "geo": {"@type": "GeoCoordinates", "latitude": {{.Latitude}}, "longitude": {{.Longitude}}}{{end}}
   {{- with locationSameAsJSON .}}, "sameAs": {{.}}{{end}}
 }
@@ -17,8 +17,8 @@
   "@context": "https://schema.org",
   "@type": "BreadcrumbList",
   "itemListElement": [
-    {"@type": "ListItem", "position": 1, "name": "{{$.Strings.T "nav_events" | js}}", "item": "https://{{$.Domain}}/"},
-    {"@type": "ListItem", "position": 2, "name": "{{.Location | js}}", "item": "{{$.CanonicalURL | js}}"}
+    {"@type": "ListItem", "position": 1, "name": "{{$.Strings.T "nav_events"}}", "item": "https://{{$.Domain}}/"},
+    {"@type": "ListItem", "position": 2, "name": "{{.Location}}", "item": "{{$.CanonicalURL}}"}
   ]
 }
 </script>

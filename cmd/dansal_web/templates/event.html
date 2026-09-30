@@ -8,66 +8,66 @@
   "@context": "https://schema.org",
   "@graph": [
     {
-      "@id": "{{$.CanonicalURL | js}}",
+      "@id": "{{$.CanonicalURL}}",
       "@type": "Event",
-  "name": "{{.Title | js}}",
+  "name": "{{.Title}}",
   "startDate": "{{.StartTime}}",
   "endDate": "{{.EndTime}}",
   "eventStatus": "https://schema.org/{{if .IsCancelled}}EventCancelled{{else if .PreviousStartTime}}EventRescheduled{{else}}EventScheduled{{end}}",
   {{- with .PreviousStartTime}}
-  "previousStartDate": "{{. | js}}",
+  "previousStartDate": "{{.}}",
   {{- end}}
   "eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode",
-  "inLanguage": "{{$.LangCode | js}}"
+  "inLanguage": "{{$.LangCode}}"
   {{- with .Location}}
   {{- if .ID}}, "location": {"@id": "https://{{$.Domain}}/location/{{.ID}}"}
   {{- else}}, "location": {
     "@type": "Place",
-    "name": "{{.Location | js}}"
-    {{- with .Address}}, "address": {"@type": "PostalAddress", "streetAddress": "{{. | js}}"{{with $.Data.Event.Location.Town}}, "addressLocality": "{{. | js}}"{{end}}{{with $.Data.Event.Location.Zipcode}}, "postalCode": "{{. | js}}"{{end}}{{with $.Data.Event.Location.DisplayRegion}}, "addressRegion": "{{. | js}}"{{end}}{{with $.Data.Event.Location.DisplayCountry}}, "addressCountry": "{{. | js}}"{{end}}}{{end}}
+    "name": "{{.Location}}"
+    {{- with .Address}}, "address": {"@type": "PostalAddress", "streetAddress": "{{.}}"{{with $.Data.Event.Location.Town}}, "addressLocality": "{{.}}"{{end}}{{with $.Data.Event.Location.Zipcode}}, "postalCode": "{{.}}"{{end}}{{with $.Data.Event.Location.DisplayRegion}}, "addressRegion": "{{.}}"{{end}}{{with $.Data.Event.Location.DisplayCountry}}, "addressCountry": "{{.}}"{{end}}}{{end}}
     {{- if and .Latitude .Longitude}}, "geo": {"@type": "GeoCoordinates", "latitude": {{.Latitude}}, "longitude": {{.Longitude}}}{{end}}
   }{{end}}
   {{- end}}
-  {{- with .URL}}, "url": "{{. | js}}"{{end}}
+  {{- with .URL}}, "url": "{{.}}"{{end}}
   {{- $img := .ImageURL}}
   {{- if not $img}}{{if or $.Data.SeriesImageURL (and $.Data.Org $.Data.Org.ImageURL)}}{{$img = printf "/api/v1/event-banner/%d" .ID}}{{end}}{{end}}
   {{- if not $img}}{{$img = $.OGImage}}{{end}}
   {{- if and $img (hasPrefix $img "/")}}{{$img = printf "https://%s%s" $.Domain $img}}{{end}}
-  {{- if $img}}, "image": "{{$img | js}}"{{end}}
+  {{- if $img}}, "image": "{{$img}}"{{end}}
   {{- /* #1290: auto-composed default (type + dance styles + admission) when
        the organizer left no description, computed once in Go and reused
        verbatim for the visible "Description" section below — a crawler and
        a human visitor always see the same text. Only when that composition
        itself produced nothing (untagged, no dances, no pricing) does this
        fall back to the old title/location/date placeholder. */}}
-  {{- if .Description}}, "description": "{{.Description | plainTextDesc | js}}"
-  {{- else if $.Data.DefaultDescription}}, "description": "{{$.Data.DefaultDescription | plainTextDesc | js}}"
-  {{- else}}, "description": "{{.Title | js}}{{with .Location}} – {{.Location | js}}{{end}}{{with .StartTime}}, {{formatDate $.LangCode $.DateFormat . | js}}{{end}}"
+  {{- if .Description}}, "description": "{{.Description | plainTextDesc}}"
+  {{- else if $.Data.DefaultDescription}}, "description": "{{$.Data.DefaultDescription | plainTextDesc}}"
+  {{- else}}, "description": "{{.Title}}{{with .Location}} – {{.Location}}{{end}}{{with .StartTime}}, {{formatDate $.LangCode $.DateFormat .}}{{end}}"
   {{- end}}
   {{- if or .Musicians .Instructors}}, "performer": [
     {{- $pfirst := true}}
-    {{- range .Musicians}}{{if not $pfirst}}, {{end}}{{$murl := printf "https://%s/musicians/%d" $.Domain .ID}}{"@type": "MusicGroup", "@id": "{{$murl | js}}", "name": "{{.Bandname | js}}", "url": "{{$murl | js}}"{{with .Internetsite}}, "sameAs": ["{{. | js}}"]{{end}}}{{$pfirst = false}}{{end}}
-    {{- range .Instructors}}{{if not $pfirst}}, {{end}}{{$iurl := printf "https://%s/instructors/%d" $.Domain .ID}}{"@type": "Person", "@id": "{{$iurl | js}}", "name": "{{.Name | js}}", "url": "{{$iurl | js}}"{{with .Website}}, "sameAs": ["{{. | js}}"]{{end}}}{{$pfirst = false}}{{end}}
+    {{- range .Musicians}}{{if not $pfirst}}, {{end}}{{$murl := printf "https://%s/musicians/%d" $.Domain .ID}}{"@type": "MusicGroup", "@id": "{{$murl}}", "name": "{{.Bandname}}", "url": "{{$murl}}"{{with .Internetsite}}, "sameAs": ["{{.}}"]{{end}}}{{$pfirst = false}}{{end}}
+    {{- range .Instructors}}{{if not $pfirst}}, {{end}}{{$iurl := printf "https://%s/instructors/%d" $.Domain .ID}}{"@type": "Person", "@id": "{{$iurl}}", "name": "{{.Name}}", "url": "{{$iurl}}"{{with .Website}}, "sameAs": ["{{.}}"]{{end}}}{{$pfirst = false}}{{end}}
   ]{{end}}
   {{- if $.Data.Org}}, "organizer": {"@id": "https://{{$.Domain}}/org/{{$.Data.OrgSlug}}"}{{end}}
   {{- $keywords := eventKeywords $.Strings $.Data.TagMap .}}
-  {{- if $keywords}}, "keywords": [{{range $i, $k := $keywords}}{{if $i}}, {{end}}"{{$k | js}}"{{end}}]{{end}}
-  , "audience": {"@type": "Audience", "audienceType": "{{eventAudienceType .Tags | js}}"}
+  {{- if $keywords}}, "keywords": [{{range $i, $k := $keywords}}{{if $i}}, {{end}}"{{$k}}"{{end}}]{{end}}
+  , "audience": {"@type": "Audience", "audienceType": "{{eventAudienceType .Tags}}"}
   {{- $offersURL := $.CanonicalURL}}
   {{- if .URL}}{{$offersURL = .URL}}{{end}}
   {{- if .BookingURL}}{{$offersURL = .BookingURL}}{{end}}
   {{- with .Pricing}}
   {{- $curr := .Currency}}{{if not $curr}}{{$curr = "EUR"}}{{end}}
   {{- $validFrom := isoDate $.Data.Event.CreatedAt}}
-  {{- if eq .Type "free"}}, "isAccessibleForFree": true, "offers": {"@type": "Offer", "price": 0, "priceCurrency": "{{$curr | js}}", "availability": "https://schema.org/InStock", "validFrom": "{{$validFrom | js}}", "url": "{{$offersURL | js}}"}
+  {{- if eq .Type "free"}}, "isAccessibleForFree": true, "offers": {"@type": "Offer", "price": 0, "priceCurrency": "{{$curr}}", "availability": "https://schema.org/InStock", "validFrom": "{{$validFrom}}", "url": "{{$offersURL}}"}
   {{- else if eq .Type "donation"}}
     {{- /* #1293: never assert isAccessibleForFree either way for a
          donation event — no one checks payment at the door (so "false" is
          wrong), but badging it "free" risks an in-person donation ask
          reading as a bait-and-switch (so "true" is equally wrong). Only
          emit an Offer when there's an actual suggested amount to report. */}}
-    {{- if gt .Amount 0.0}}, "offers": {"@type": "Offer", "price": {{.Amount}}, "priceCurrency": "{{$curr | js}}", "availability": "https://schema.org/InStock", "validFrom": "{{$validFrom | js}}", "url": "{{$offersURL | js}}"}{{end}}
-  {{- else if eq .Type "single"}}, "offers": {"@type": "Offer", "price": {{.Amount}}, "priceCurrency": "{{$curr | js}}", "availability": "https://schema.org/InStock", "validFrom": "{{$validFrom | js}}", "url": "{{$offersURL | js}}"}
+    {{- if gt .Amount 0.0}}, "offers": {"@type": "Offer", "price": {{.Amount}}, "priceCurrency": "{{$curr}}", "availability": "https://schema.org/InStock", "validFrom": "{{$validFrom}}", "url": "{{$offersURL}}"}{{end}}
+  {{- else if eq .Type "single"}}, "offers": {"@type": "Offer", "price": {{.Amount}}, "priceCurrency": "{{$curr}}", "availability": "https://schema.org/InStock", "validFrom": "{{$validFrom}}", "url": "{{$offersURL}}"}
   {{- else if eq .Type "multiple"}}
     {{- $low := 0.0}}{{$high := 0.0}}{{$first := true}}
     {{- range .Prices}}
@@ -77,29 +77,29 @@
         {{- if gt .Amount $high}}{{$high = .Amount}}{{end}}
       {{- end}}
     {{- end}}
-    {{- if not $first}}, "offers": {"@type": "AggregateOffer", "lowPrice": {{$low}}, "highPrice": {{$high}}, "priceCurrency": "{{$curr | js}}", "offerCount": {{len .Prices}}, "availability": "https://schema.org/InStock", "validFrom": "{{$validFrom | js}}", "url": "{{$offersURL | js}}"}{{end}}
+    {{- if not $first}}, "offers": {"@type": "AggregateOffer", "lowPrice": {{$low}}, "highPrice": {{$high}}, "priceCurrency": "{{$curr}}", "offerCount": {{len .Prices}}, "availability": "https://schema.org/InStock", "validFrom": "{{$validFrom}}", "url": "{{$offersURL}}"}{{end}}
   {{- end}}
   {{- else}}
   {{- /* #1293: no structured Pricing at all, but a real ticket/registration
        link exists — surface it without fabricating a price or availability
        the site doesn't actually know. */}}
-  {{- if .BookingURL}}, "offers": {"@type": "Offer", "url": "{{.BookingURL | js}}", "availability": "https://schema.org/InStock"}{{end}}
+  {{- if .BookingURL}}, "offers": {"@type": "Offer", "url": "{{.BookingURL}}", "availability": "https://schema.org/InStock"}{{end}}
   {{- end}}
   }
   {{- if and .Location .ID}}, {
     "@id": "https://{{$.Domain}}/location/{{.Location.ID}}",
     "@type": "Place",
-    "name": "{{.Location.Location | js}}",
+    "name": "{{.Location.Location}}",
     "url": "https://{{$.Domain}}/location/{{.Location.ID}}"
-    {{- with .Location.Address}}, "address": {"@type": "PostalAddress", "streetAddress": "{{. | js}}", "addressLocality": "{{$.Data.Event.Location.Town | js}}"{{with $.Data.Event.Location.Zipcode}}, "postalCode": "{{. | js}}"{{end}}{{with $.Data.Event.Location.DisplayRegion}}, "addressRegion": "{{. | js}}"{{end}}{{with $.Data.Event.Location.DisplayCountry}}, "addressCountry": "{{. | js}}"{{end}}}{{end}}
+    {{- with .Location.Address}}, "address": {"@type": "PostalAddress", "streetAddress": "{{.}}", "addressLocality": "{{$.Data.Event.Location.Town}}"{{with $.Data.Event.Location.Zipcode}}, "postalCode": "{{.}}"{{end}}{{with $.Data.Event.Location.DisplayRegion}}, "addressRegion": "{{.}}"{{end}}{{with $.Data.Event.Location.DisplayCountry}}, "addressCountry": "{{.}}"{{end}}}{{end}}
     {{- if and .Location.Latitude .Location.Longitude}}, "geo": {"@type": "GeoCoordinates", "latitude": {{.Location.Latitude}}, "longitude": {{.Location.Longitude}}}{{end}}
     {{- with locationSameAsJSON .Location}}, "sameAs": {{.}}{{end}}
   }{{- end}}
   {{- if $.Data.Org}}, {
     "@id": "https://{{$.Domain}}/org/{{$.Data.OrgSlug}}",
     "@type": "Organization",
-    "name": "{{$.Data.Org.Name | js}}"
-    {{- with $.Data.Org.Website}}, "url": "{{. | js}}"{{end}}
+    "name": "{{$.Data.Org.Name}}"
+    {{- with $.Data.Org.Website}}, "url": "{{.}}"{{end}}
   }{{- end}}
   ]
 }
@@ -109,11 +109,11 @@
   "@context": "https://schema.org",
   "@type": "BreadcrumbList",
   "itemListElement": [
-    {"@type": "ListItem", "position": 1, "name": "{{$.Strings.T "nav_events" | js}}", "item": "https://{{$.Domain}}/"}
+    {"@type": "ListItem", "position": 1, "name": "{{$.Strings.T "nav_events"}}", "item": "https://{{$.Domain}}/"}
     {{- $pos := 2}}
-    {{- if $.Data.Org}}, {"@type": "ListItem", "position": {{$pos}}, "name": "{{$.Data.Org.Name | js}}", "item": "https://{{$.Domain}}/org/{{$.Data.OrgSlug}}"}{{$pos = add $pos 1}}{{end}}
-    {{- with .Location}}, {"@type": "ListItem", "position": {{$pos}}, "name": "{{.Location | js}}", "item": "https://{{$.Domain}}/location/{{.ID}}"}{{$pos = add $pos 1}}{{end}}
-    , {"@type": "ListItem", "position": {{$pos}}, "name": "{{.Title | js}}", "item": "{{$.CanonicalURL | js}}"}
+    {{- if $.Data.Org}}, {"@type": "ListItem", "position": {{$pos}}, "name": "{{$.Data.Org.Name}}", "item": "https://{{$.Domain}}/org/{{$.Data.OrgSlug}}"}{{$pos = add $pos 1}}{{end}}
+    {{- with .Location}}, {"@type": "ListItem", "position": {{$pos}}, "name": "{{.Location}}", "item": "https://{{$.Domain}}/location/{{.ID}}"}{{$pos = add $pos 1}}{{end}}
+    , {"@type": "ListItem", "position": {{$pos}}, "name": "{{.Title}}", "item": "{{$.CanonicalURL}}"}
   ]
 }
 </script>

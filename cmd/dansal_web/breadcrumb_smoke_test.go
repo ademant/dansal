@@ -418,6 +418,71 @@ func TestSmokeBreadcrumbJSONLD(t *testing.T) {
 		checkBlocks(t, string(body), false)
 	})
 
+	// #1406: {{. | js}} inside a <script type="application/ld+json"> block
+	// double-escapes, since html/template's own contextual JS-string escaper
+	// already runs on every {{action}} in a <script> element regardless of
+	// its type — piping through the plain "js" builtin on top of that
+	// doesn't suppress the auto-escaper (unlike the project's own "jsStr",
+	// which returns template.JS and is correctly recognized as pre-escaped).
+	// A syntactically-valid-JSON check alone (as checkBlocks does) can't
+	// catch this: doubled backslashes are still valid JSON, just wrong
+	// *content* once parsed. Assert the decoded value instead.
+	t.Run("special characters round-trip through JSON-LD without double-escaping (#1406)", func(t *testing.T) {
+		const special = `Kost ar c'hoat & "Fest" <Noz>`
+		body := renderEvent(Event{
+			ID:        10,
+			Title:     special,
+			StartTime: "2026-08-19T20:00:00Z",
+			EndTime:   "2026-08-20T01:00:00Z",
+			Location:  &Location{ID: 6, Location: special},
+		}, &Organization{ID: 3, Name: special}, "special-org")
+		checkBlocks(t, body, true)
+
+		ev := eventNodeOf(t, body)
+		if ev["name"] != special {
+			t.Errorf("event name = %q, want %q", ev["name"], special)
+		}
+
+		matches := reJSONLDBlocks.FindAllStringSubmatch(body, -1)
+		var breadcrumb map[string]any
+		for _, m := range matches {
+			var v map[string]any
+			json.Unmarshal([]byte(m[1]), &v)
+			if v["@type"] == "BreadcrumbList" {
+				breadcrumb = v
+				break
+			}
+		}
+		if breadcrumb == nil {
+			t.Fatal("no BreadcrumbList block found")
+		}
+		items, _ := breadcrumb["itemListElement"].([]any)
+		var sawOrg, sawLocation, sawTitle bool
+		for _, it := range items {
+			m := it.(map[string]any)
+			switch m["name"] {
+			case special:
+				switch {
+				case strings.Contains(m["item"].(string), "/org/"):
+					sawOrg = true
+				case strings.Contains(m["item"].(string), "/location/"):
+					sawLocation = true
+				case strings.Contains(m["item"].(string), "/events/"):
+					sawTitle = true
+				}
+			}
+		}
+		if !sawOrg {
+			t.Errorf("breadcrumb org name not decoded correctly: %v", items)
+		}
+		if !sawLocation {
+			t.Errorf("breadcrumb location name not decoded correctly: %v", items)
+		}
+		if !sawTitle {
+			t.Errorf("breadcrumb event title not decoded correctly: %v", items)
+		}
+	})
+
 	t.Run("instructor page", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/instructors/9", nil)
 		rec := httptest.NewRecorder()

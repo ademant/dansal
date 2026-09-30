@@ -8,8 +8,8 @@
   "@context": "https://schema.org",
   "@type": "BreadcrumbList",
   "itemListElement": [
-    {"@type": "ListItem", "position": 1, "name": "{{$.Strings.T "nav_events" | js}}", "item": "https://{{$.Domain}}/"},
-    {"@type": "ListItem", "position": 2, "name": "{{tagLabelOf $.Strings . | js}}", "item": "{{$.CanonicalURL | js}}"}
+    {"@type": "ListItem", "position": 1, "name": "{{$.Strings.T "nav_events"}}", "item": "https://{{$.Domain}}/"},
+    {"@type": "ListItem", "position": 2, "name": "{{tagLabelOf $.Strings .}}", "item": "{{$.CanonicalURL}}"}
   ]
 }
 </script>

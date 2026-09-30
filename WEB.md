@@ -42,6 +42,14 @@ All public. Each event/org/location/musician/instructor page carries `schema.org
 JSON-LD (`Event`/`Organization`/`Place`/`MusicGroup`/`Person`) and Open Graph
 tags for link previews and search-engine structured data.
 
+Every text field sourced from the API (`title`, `description`, location/organizer
+names, …) is rendered as **plain text**: dansal-web HTML/JS-escapes it for safe
+output wherever it appears (page body, `<meta>` tags, JSON-LD) and never
+interprets markup in it. This is a one-way guarantee about dansal-web's own
+output, not an entity-decoding step — a client that sends already
+HTML-entity-encoded text (see [API.md](API.md#events)) will see that literal
+encoded text reproduced (and re-escaped) rather than decoded.
+
 Event page `<title>` includes the event's start date (e.g. "Balfolk im
 Stadtgarten – 19 Sep 2027") so that recurring events at the same venue get a
 unique title per date instead of sharing one across occurrences. The meta

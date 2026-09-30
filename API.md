@@ -194,6 +194,8 @@ Public — no auth required, since this describes shape, not data. Response shap
 
 `required` is true when the field has no JSON `omitempty` tag. `enum` is present only on fields with a closed vocabulary. Not available for users, organizations, API keys, or publishers — those are account/credential-provisioning endpoints that stay admin-driven rather than a self-service integration target.
 
+**Enforcement.** The `OPTIONS`/schema-discovery reach of every write route is enforced by `TestWriteRoutesHaveSchemaDiscovery` in `cmd/dansal/phase21_schema_coverage_test.go`: each registered `POST`/`PUT`/`PATCH` path must either have an `OPTIONS` responder on the same path or a documented entry in `writeSchemaExemptions` in that file (see the map's comments for the per-family reasons). The test also fails on stale or redundant exemption entries, so removing a responder or retiring a route surfaces immediately rather than silently. HEAD is served on every GET route by the Go `http.ServeMux` (a `GET /path` pattern also matches HEAD, with the body suppressed); `TestHeadMatchesEveryGetRoute` pins that behaviour.
+
 ## Authentication Endpoints
 
 ### Login
@@ -1009,6 +1011,8 @@ Events support `Accept: text/calendar` for iCalendar and `Accept: application/at
 ```
 
 IDs are integers throughout the API, not strings.
+
+**`title`/`description` (and other free-text fields — `location`/address fields, musician/instructor names, organization names) must be plain text, not HTML.** dansal stores and displays these fields verbatim; it never HTML-decodes them on write. A client that runs a value through an HTML-rendering filter before sending it — e.g. WordPress's `get_the_title()`, which HTML-entity-encodes typographic characters (`'` → `&#8217;`, `–` → `&#8211;`) for safe display in a web page — will produce a literal, garbled `&#8217;`/`&#8211;` in the field once dansal stores and re-escapes it for its own HTML output. Send the raw, unfiltered text (e.g. WordPress's raw `post_title`, not the `the_title`-filtered value).
 
 ## Event Series
 

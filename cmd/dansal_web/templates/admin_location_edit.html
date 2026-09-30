@@ -1150,7 +1150,7 @@ function safeGoBack(){
   if(_formDirty&&!confirm('{{$.Strings.T "admin_unsaved_confirm"}}')){return;}
   _formDirty=false;
   if(window.history.length>1){history.back();}
-  else{location.href='{{if .Data.From}}{{.Data.From | js}}{{else if .Data.ReturnURL}}{{.Data.ReturnURL | js}}{{else}}/admin/locations{{end}}';}
+  else{location.href='{{if .Data.From}}{{.Data.From}}{{else if .Data.ReturnURL}}{{.Data.ReturnURL}}{{else}}/admin/locations{{end}}';}
 }
 (function(){
   var form=document.getElementById('loc-edit-form');

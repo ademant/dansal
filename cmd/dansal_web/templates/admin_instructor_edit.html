@@ -153,7 +153,7 @@ function safeGoBack(){
   if(_formDirty&&!confirm('{{$.Strings.T "admin_unsaved_confirm"}}')){return;}
   _formDirty=false;
   if(window.history.length>1){history.back();}
-  else{location.href='{{if .Data.From}}{{.Data.From | js}}{{else}}/admin/instructors{{end}}';}
+  else{location.href='{{if .Data.From}}{{.Data.From}}{{else}}/admin/instructors{{end}}';}
 }
 (function(){
   var form=document.getElementById('instructor-edit-form');

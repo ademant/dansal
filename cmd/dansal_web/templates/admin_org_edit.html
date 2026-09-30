@@ -576,7 +576,7 @@ function safeGoBack(){
   if(_formDirty&&!confirm('{{$.Strings.T "admin_unsaved_confirm"}}')){return;}
   _formDirty=false;
   if(window.history.length>1){history.back();}
-  else{location.href='{{if .Data.From}}{{.Data.From | js}}{{else}}/admin/organizations{{end}}';}
+  else{location.href='{{if .Data.From}}{{.Data.From}}{{else}}/admin/organizations{{end}}';}
 }
 (function(){
   var form=document.getElementById('org-edit-form');

@@ -354,7 +354,7 @@ var _allInstructors = (function(){
 var _evtStart = "{{.Event.StartTime}}";
 var _evtEnd = "{{.Event.EndTime}}";
 var _topLocID = {{.TopLocationID}}; // building-level location for room quick-create
-var _topLocName = {{.TopLocationName | js}}; // short name of the primary building
+var _topLocName = {{.TopLocationName}}; // short name of the primary building
 
 // Assign client-side IDs to loaded entries
 var _cidCounter = 1;
@@ -1211,15 +1211,15 @@ function showCtxMenu(x, y, entry){
     li.addEventListener('mousedown', function(ev){ ev.preventDefault(); fn(); hideCtxMenu(); });
     m.appendChild(li);
   }
-  addItem({{$.Strings.T "tt_clone_entry" | js}}, ctxClone);
+  addItem({{$.Strings.T "tt_clone_entry"}}, ctxClone);
   // #1236: previous/next-day only offered when that day actually exists in
   // the event's range (_days — same list the popup's Day <select> uses, see
   // computeDays()), so the item simply isn't shown at either edge instead of
   // moving an entry outside the event.
   var dayIdx = _days.indexOf(entry.entry_date);
-  if(dayIdx > 0) addItem({{$.Strings.T "tt_move_prev_day" | js}}, function(){ ctxMoveDay(-1); });
-  if(dayIdx >= 0 && dayIdx < _days.length-1) addItem({{$.Strings.T "tt_move_next_day" | js}}, function(){ ctxMoveDay(1); });
-  addItem({{$.Strings.T "admin_delete" | js}}, ctxDelete, true);
+  if(dayIdx > 0) addItem({{$.Strings.T "tt_move_prev_day"}}, function(){ ctxMoveDay(-1); });
+  if(dayIdx >= 0 && dayIdx < _days.length-1) addItem({{$.Strings.T "tt_move_next_day"}}, function(){ ctxMoveDay(1); });
+  addItem({{$.Strings.T "admin_delete"}}, ctxDelete, true);
   // unhide before measuring — a hidden ([hidden] → display:none) element has
   // no box to read offsetHeight from, and the item count (1-4, #1236) now
   // varies with which move-day items apply, so a fixed clamp no longer fits
@@ -1549,7 +1549,7 @@ function renderTracksTable(){
 
     var tdDel = document.createElement('td');
     var delBtn = document.createElement('button'); delBtn.type='button'; delBtn.className='tt-tr-del'; delBtn.textContent='×';
-    delBtn.title = {{$.Strings.T "admin_delete" | js}};
+    delBtn.title = {{$.Strings.T "admin_delete"}};
     delBtn.disabled = _tracks.length<=1; // keep the Type dropdown from ever going empty
     delBtn.addEventListener('click', function(){ tmDeleteTrack(t); });
     tdDel.appendChild(delBtn);

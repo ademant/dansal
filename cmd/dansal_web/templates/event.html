@@ -462,10 +462,10 @@
       // placeholders filled in order (title[, time][, room]); an entry
       // without a room drops straight to the "_noroom" variant rather than
       // rendering an empty " in " clause.
-      var TT_NEXTUP_NOW = '{{$.Strings.T "tt_nextup_now" | js}}';
-      var TT_NEXTUP_NOW_NOROOM = '{{$.Strings.T "tt_nextup_now_noroom" | js}}';
-      var TT_NEXTUP_NEXT = '{{$.Strings.T "tt_nextup_next" | js}}';
-      var TT_NEXTUP_NEXT_NOROOM = '{{$.Strings.T "tt_nextup_next_noroom" | js}}';
+      var TT_NEXTUP_NOW = '{{$.Strings.T "tt_nextup_now"}}';
+      var TT_NEXTUP_NOW_NOROOM = '{{$.Strings.T "tt_nextup_now_noroom"}}';
+      var TT_NEXTUP_NEXT = '{{$.Strings.T "tt_nextup_next"}}';
+      var TT_NEXTUP_NEXT_NOROOM = '{{$.Strings.T "tt_nextup_next_noroom"}}';
       function ttFillTemplate(tmpl, args){
         var i = 0;
         return tmpl.replace(/%s/g, function(){ return args[i++]; });

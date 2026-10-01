@@ -2288,6 +2288,18 @@ func migrateDB() {
 	// page, not a subscription — the refresh loop skips it after its first
 	// successful import instead of failing forever once the page 404s).
 	migrateFetchSourcesJsonldType()
+	// #1419 safety net: imported_once only arrives via the rebuild above, so a
+	// rebuild that keeps failing (e.g. the orphaned fetch_sources_chk on dev)
+	// left every fetchSourceCols query 500ing on the missing column. Add it
+	// directly so fetch sources keep working even while the CHECK widening
+	// is still pending.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('fetch_sources') WHERE name='imported_once'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE fetch_sources ADD COLUMN imported_once INTEGER NOT NULL DEFAULT 0")
+		}
+	}
 
 	// #895: widen timetable_entries.entry_type CHECK to allow 'break'
 	// (coffee break / lunch slots), alongside the existing bal/workshop.
@@ -2926,6 +2938,41 @@ func migrateEventTagsDropTagFK() {
 	log.Printf("migrateEventTagsDropTagFK: removed FK from event_tags.tag to tags.slug")
 }
 
+// rebuildTable runs a CHECK-widening table rebuild (create shadow, copy rows,
+// drop original, rename shadow into place) for the migrate*Type/EnumChecks
+// functions below. #1419: these used to run as loose statements with no
+// transaction, so one failure mid-sequence left the shadow table behind and
+// every later rebuild of that table failed at startup with "table x_chk
+// already exists" (only visible in the journal). Now a leftover shadow from
+// an older failed run is dropped first, and the sequence runs in a single
+// transaction on a dedicated connection, so a failure rolls back cleanly and
+// the next startup simply retries.
+func rebuildTable(shadow string, stmts []string) error {
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("get conn: %w", err)
+	}
+	defer conn.Close()
+	// PRAGMA foreign_keys is a no-op inside a transaction: toggle it outside.
+	conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF")
+	defer conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, "DROP TABLE IF EXISTS "+shadow); err != nil {
+		return err
+	}
+	for _, st := range stmts {
+		if _, err := tx.ExecContext(ctx, st); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 // migrateFetchSourcesTypeCheck adds CHECK(type IN (...)) to fetch_sources.type.
 // Any row with a now-invalid type is coerced to 'ical' before the rebuild.
 func migrateFetchSourcesTypeCheck() {
@@ -2934,15 +2981,7 @@ func migrateFetchSourcesTypeCheck() {
 	if strings.Contains(schema, "CHECK(type IN") || strings.Contains(schema, "CHECK (type IN") {
 		return
 	}
-	conn, err := db.Conn(context.Background())
-	if err != nil {
-		log.Printf("migrateFetchSourcesTypeCheck: get conn: %v", err)
-		return
-	}
-	defer conn.Close()
-	ctx := context.Background()
-	conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF")
-	stmts := []string{
+	if err := rebuildTable("fetch_sources_chk", []string{
 		`CREATE TABLE fetch_sources_chk (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			url TEXT UNIQUE NOT NULL,
@@ -2975,15 +3014,10 @@ func migrateFetchSourcesTypeCheck() {
 		FROM fetch_sources`,
 		`DROP TABLE fetch_sources`,
 		`ALTER TABLE fetch_sources_chk RENAME TO fetch_sources`,
+	}); err != nil {
+		log.Printf("migrateFetchSourcesTypeCheck: %v", err)
+		return
 	}
-	for _, s := range stmts {
-		if _, err := conn.ExecContext(ctx, s); err != nil {
-			conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
-			log.Printf("migrateFetchSourcesTypeCheck: %v", err)
-			return
-		}
-	}
-	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_fetch_sources_organization_id ON fetch_sources(organization_id)")
 	log.Printf("migrateFetchSourcesTypeCheck: added CHECK constraint to fetch_sources.type")
 }
@@ -2997,15 +3031,7 @@ func migrateFetchSourcesKuferType() {
 	if strings.Contains(schema, "'kufer'") {
 		return
 	}
-	conn, err := db.Conn(context.Background())
-	if err != nil {
-		log.Printf("migrateFetchSourcesKuferType: get conn: %v", err)
-		return
-	}
-	defer conn.Close()
-	ctx := context.Background()
-	conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF")
-	stmts := []string{
+	if err := rebuildTable("fetch_sources_chk", []string{
 		`CREATE TABLE fetch_sources_chk (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			url TEXT UNIQUE NOT NULL,
@@ -3037,15 +3063,10 @@ func migrateFetchSourcesKuferType() {
 		FROM fetch_sources`,
 		`DROP TABLE fetch_sources`,
 		`ALTER TABLE fetch_sources_chk RENAME TO fetch_sources`,
+	}); err != nil {
+		log.Printf("migrateFetchSourcesKuferType: %v", err)
+		return
 	}
-	for _, s := range stmts {
-		if _, err := conn.ExecContext(ctx, s); err != nil {
-			conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
-			log.Printf("migrateFetchSourcesKuferType: %v", err)
-			return
-		}
-	}
-	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_fetch_sources_organization_id ON fetch_sources(organization_id)")
 	log.Printf("migrateFetchSourcesKuferType: added 'kufer' to fetch_sources.type CHECK constraint")
 }
@@ -3059,15 +3080,7 @@ func migrateFetchSourcesJcalType() {
 	if strings.Contains(schema, "'jcal'") {
 		return
 	}
-	conn, err := db.Conn(context.Background())
-	if err != nil {
-		log.Printf("migrateFetchSourcesJcalType: get conn: %v", err)
-		return
-	}
-	defer conn.Close()
-	ctx := context.Background()
-	conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF")
-	stmts := []string{
+	if err := rebuildTable("fetch_sources_chk", []string{
 		// #1376: dance_ids (an early denormalized column) was dropped in
 		// favor of the fetch_source_dances join table, and category_filter
 		// was added, both *before* this rebuild is ever actually reached on
@@ -3107,15 +3120,10 @@ func migrateFetchSourcesJcalType() {
 		FROM fetch_sources`,
 		`DROP TABLE fetch_sources`,
 		`ALTER TABLE fetch_sources_chk RENAME TO fetch_sources`,
+	}); err != nil {
+		log.Printf("migrateFetchSourcesJcalType: %v", err)
+		return
 	}
-	for _, s := range stmts {
-		if _, err := conn.ExecContext(ctx, s); err != nil {
-			conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
-			log.Printf("migrateFetchSourcesJcalType: %v", err)
-			return
-		}
-	}
-	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_fetch_sources_organization_id ON fetch_sources(organization_id)")
 	log.Printf("migrateFetchSourcesJcalType: added 'jcal' to fetch_sources.type CHECK constraint")
 }
@@ -3129,15 +3137,16 @@ func migrateFetchSourcesJsonldType() {
 	if strings.Contains(schema, "'jsonld'") {
 		return
 	}
-	conn, err := db.Conn(context.Background())
-	if err != nil {
-		log.Printf("migrateFetchSourcesJsonldType: get conn: %v", err)
-		return
+	// #1419: the safety net in migrateDB() may already have added
+	// imported_once while this rebuild was still failing — carry its values
+	// over instead of resetting them, so a one-shot jsonld import isn't redone.
+	importedOnce := "0"
+	var hasImportedOnce int
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('fetch_sources') WHERE name='imported_once'").Scan(&hasImportedOnce)
+	if hasImportedOnce > 0 {
+		importedOnce = "COALESCE(imported_once, 0)"
 	}
-	defer conn.Close()
-	ctx := context.Background()
-	conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF")
-	stmts := []string{
+	if err := rebuildTable("fetch_sources_chk", []string{
 		`CREATE TABLE fetch_sources_chk (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			url TEXT UNIQUE NOT NULL,
@@ -3165,19 +3174,14 @@ func migrateFetchSourcesJsonldType() {
 		SELECT id, url, type, tags, organization_id, last_fetched_at, last_result,
 			created_at, template_id, template_mode, template_data,
 			COALESCE(consecutive_failures, 0),
-			created_by_id, updated_at, COALESCE(updated_by, ''), kufer_config, category_filter, 0
+			created_by_id, updated_at, COALESCE(updated_by, ''), kufer_config, category_filter, ` + importedOnce + `
 		FROM fetch_sources`,
 		`DROP TABLE fetch_sources`,
 		`ALTER TABLE fetch_sources_chk RENAME TO fetch_sources`,
+	}); err != nil {
+		log.Printf("migrateFetchSourcesJsonldType: %v", err)
+		return
 	}
-	for _, s := range stmts {
-		if _, err := conn.ExecContext(ctx, s); err != nil {
-			conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
-			log.Printf("migrateFetchSourcesJsonldType: %v", err)
-			return
-		}
-	}
-	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_fetch_sources_organization_id ON fetch_sources(organization_id)")
 	log.Printf("migrateFetchSourcesJsonldType: added 'jsonld' to fetch_sources.type CHECK constraint and imported_once column")
 }
@@ -3192,15 +3196,7 @@ func migrateTimetableEntriesBreakType() {
 	if strings.Contains(schema, "'break'") {
 		return
 	}
-	conn, err := db.Conn(context.Background())
-	if err != nil {
-		log.Printf("migrateTimetableEntriesBreakType: get conn: %v", err)
-		return
-	}
-	defer conn.Close()
-	ctx := context.Background()
-	conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF")
-	stmts := []string{
+	if err := rebuildTable("timetable_entries_chk", []string{
 		`CREATE TABLE timetable_entries_chk (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			event_id INTEGER NOT NULL,
@@ -3230,15 +3226,10 @@ func migrateTimetableEntriesBreakType() {
 		FROM timetable_entries`,
 		`DROP TABLE timetable_entries`,
 		`ALTER TABLE timetable_entries_chk RENAME TO timetable_entries`,
+	}); err != nil {
+		log.Printf("migrateTimetableEntriesBreakType: %v", err)
+		return
 	}
-	for _, s := range stmts {
-		if _, err := conn.ExecContext(ctx, s); err != nil {
-			conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
-			log.Printf("migrateTimetableEntriesBreakType: %v", err)
-			return
-		}
-	}
-	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_event_id ON timetable_entries(event_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_location_id ON timetable_entries(location_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_musician_id ON timetable_entries(musician_id)")
@@ -3255,15 +3246,7 @@ func migrateTimetableEntriesExtendedTypes() {
 	if strings.Contains(schema, "'session'") {
 		return
 	}
-	conn, err := db.Conn(context.Background())
-	if err != nil {
-		log.Printf("migrateTimetableEntriesExtendedTypes: get conn: %v", err)
-		return
-	}
-	defer conn.Close()
-	ctx := context.Background()
-	conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF")
-	stmts := []string{
+	if err := rebuildTable("timetable_entries_chk", []string{
 		`CREATE TABLE timetable_entries_chk (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			event_id INTEGER NOT NULL,
@@ -3293,15 +3276,10 @@ func migrateTimetableEntriesExtendedTypes() {
 		FROM timetable_entries`,
 		`DROP TABLE timetable_entries`,
 		`ALTER TABLE timetable_entries_chk RENAME TO timetable_entries`,
+	}); err != nil {
+		log.Printf("migrateTimetableEntriesExtendedTypes: %v", err)
+		return
 	}
-	for _, s := range stmts {
-		if _, err := conn.ExecContext(ctx, s); err != nil {
-			conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
-			log.Printf("migrateTimetableEntriesExtendedTypes: %v", err)
-			return
-		}
-	}
-	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_event_id ON timetable_entries(event_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_location_id ON timetable_entries(location_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_musician_id ON timetable_entries(musician_id)")
@@ -3317,15 +3295,7 @@ func migrateEventsEnumChecks() {
 	if strings.Contains(schema, "CHECK(workshop_difficulty") || strings.Contains(schema, "CHECK (workshop_difficulty") {
 		return
 	}
-	conn, err := db.Conn(context.Background())
-	if err != nil {
-		log.Printf("migrateEventsEnumChecks: get conn: %v", err)
-		return
-	}
-	defer conn.Close()
-	ctx := context.Background()
-	conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF")
-	stmts := []string{
+	if err := rebuildTable("events_chk", []string{
 		`CREATE TABLE events_chk (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			uid TEXT UNIQUE,
@@ -3397,15 +3367,10 @@ func migrateEventsEnumChecks() {
 		FROM events`,
 		`DROP TABLE events`,
 		`ALTER TABLE events_chk RENAME TO events`,
+	}); err != nil {
+		log.Printf("migrateEventsEnumChecks: %v", err)
+		return
 	}
-	for _, s := range stmts {
-		if _, err := conn.ExecContext(ctx, s); err != nil {
-			conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
-			log.Printf("migrateEventsEnumChecks: %v", err)
-			return
-		}
-	}
-	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
 	// Recreate indexes dropped by the table rebuild.
 	db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_events_uid ON events(uid) WHERE uid IS NOT NULL")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_organization_id ON events(organization_id) WHERE organization_id IS NOT NULL")
@@ -3427,15 +3392,7 @@ func migrateLocationsEnumChecks() {
 	if strings.Contains(schema, "CHECK(parking") || strings.Contains(schema, "CHECK (parking") {
 		return
 	}
-	conn, err := db.Conn(context.Background())
-	if err != nil {
-		log.Printf("migrateLocationsEnumChecks: get conn: %v", err)
-		return
-	}
-	defer conn.Close()
-	ctx := context.Background()
-	conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF")
-	stmts := []string{
+	if err := rebuildTable("locations_chk", []string{
 		`CREATE TABLE locations_chk (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			location TEXT NOT NULL,
@@ -3488,15 +3445,10 @@ func migrateLocationsEnumChecks() {
 		FROM locations`,
 		`DROP TABLE locations`,
 		`ALTER TABLE locations_chk RENAME TO locations`,
+	}); err != nil {
+		log.Printf("migrateLocationsEnumChecks: %v", err)
+		return
 	}
-	for _, s := range stmts {
-		if _, err := conn.ExecContext(ctx, s); err != nil {
-			conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
-			log.Printf("migrateLocationsEnumChecks: %v", err)
-			return
-		}
-	}
-	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_fetch_sources_organization_id ON fetch_sources(organization_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_location_organizations_location_id ON location_organizations(location_id)")
 	log.Printf("migrateLocationsEnumChecks: added CHECK constraints to locations.parking and locations.floor_condition")

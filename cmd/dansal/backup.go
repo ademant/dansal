@@ -146,6 +146,8 @@ func createBackup(outputPath string, since time.Time, keepCredentials bool) admi
 		size = info.Size()
 	}
 
+	pruneBackupsIfConfigured(outputPath)
+
 	return adminResponse{OK: true, Data: backupResult{
 		Path:        outputPath,
 		Size:        size,
@@ -246,6 +248,8 @@ func createConfigBackup(outputPath string) adminResponse {
 	if info != nil {
 		size = info.Size()
 	}
+	pruneBackupsIfConfigured(outputPath)
+
 	return adminResponse{OK: true, Data: configBackupResult{Path: outputPath, Size: size, Files: included}}
 }
 
@@ -609,6 +613,71 @@ func adminListBackups(_ adminRequest) adminResponse {
 		return adminResponse{OK: false, Error: err.Error()}
 	}
 	return adminResponse{OK: true, Data: files}
+}
+
+// backupPrefixes are the three archive "kinds" #1407 retention applies to,
+// matching resolveBackupPath/resolveConfigBackupPath's generated filenames.
+// Retention is counted per kind so a burst of incremental backups can't
+// evict full backups (or vice versa) — any other file in backup_dir
+// (manually placed, or from an unrelated tool) is never touched.
+var backupPrefixes = []string{"dansal-backup-", "dansal-incremental-", "dansal-config-backup-"}
+
+// pruneBackupsIfConfigured prunes backup_dir after a successful write at
+// writtenPath, honoring the two guards #1407 requires: no-op when
+// backup_keep is unset/0 (default: keep everything, matching pre-#1407
+// behavior), and no-op when writtenPath isn't inside the configured
+// backup_dir (an explicit --output elsewhere is a caller-managed location,
+// never pruned).
+func pruneBackupsIfConfigured(writtenPath string) {
+	if config == nil || config.Server.BackupKeep <= 0 || config.Server.BackupDir == "" {
+		return
+	}
+	if filepath.Clean(filepath.Dir(writtenPath)) != filepath.Clean(config.Server.BackupDir) {
+		return
+	}
+	pruneBackups(config.Server.BackupDir, config.Server.BackupKeep, filepath.Base(writtenPath))
+}
+
+// pruneBackups deletes old archives in dir, keeping the newest keep files
+// of each kind in backupPrefixes. justWritten is always protected from
+// deletion regardless of its mtime, so two archives landing in the same
+// second (or any clock oddity) can never delete the backup that was just
+// created by this very run.
+func pruneBackups(dir string, keep int, justWritten string) {
+	if keep <= 0 {
+		return
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	removed, kept := 0, 0
+	for _, prefix := range backupPrefixes {
+		var files []backupFileInfo
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasPrefix(e.Name(), prefix) || !strings.HasSuffix(e.Name(), ".tar.gz") {
+				continue
+			}
+			info, err := e.Info()
+			if err != nil {
+				continue
+			}
+			files = append(files, backupFileInfo{Name: e.Name(), ModTime: info.ModTime()})
+		}
+		sort.Slice(files, func(i, j int) bool { return files[i].ModTime.After(files[j].ModTime) })
+		for i, f := range files {
+			if i < keep || f.Name == justWritten {
+				kept++
+				continue
+			}
+			if rmErr := os.Remove(filepath.Join(dir, f.Name)); rmErr == nil {
+				removed++
+			}
+		}
+	}
+	if removed > 0 {
+		log.Printf("backup: pruned %d old archive(s), kept %d", removed, kept)
+	}
 }
 
 func startScheduledBackup() {

@@ -94,6 +94,11 @@ type ServerConfig struct {
 	BoardOpenPosting         bool   `yaml:"board_open_posting"`         // true = posts visible immediately; false (default) = verify contact first
 	BackupDir                string `yaml:"backup_dir"`
 	BackupIntervalHours      int    `yaml:"backup_interval_hours"` // 0 = disabled
+	// BackupKeep (#1407) is how many of the most recent archives to keep per
+	// kind (dansal-backup-*, dansal-incremental-*, dansal-config-backup-*)
+	// after each successful backup; older ones in that kind are pruned.
+	// 0 (default) keeps every archive forever, matching pre-#1407 behavior.
+	BackupKeep int `yaml:"backup_keep"`
 
 	// InviteSigningKeyPath is where the ECDSA P-256 key pair used to sign
 	// invite-link JWTs (see invite_jwt.go) is persisted. Generated on first
@@ -211,6 +216,11 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv("DANSAL_BACKUP_DIR"); v != "" {
 		cfg.Server.BackupDir = v
+	}
+	if v := os.Getenv("DANSAL_BACKUP_KEEP"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.Server.BackupKeep = n
+		}
 	}
 }
 

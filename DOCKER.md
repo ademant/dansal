@@ -54,6 +54,7 @@ Dansal uses a two-layer configuration approach:
 | `DANSAL_SMTP_PASS` | `smtp.password` | *(empty)* |
 | `DANSAL_SMTP_FROM` | `smtp.from` | *(empty)* |
 | `DANSAL_BACKUP_DIR` | `server.backup_dir` | `/var/lib/dansal/backups` |
+| `DANSAL_BACKUP_KEEP` | `server.backup_keep` | `0` (keep all) |
 
 ### dansal-web (frontend)
 

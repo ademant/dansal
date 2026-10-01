@@ -108,6 +108,7 @@ Key settings (all others have sensible defaults):
 | `server.images_dir` | Directory for uploaded event/musician/org images |
 | `server.admin_socket` | Unix socket used by `dansal_admin` and `dansal-webmin` |
 | `server.backup_dir` | Directory for database backups |
+| `server.backup_keep` | Number of most recent backups to keep per kind (0 = keep all, default) |
 | `server.base_url` | Public API URL, used in emails and iCal feeds (required) |
 | `server.token_expiration_hours` | Session lifetime in hours (default 24) |
 | `server.invite_expiry_hours` | Invite link lifetime (default 48) |
@@ -262,6 +263,8 @@ sudo systemctl status dansal-backup@prod.timer
 ```
 
 Backups are written to `server.backup_dir` (default `/var/lib/dansal/<instance>/backups/`).
+
+By default every archive is kept forever. Set `server.backup_keep: 30` (or any number) to bound disk usage — after each successful backup, older archives beyond that count are deleted, counted separately per kind (full backups, incremental backups, and config backups never evict each other). Only dansal's own generated filenames (`dansal-backup-*`, `dansal-incremental-*`, `dansal-config-backup-*`) are ever pruned; anything else placed in `backup_dir` is left alone. A backup written to an explicit `--output` path outside `backup_dir` is never pruned either.
 
 ### Manual Backup
 

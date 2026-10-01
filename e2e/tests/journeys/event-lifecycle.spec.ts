@@ -99,6 +99,9 @@ test.describe("Admin: event lifecycle", () => {
     // -- Edit A: the form must still carry the values just entered, then
     //    publish it. --
     await page.goto(`/admin/events/${idA}/edit`);
+    // #1409: external syndication is untested and off by default
+    // (enable_syndication unset in web.yaml) — the section must not render.
+    await expect(page.locator("#sec-syndication")).toHaveCount(0);
     await expect(page.locator('input[name="title"]')).toHaveValue(titleA);
     await expect(page.locator('input[name="start_time"]')).toHaveValue(
       hhmm(20, 0)

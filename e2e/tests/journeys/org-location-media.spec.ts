@@ -125,6 +125,9 @@ test.describe("Organization and venue media links (#1361)", () => {
     ]);
 
     await page.goto(`/admin/organizations/${id}/edit`);
+    // #1409: external syndication is untested and off by default
+    // (enable_syndication unset in web.yaml) — the section must not render.
+    await expect(page.locator("#sec-syndication")).toHaveCount(0);
     await openSection(page, "org-nav-item", "org-nav-toggle", "sec-media");
     const rows = page.locator("#sec-media .media-row");
     await expect(rows).toHaveCount(2);

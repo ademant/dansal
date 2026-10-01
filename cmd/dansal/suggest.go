@@ -234,6 +234,18 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "invalid start_time: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+	// #1411: a suggested event is, by definition, something that hasn't
+	// happened yet -- unlike admin/publisher writes and feed imports (which
+	// legitimately backfill past events), nobody anonymously suggests an
+	// event that already occurred. Catches e.g. a day/month swap in the
+	// suggest wizard's free-text date field landing months in the past,
+	// which client-side validation alone can't be trusted to prevent.
+	now := time.Now().In(instanceTimezone)
+	startOfToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, instanceTimezone).Unix()
+	if startTime < startOfToday {
+		writeError(w, "start_time must not be in the past", http.StatusBadRequest)
+		return
+	}
 	endTime := startTime + 3600
 	if req.EndTime != "" {
 		if et, err2 := parseTimeToUnix(req.EndTime); err2 == nil {

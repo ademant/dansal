@@ -123,7 +123,7 @@
           <!-- this mirrors that value so it can be read and edited directly. -->
           <div class="sg-date-col">
             <label class="sg-time-col-label" for="sg-date-text">{{$.Strings.T "evt_date"}}</label>
-            <input type="text" id="sg-date-text" class="sg-date-text" inputmode="numeric" placeholder="YYYY-MM-DD" autocomplete="off" spellcheck="false">
+            <input type="text" id="sg-date-text" class="sg-date-text" inputmode="numeric" placeholder="{{if eq $.DateFormat "de"}}DD.MM.YYYY{{else}}YYYY-MM-DD{{end}}" autocomplete="off" spellcheck="false">
           </div>
           <div class="sg-time-col">
             <label class="sg-time-col-label" for="sg-start-time">{{$.Strings.T "suggest_start_time"}} *</label>
@@ -144,6 +144,7 @@
             </div>
           </div>
         </div>
+        <p id="sg-date-err" class="form-error" style="display:none;margin-top:.25rem"></p>
         <p id="sg-time-err" class="form-error" style="display:none;margin-top:.25rem"></p>
       </div>
       <input type="hidden" id="sg-date-from">
@@ -372,6 +373,7 @@
    below so the date stays typeable on small screens. */
 .sg-date-col{flex:0 1 9.5rem;min-width:8rem}
 .sg-date-text{width:100%;padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem;box-sizing:border-box}
+.sg-date-text.sg-date-err{border-color:#dc3545;background:#fff5f5}
 .sg-time-col{flex:1;min-width:9rem}
 .sg-time-col-label{display:block;font-weight:600;font-size:.88rem;color:#444;margin-bottom:.3rem}
 .sg-time-input{width:100%;padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem;box-sizing:border-box}
@@ -602,6 +604,77 @@ function sgGrowTTTable(el) {
 // now, registered after this one, and listeners fire in registration order —
 // so window.sgDatePickerSet and window.sgDateApply always exist by the time
 // they run. Do not move either prefill back to top level.
+// #1411: the free-text date field is hardcoded-ISO no longer — it honors the
+// site's configured date notation (webmin's date_format, $.DateFormat here)
+// both for its placeholder and for which shape it accepts, and infers a
+// missing year as the nearest future occurrence of the typed month/day so a
+// suggester never has to reorder digits by hand (the original failure mode:
+// a day-first typist forcing their date into ISO and swapping day/month).
+var SG_DATE_FORMAT = '{{if eq $.DateFormat "de"}}de{{else}}iso{{end}}';
+var SG_DATE_INVALID_MSG = '{{if eq $.DateFormat "de"}}{{$.Strings.TF "suggest_date_invalid_format" "DD.MM.YYYY or DD.MM"}}{{else}}{{$.Strings.TF "suggest_date_invalid_format" "YYYY-MM-DD or MM-DD"}}{{end}}';
+var SG_DATE_PAST_MSG = '{{$.Strings.T "suggest_date_past"}}';
+
+function sgTodayISO() {
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// sgRealDate builds an ISO string from (y, m, d) and confirms it round-trips
+// — JS's Date silently rolls an out-of-range day/month into the next one
+// (e.g. Feb 30 -> Mar 2), which would otherwise slip an invalid date through
+// as if it were valid.
+function sgRealDate(y, m, d) {
+  var dt = new Date(y, m - 1, d);
+  if (dt.getFullYear() !== y || dt.getMonth() !== m - 1 || dt.getDate() !== d) return null;
+  return y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+}
+
+// sgInferYear picks the nearest year (this one, or next) that makes (m, d)
+// fall on or after today — an event in November is assumed to be this year,
+// one in March next year, as of "today" (#1411).
+function sgInferYear(m, d) {
+  var now = new Date();
+  var y = now.getFullYear();
+  var candidate = sgRealDate(y, m, d);
+  if (candidate && candidate >= sgTodayISO()) return y;
+  return y + 1;
+}
+
+// sgParseDateText accepts four mutually-exclusive shapes (dash-year-first
+// forms and dot-year-last forms can never collide, so both are always
+// accepted regardless of the site's configured format) and returns the
+// resolved ISO date, or null when the text matches none of them or names an
+// impossible calendar date.
+function sgParseDateText(v) {
+  var m;
+  if ((m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v))) {
+    return sgRealDate(+m[1], +m[2], +m[3]);
+  }
+  if ((m = /^(\d{2})-(\d{2})$/.exec(v))) {
+    var isoMonth = +m[1], isoDay = +m[2];
+    return sgRealDate(sgInferYear(isoMonth, isoDay), isoMonth, isoDay);
+  }
+  if ((m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(v))) {
+    return sgRealDate(+m[3], +m[2], +m[1]);
+  }
+  if ((m = /^(\d{2})\.(\d{2})$/.exec(v))) {
+    var deDay = +m[1], deMonth = +m[2];
+    return sgRealDate(sgInferYear(deMonth, deDay), deMonth, deDay);
+  }
+  return null;
+}
+
+// sgFormatDateForDisplay renders an ISO date back in the site's configured
+// notation, so the text field never shows something inconsistent with what
+// it itself expects to receive (the calendar popup and URL-import prefill
+// both write through sgDateApply, which uses this).
+function sgFormatDateForDisplay(iso) {
+  if (!iso) return '';
+  if (SG_DATE_FORMAT !== 'de') return iso;
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? (m[3] + '.' + m[2] + '.' + m[1]) : iso;
+}
+
 document.addEventListener('DOMContentLoaded', function(){
   var btn  = document.getElementById('sg-date-btn');
   var popup = document.getElementById('sg-date-popup');
@@ -609,6 +682,7 @@ document.addEventListener('DOMContentLoaded', function(){
   var fromEl = document.getElementById('sg-date-from');
   var toEl   = document.getElementById('sg-date-to');
   var txtEl  = document.getElementById('sg-date-text');
+  var errEl  = document.getElementById('sg-date-err');
   window.sgDatePickerSet = initDateRangePicker({
     btn: btn,
     popup: popup,
@@ -623,6 +697,14 @@ document.addEventListener('DOMContentLoaded', function(){
       applyTimeDefaults(f, t || f);
     }
   }).setRange;
+  function setDateError(msg) {
+    if (txtEl) txtEl.classList.add('sg-date-err');
+    if (errEl) { errEl.textContent = msg; errEl.style.display = ''; }
+  }
+  function clearDateError() {
+    if (txtEl) txtEl.classList.remove('sg-date-err');
+    if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
+  }
   // #1389/#1390: single writer for the date, so the hidden inputs, the button
   // label and the #1390 text field can never drift apart. The button is
   // refreshed via setRange, which is what the auto-prefill previously skipped
@@ -630,22 +712,30 @@ document.addEventListener('DOMContentLoaded', function(){
   window.sgDateApply = function(f, t) {
     if (f) fromEl.value = f;
     if (t) toEl.value = t;
-    if (txtEl && document.activeElement !== txtEl) txtEl.value = fromEl.value || '';
+    if (txtEl && document.activeElement !== txtEl) txtEl.value = sgFormatDateForDisplay(fromEl.value);
     window.sgDatePickerSet(fromEl.value, toEl.value);
   };
   if (txtEl) {
     txtEl.addEventListener('change', function(){
       var v = txtEl.value.trim();
-      // A malformed entry is ignored rather than written through, so the
-      // submit-time "date required" check still fires instead of us storing
-      // garbage in the hidden inputs.
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return;
+      if (!v) { clearDateError(); return; }
+      var iso = sgParseDateText(v);
+      if (!iso) {
+        setDateError(SG_DATE_INVALID_MSG);
+        return;
+      }
+      if (iso < sgTodayISO()) {
+        setDateError(SG_DATE_PAST_MSG);
+        return;
+      }
+      clearDateError();
       // Keep an existing range only while the typed start still precedes its
       // end (ISO dates compare correctly as strings); a later date means the
       // old end is stale, so this is a single-day event. Either way the range
       // can never end up inverted, which would silently swap start/end.
-      var to = (toEl.value && toEl.value >= v) ? toEl.value : v;
-      window.sgDateApply(v, to);
+      var to = (toEl.value && toEl.value >= iso) ? toEl.value : iso;
+      txtEl.value = sgFormatDateForDisplay(iso);
+      window.sgDateApply(iso, to);
     });
   }
   document.addEventListener('click', function(e) {

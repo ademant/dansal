@@ -73,6 +73,22 @@ func parseTime(s string) (time.Time, bool) {
 	return strutil.ParseTime(s)
 }
 
+// isPastDate reports whether s (an absolute RFC3339 instant, as the API
+// always returns) falls before the start of today in the server process's
+// local time. Used by the admin import preview (#1416) to hide past-dated
+// feed entries by default — a UI convenience, not a security boundary, so
+// process-local "today" (rather than plumbing through the API's own
+// server.timezone) is an acceptable approximation here.
+func isPastDate(s string) bool {
+	t, ok := parseTime(s)
+	if !ok {
+		return false
+	}
+	now := time.Now()
+	startOfToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	return t.Before(startOfToday)
+}
+
 // parseISODate parses a "2006-01-02" calendar-date string (the ?from=/?to=
 // query-param format), reporting ok=false for empty or malformed input. Handlers
 // use it to validate date params instead of repeating time.Parse("2006-01-02", …).
@@ -421,6 +437,7 @@ var tmplFuncsTime = template.FuncMap{
 		}
 		return s
 	},
+	"isPastDate": isPastDate,
 	// isoEndDate is like isoDate but treats 00:00–04:59 end times as
 	// belonging to the previous calendar day — but only when start and end
 	// are already on different dates (an event starting and ending on the

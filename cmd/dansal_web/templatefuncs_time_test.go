@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"testing"
+	"time"
 )
 
 // TestTimetableEntriesForNextUpJSON verifies the entry-id -> {date,start,
@@ -83,5 +84,35 @@ func TestTimetableGridNoOverlapSingleLane(t *testing.T) {
 		if p.TotalLanes != 1 {
 			t.Errorf("entry %q: expected TotalLanes=1 for non-overlapping entries, got %d", p.Entry.Title, p.TotalLanes)
 		}
+	}
+}
+
+// TestIsPastDate covers #1416: the admin import preview hides past-dated
+// feed entries by default, using this to decide which rows qualify.
+func TestIsPastDate(t *testing.T) {
+	now := time.Now()
+	yesterday := now.AddDate(0, 0, -1).Format(time.RFC3339)
+	monthsAgo := now.AddDate(0, -6, 0).Format(time.RFC3339)
+	tomorrow := now.AddDate(0, 0, 1).Format(time.RFC3339)
+	startOfToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 1, 0, 0, now.Location()).Format(time.RFC3339)
+
+	cases := []struct {
+		name string
+		s    string
+		want bool
+	}{
+		{"yesterday", yesterday, true},
+		{"six months ago", monthsAgo, true},
+		{"tomorrow", tomorrow, false},
+		{"earlier today is not \"the past\"", startOfToday, false},
+		{"unparseable", "not a date", false},
+		{"empty", "", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := isPastDate(c.s); got != c.want {
+				t.Errorf("isPastDate(%q) = %v, want %v", c.s, got, c.want)
+			}
+		})
 	}
 }

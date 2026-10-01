@@ -33,8 +33,12 @@ type FeedCategory struct {
 }
 
 type AdminImportEventsData struct {
-	PreviewEvents        []PreviewEvent
-	PreviewJSON          []string
+	PreviewEvents []PreviewEvent
+	PreviewJSON   []string
+	// PastEventCount (#1416) is how many previewed entries fall before today
+	// -- normally hidden and excluded from import by default, with a
+	// checkbox to reveal and opt into importing them.
+	PastEventCount       int
 	Error                string
 	FeedURL              string
 	FeedType             string
@@ -184,9 +188,13 @@ func adminImportEventsHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 		}
 
 		previewJSON := make([]string, len(events))
+		pastEventCount := 0
 		for i, e := range events {
 			b, _ := json.Marshal(e)
 			previewJSON[i] = string(b)
+			if isPastDate(e.StartTime) {
+				pastEventCount++
+			}
 		}
 
 		selectedOrgID, _ := strconv.Atoi(orgID)
@@ -299,6 +307,7 @@ func adminImportEventsHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 		renderTemplate(w, tmpls.adminEventsImport, tmplData(r, cfg, i18n, title, AdminImportEventsData{
 			PreviewEvents:        events,
 			PreviewJSON:          previewJSON,
+			PastEventCount:       pastEventCount,
 			FeedURL:              feedURL,
 			FeedType:             feedType,
 			Orgs:                 orgs,

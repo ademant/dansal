@@ -2,7 +2,6 @@ package main
 
 import (
 	"net/http"
-	"strings"
 	"time"
 )
 
@@ -16,34 +15,6 @@ type InstructorPageData struct {
 	UpcomingEvents []Event // follow-up to #1161: always upcoming-only, feeds the monthly calendar regardless of IncludePast
 	HasPast        bool
 	IncludePast    bool
-}
-
-// instructorSearchHandler serves GET /search/instructors?name=... — proxies the
-// instructor autocomplete used by the public event-suggest form so the browser
-// never touches /api/v1/ directly (#1068).
-func instructorSearchHandler(client *DansalClient) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("name")))
-		if q == "" {
-			writeJSONError(w, r, http.StatusBadRequest, "name parameter required")
-			return
-		}
-		all, err := client.GetInstructors(r.Context())
-		if err != nil {
-			writeJSONError(w, r, http.StatusBadGateway, "could not load instructors")
-			return
-		}
-		out := make([]Instructor, 0, 8)
-		for _, inst := range all {
-			if strings.Contains(strings.ToLower(inst.Name), q) {
-				out = append(out, inst)
-				if len(out) == 8 {
-					break
-				}
-			}
-		}
-		writeJSONResponse(w, http.StatusOK, out)
-	}
 }
 
 func instructorsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {

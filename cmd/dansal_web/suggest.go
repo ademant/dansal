@@ -319,8 +319,8 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			pricing = p
 		}
 
-		musicians := trimmedNonEmpty(r.Form["dansal_musicians"])
-		instructors := trimmedNonEmpty(r.Form["dansal_instructors"])
+		musicians := peopleFromForm(r, "dansal_musicians")
+		instructors := peopleFromForm(r, "dansal_instructors")
 
 		starts := r.Form["tt_start"]
 		ends := r.Form["tt_end"]
@@ -583,8 +583,8 @@ func suggestManageSubmitHandler(cfg *Config, tmpls *Templates, client *DansalCli
 				danceIDs = append(danceIDs, id)
 			}
 		}
-		musicians := trimmedNonEmpty(r.Form["dansal_musicians"])
-		instructors := trimmedNonEmpty(r.Form["dansal_instructors"])
+		musicians := peopleFromForm(r, "dansal_musicians")
+		instructors := peopleFromForm(r, "dansal_instructors")
 
 		starts := r.Form["tt_start"]
 		ends := r.Form["tt_end"]

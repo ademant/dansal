@@ -82,22 +82,27 @@
         </div>
       </div>
       {{end}}
+      <!-- #1412: comma-separated text is what gets submitted; chips below are a preview -->
       <div class="form-row">
-        <label class="form-label-sm">{{$.Strings.T "evt_musicians"}}</label>
-        <div id="sg-musician-chips" class="chip-wrap"></div>
-        <div class="ac-wrap">
-          <input id="sg-musician-search" type="text" placeholder="{{$.Strings.T "evt_musician_search"}}" autocomplete="off">
-          <div id="sg-musician-ac" class="ac-list" hidden></div>
-        </div>
+        <label class="form-label-sm" for="sg-musicians">{{$.Strings.T "evt_musicians"}}</label>
+        <input id="sg-musicians" type="text" name="dansal_musicians_text" maxlength="2000" placeholder="{{$.Strings.T "people_list_placeholder"}}" autocomplete="off" aria-describedby="sg-people-hint-m">
+        <small id="sg-people-hint-m" class="people-hint">{{$.Strings.T "people_list_hint"}}</small>
+        <div id="sg-musician-chips" class="chip-wrap" aria-live="polite"></div>
       </div>
       <div class="form-row">
-        <label class="form-label-sm">{{$.Strings.T "evt_instructors"}}</label>
-        <div id="sg-instructor-chips" class="chip-wrap"></div>
-        <div class="ac-wrap">
-          <input id="sg-instructor-search" type="text" placeholder="{{$.Strings.T "evt_instructor_search"}}" autocomplete="off">
-          <div id="sg-instructor-ac" class="ac-list" hidden></div>
-        </div>
+        <label class="form-label-sm" for="sg-instructors">{{$.Strings.T "evt_instructors"}}</label>
+        <input id="sg-instructors" type="text" name="dansal_instructors_text" maxlength="2000" placeholder="{{$.Strings.T "people_list_placeholder"}}" autocomplete="off" aria-describedby="sg-people-hint-i">
+        <small id="sg-people-hint-i" class="people-hint">{{$.Strings.T "people_list_hint"}}</small>
+        <div id="sg-instructor-chips" class="chip-wrap" aria-live="polite"></div>
       </div>
+      <dialog id="sg-people-dialog" class="people-dialog" aria-labelledby="sg-people-dialog-title">
+        <h2 id="sg-people-dialog-title">{{$.Strings.T "people_dialog_title"}}</h2>
+        <p>{{$.Strings.T "people_dialog_intro"}}</p>
+        <div id="sg-people-dialog-body"></div>
+        <div class="people-dialog-actions">
+          <button type="button" class="btn-primary" id="sg-people-dialog-ok">{{$.Strings.T "admin_apply"}}</button>
+        </div>
+      </dialog>
       <!-- Honeypot: named to blend in with the dansal_ fields above so a bot
            filling "everything that looks like a field" also fills this. -->
       <input type="text" name="dansal_phone2" class="hp-field" style="display:none!important" tabindex="-1" autocomplete="off">
@@ -417,11 +422,20 @@
 .musician-chip{display:inline-flex;align-items:center;gap:.3rem;background:#e8eaf6;border-radius:20px;padding:.2rem .6rem .2rem .8rem;font-size:.85rem}
 .btn-chip-del{background:none;border:none;cursor:pointer;color:#777;font-size:1rem;padding:0;line-height:1}
 .btn-chip-del:hover{color:#c0392b}
-.ac-wrap{position:relative}
-.ac-list{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #ccc;border-radius:0 0 4px 4px;max-height:220px;overflow-y:auto;z-index:50}
-.ac-item{padding:.4rem .7rem;cursor:pointer;font-size:.9rem}
-.ac-item:hover,.ac-item:focus{background:#f0f4ff;outline:none}
-.ac-item-new{color:#555;font-style:italic}
+/* #1412: musician/instructor list preview chips + "did you mean" dialog */
+.people-hint{display:block;font-size:.8rem;color:var(--fg-muted,#666);margin:.2rem 0 .4rem}
+.chip-status{font-size:.75rem;color:#555}
+.musician-chip.is-known{background:#e3f4e6}
+.musician-chip.is-similar{background:#fff3cd}
+.musician-chip.is-new{background:#eef0f3}
+.people-dialog{max-width:32rem;width:calc(100% - 2rem);border:1px solid var(--border-mid,#ccc);border-radius:8px;padding:1rem 1.2rem;background:var(--bg,#fff);color:var(--fg,#222)}
+.people-dialog::backdrop{background:rgba(0,0,0,.4)}
+.people-dialog h2{font-size:1.1rem;margin:0 0 .5rem}
+.people-dialog fieldset{border:1px solid var(--border-mid,#ddd);border-radius:6px;margin:0 0 .7rem;padding:.4rem .7rem}
+.people-dialog legend{font-weight:600;font-size:.9rem;padding:0 .3rem}
+.people-dialog label{display:block;font-size:.9rem;padding:.15rem 0;cursor:pointer}
+.people-kind{font-size:.78rem;color:var(--fg-muted,#666)}
+.people-dialog-actions{display:flex;justify-content:flex-end}
 .btn-secondary{padding:.5rem 1.2rem;background:#f5f5f5;color:#333;border:1px solid #ccc;border-radius:4px;cursor:pointer;font-size:.95rem}
 .btn-secondary:hover{background:#e8e8e8}
 /* ── Progress arrows ──────────────────────────────────────────────────── */
@@ -509,89 +523,177 @@ function sgGrowTTTable(el) {
   }
 }
 
-// ── Musicians / Instructors: chip picker with live autocomplete against the
-// public musician/instructor lists. Typing a name not found in the list still
-// adds a chip; the backend creates a new record for unmatched names.
+// ── Musicians / Instructors (#1412): one comma-separated text field each.
+// The text is what gets submitted (dansal_*_text, split server-side); on
+// change it is checked in one batch against /search/people and rendered as
+// status chips. Names with similar stored entries are resolved in one dialog;
+// closing it without "apply" keeps everything as typed.
 (function(){
-  function setupChipPicker(searchID, acID, chipsID, apiPath, fieldName) {
-    var input = document.getElementById(searchID);
-    var acList = document.getElementById(acID);
-    var chips  = document.getElementById(chipsID);
-    if (!input || !acList || !chips) return;
+  var KIND_LABEL = {musician: {{$.Strings.T "tt_musician" | jsStr}}, instructor: {{$.Strings.T "tt_instructor" | jsStr}}};
+  var STATUS_LABEL = {known: {{$.Strings.T "people_status_known" | jsStr}}, similar: {{$.Strings.T "people_status_similar" | jsStr}}, 'new': {{$.Strings.T "people_status_new" | jsStr}}};
+  var KEEP_LABEL = {{$.Strings.T "people_keep_typed" | jsStr}};
+  var MAX_NAMES = 20;
+  var fields = {
+    musician:   {input: document.getElementById('sg-musicians'),   chips: document.getElementById('sg-musician-chips'),   results: [], seq: 0},
+    instructor: {input: document.getElementById('sg-instructors'), chips: document.getElementById('sg-instructor-chips'), results: [], seq: 0}
+  };
+  var dialog = document.getElementById('sg-people-dialog');
+  var dialogBody = document.getElementById('sg-people-dialog-body');
+  if (!fields.musician.input || !fields.instructor.input || !dialog) return;
+  var dialogQueue = [], dialogCtx = null;
 
-    function addChip(name) {
-      name = name.trim();
-      if (!name) return;
+  function splitNames(s) {
+    var seen = {}, out = [];
+    (s || '').split(/[,;\r\n]+/).forEach(function(n){
+      n = n.trim();
+      if (n && !seen[n.toLowerCase()]) { seen[n.toLowerCase()] = true; out.push(n); }
+    });
+    return out;
+  }
+  function same(a, b) { return a.toLowerCase() === b.toLowerCase(); }
+  function writeNames(kind, names) { fields[kind].input.value = splitNames(names.join(',')).join(', '); }
+
+  function renderChips(kind) {
+    var f = fields[kind];
+    f.chips.innerHTML = '';
+    f.results.forEach(function(r){
       var chip = document.createElement('div');
-      chip.className = 'musician-chip';
+      chip.className = 'musician-chip' + (r.status ? ' is-' + r.status : '');
       var span = document.createElement('span');
-      span.textContent = name;
+      span.textContent = r.name;
       chip.appendChild(span);
+      if (r.status) {
+        var st = document.createElement('small');
+        st.className = 'chip-status';
+        st.textContent = (r.status === 'known' ? '✓ ' : r.status === 'similar' ? '? ' : '+ ') + STATUS_LABEL[r.status];
+        chip.appendChild(st);
+      }
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'btn-chip-del';
       btn.textContent = '×';
-      btn.addEventListener('click', function(){ chip.remove(); });
+      btn.setAttribute('aria-label', '× ' + r.name);
+      btn.addEventListener('click', function(){
+        f.results = f.results.filter(function(x){ return x !== r; });
+        writeNames(kind, splitNames(f.input.value).filter(function(n){ return !same(n, r.name); }));
+        f.last = f.input.value;
+        renderChips(kind);
+      });
       chip.appendChild(btn);
-      var hidden = document.createElement('input');
-      hidden.type = 'hidden';
-      hidden.name = fieldName;
-      hidden.value = name;
-      chip.appendChild(hidden);
-      chips.appendChild(chip);
-      input.value = '';
-      acList.hidden = true;
-    }
-
-    var debounceTimer;
-    input.addEventListener('input', function(){
-      var q = input.value.trim();
-      clearTimeout(debounceTimer);
-      if (q.length < 2) { acList.hidden = true; return; }
-      debounceTimer = setTimeout(function(){
-        fetch(apiPath + '?name=' + encodeURIComponent(q))
-          .then(function(r){ return r.json(); })
-          .then(function(results){
-            acList.innerHTML = '';
-            var typedName = input.value.trim();
-            var exactMatch = false;
-            if (results && results.length) {
-              results.slice(0, 8).forEach(function(r){
-                var name = r.bandname || r.name || '';
-                if (!name) return;
-                if (name.toLowerCase() === typedName.toLowerCase()) exactMatch = true;
-                var item = document.createElement('div');
-                item.className = 'ac-item';
-                item.tabIndex = 0;
-                item.textContent = name;
-                item.addEventListener('mousedown', function(e){ e.preventDefault(); addChip(name); });
-                acList.appendChild(item);
-              });
-            }
-            // Always offer to add the typed name when it's not already an exact match,
-            // so users can confirm a new name without pressing Enter.
-            if (!exactMatch && typedName) {
-              var addItem = document.createElement('div');
-              addItem.className = 'ac-item ac-item-new';
-              addItem.tabIndex = 0;
-              addItem.textContent = '+ ' + typedName;
-              addItem.addEventListener('mousedown', function(e){ e.preventDefault(); addChip(typedName); });
-              acList.appendChild(addItem);
-            }
-            acList.hidden = acList.children.length === 0;
-          })
-          .catch(function(){ acList.hidden = true; });
-      }, 300);
-    });
-    input.addEventListener('keydown', function(e){
-      if (e.key === 'Enter') { e.preventDefault(); addChip(input.value); }
-    });
-    document.addEventListener('click', function(e){
-      if (!e.target.closest('#' + acID) && e.target !== input) acList.hidden = true;
+      f.chips.appendChild(chip);
     });
   }
-  setupChipPicker('sg-musician-search', 'sg-musician-ac', 'sg-musician-chips', '/search/musicians', 'dansal_musicians');
-  setupChipPicker('sg-instructor-search', 'sg-instructor-ac', 'sg-instructor-chips', '/search/instructors', 'dansal_instructors');
+
+  function check(kind) {
+    var f = fields[kind];
+    var names = splitNames(f.input.value);
+    if (f.input.value === f.last) return;
+    writeNames(kind, names);
+    f.last = f.input.value;
+    var seq = ++f.seq;
+    f.results = names.map(function(n){ return {name: n, status: ''}; });
+    renderChips(kind);
+    if (!names.length) return;
+    var qs = names.slice(0, MAX_NAMES).map(function(n){ return '&name=' + encodeURIComponent(n); }).join('');
+    fetch('/search/people?kind=' + kind + qs)
+      .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(function(results){
+        if (seq !== f.seq) return; // field changed again meanwhile
+        var similar = [];
+        (results || []).forEach(function(res){
+          var cur = f.results.find(function(x){ return same(x.name, res.name); });
+          if (!cur) return;
+          cur.status = res.status;
+          if (res.status === 'known' && res.match && res.match !== cur.name) {
+            // adopt the stored spelling ("Dr. Roland Vogel" → "Roland Vogel")
+            writeNames(kind, splitNames(f.input.value).map(function(n){ return same(n, cur.name) ? res.match : n; }));
+            f.last = f.input.value;
+            cur.name = res.match;
+          }
+          if (res.status === 'similar') similar.push({result: cur, candidates: res.candidates || []});
+        });
+        renderChips(kind);
+        if (similar.length) { dialogQueue.push({kind: kind, seq: seq, items: similar}); nextDialog(); }
+      })
+      .catch(function(){ /* lookup failed: chips stay without status, text is still submitted */ });
+  }
+
+  function nextDialog() {
+    if (dialog.open || !dialogQueue.length) return;
+    dialogCtx = dialogQueue.shift();
+    if (dialogCtx.seq !== fields[dialogCtx.kind].seq) { dialogCtx = null; nextDialog(); return; }
+    dialogBody.innerHTML = '';
+    dialogCtx.items.forEach(function(item, i){
+      var fs = document.createElement('fieldset');
+      var lg = document.createElement('legend');
+      lg.textContent = item.result.name;
+      fs.appendChild(lg);
+      item.candidates.forEach(function(c, j){
+        fs.appendChild(radio('sg-pd-' + i, String(j), c.name, c.kind !== dialogCtx.kind ? KIND_LABEL[c.kind] : '', false));
+      });
+      fs.appendChild(radio('sg-pd-' + i, '', KEEP_LABEL, '', true));
+      dialogBody.appendChild(fs);
+    });
+    dialog.showModal();
+  }
+  function radio(name, value, text, kindText, checked) {
+    var lbl = document.createElement('label');
+    var inp = document.createElement('input');
+    inp.type = 'radio'; inp.name = name; inp.value = value; inp.checked = checked;
+    lbl.appendChild(inp);
+    lbl.appendChild(document.createTextNode(' ' + text));
+    if (kindText) {
+      var k = document.createElement('span');
+      k.className = 'people-kind';
+      k.textContent = ' (' + kindText + ')';
+      lbl.appendChild(k);
+    }
+    return lbl;
+  }
+
+  document.getElementById('sg-people-dialog-ok').addEventListener('click', function(){
+    var ctx = dialogCtx, f = fields[ctx.kind];
+    if (ctx.seq === f.seq) {
+      var moved = {};
+      ctx.items.forEach(function(item, i){
+        var sel = dialogBody.querySelector('input[name="sg-pd-' + i + '"]:checked');
+        if (!sel || sel.value === '') return;
+        var c = item.candidates[+sel.value], typed = item.result.name;
+        if (c.kind === ctx.kind) {
+          writeNames(ctx.kind, splitNames(f.input.value).map(function(n){ return same(n, typed) ? c.name : n; }));
+          item.result.name = c.name;
+          item.result.status = 'known';
+        } else {
+          // typed into the wrong field: move it to the other one
+          writeNames(ctx.kind, splitNames(f.input.value).filter(function(n){ return !same(n, typed); }));
+          f.results = f.results.filter(function(x){ return x !== item.result; });
+          (moved[c.kind] = moved[c.kind] || []).push(c.name);
+        }
+      });
+      f.last = f.input.value;
+      renderChips(ctx.kind);
+      Object.keys(moved).forEach(function(k){
+        writeNames(k, splitNames(fields[k].input.value).concat(moved[k]));
+        check(k);
+      });
+    }
+    dialog.close();
+  });
+  dialog.addEventListener('close', function(){ dialogCtx = null; nextDialog(); });
+
+  Object.keys(fields).forEach(function(kind){
+    var inp = fields[kind].input;
+    inp.addEventListener('change', function(){ check(kind); });
+    inp.addEventListener('keydown', function(e){
+      if (e.key === 'Enter') { e.preventDefault(); check(kind); }
+    });
+  });
+  // Used by the import / manage-link prefill below.
+  window.sgSetPeople = function(kind, names) {
+    if (!fields[kind]) return;
+    writeNames(kind, names || []);
+    check(kind);
+  };
 })();
 
 // ── Date range picker ─────────────────────────────────────────────────────
@@ -829,27 +931,6 @@ function applyTimeDefaults(dateFrom, dateTo) {
   var form = document.querySelector('#tab-manual form');
   if (!form) return;
   form.addEventListener('submit', function(e) {
-    // Auto-commit any typed musician/instructor text not confirmed as a chip yet
-    // (covers the case where the user types a name and moves on without pressing Enter)
-    [['sg-musician-search', 'sg-musician-chips', 'dansal_musicians'],
-     ['sg-instructor-search', 'sg-instructor-chips', 'dansal_instructors']].forEach(function(cfg){
-      var inp = document.getElementById(cfg[0]);
-      var chipsEl = document.getElementById(cfg[1]);
-      if (!inp || !chipsEl) return;
-      var name = inp.value.trim();
-      if (!name) return;
-      var already = Array.prototype.some.call(
-        chipsEl.querySelectorAll('input[type=hidden]'),
-        function(h){ return h.value === name; }
-      );
-      if (!already) {
-        var hidden = document.createElement('input');
-        hidden.type = 'hidden';
-        hidden.name = cfg[2];
-        hidden.value = name;
-        chipsEl.appendChild(hidden);
-      }
-    });
     var dateFrom = document.getElementById('sg-date-from').value;
     var dateTo   = document.getElementById('sg-date-to').value || dateFrom;
     var startInp = document.getElementById('sg-start-time');
@@ -1028,18 +1109,10 @@ function applyWizardData(data) {
     setTimeInput('sg-start-time', startH);
     setTimeInput('sg-end-time', endH);
   }
-  function makeChip(name, fieldName) {
-    var chip = document.createElement('div'); chip.className = 'musician-chip';
-    var span = document.createElement('span'); span.textContent = name; chip.appendChild(span);
-    var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'btn-chip-del'; btn.textContent = '×';
-    btn.addEventListener('click', function(){ chip.remove(); }); chip.appendChild(btn);
-    var hidden = document.createElement('input'); hidden.type = 'hidden'; hidden.name = fieldName; hidden.value = name;
-    chip.appendChild(hidden); return chip;
+  if (window.sgSetPeople) {
+    window.sgSetPeople('musician', data.musicians);
+    window.sgSetPeople('instructor', data.instructors);
   }
-  var chips = document.getElementById('sg-musician-chips');
-  if (chips) { chips.innerHTML = ''; (data.musicians || []).forEach(function(n){ chips.appendChild(makeChip(n, 'dansal_musicians')); }); }
-  var instrChips = document.getElementById('sg-instructor-chips');
-  if (instrChips) { instrChips.innerHTML = ''; (data.instructors || []).forEach(function(n){ instrChips.appendChild(makeChip(n, 'dansal_instructors')); }); }
   var ttBody = document.getElementById('sg-tt-body');
   if (ttBody && data.timetable && data.timetable.length > 0) {
     ttBody.innerHTML = '';

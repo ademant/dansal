@@ -163,6 +163,8 @@
         {{template "sg-help-text" (dict "id" "end" "S" $.Strings)}}
         <p id="sg-date-err" class="form-error" style="display:none;margin-top:.25rem"></p>
         <p id="sg-time-err" class="form-error" style="display:none;margin-top:.25rem"></p>
+        <!-- #1417: typed date vs. the date the source (import / website URL) names -->
+        <p class="sg-src-date-warn date-warn-note" hidden><span class="sg-src-date-msg"></span> <button type="button" class="btn-secondary sg-src-date-use">{{$.Strings.T "sg_src_date_use"}}</button></p>
       </div>
       <input type="hidden" id="sg-date-from">
       <input type="hidden" id="sg-date-to">
@@ -288,6 +290,7 @@
         <label for="sg-url">{{$.Strings.T "evt_website"}} {{template "sg-help" (dict "id" "website" "S" $.Strings)}}
           <input type="url" id="sg-url" name="url" placeholder="https://...">
         </label>
+        <p class="sg-src-date-warn date-warn-note" hidden><span class="sg-src-date-msg"></span> <button type="button" class="btn-secondary sg-src-date-use">{{$.Strings.T "sg_src_date_use"}}</button></p>
       </div>
       <div class="form-row form-row-2col">
         <label for="sg-contact-name">{{$.Strings.T "evt_contact_name"}} {{template "sg-help" (dict "id" "contact_name" "S" $.Strings)}}
@@ -448,6 +451,10 @@
 .drop-filename{font-size:.88rem;color:var(--fg-2,#555);margin-top:.3rem}
 /* #1386: the URL path is a peer of the drop zone, not a subordinate afterthought */
 #import-url{padding:.7rem .8rem;font-size:1rem}
+/* #1417: source-date warning */
+.sg-src-date-warn{display:flex!important;align-items:center;gap:.5rem;flex-wrap:wrap;padding:.35rem .6rem;border-left:3px solid #d97706;background:var(--badge-warn-bg,#fff3cd);border-radius:3px}
+.sg-src-date-warn[hidden]{display:none!important}
+.sg-src-date-use{padding:.2rem .6rem;font-size:.8rem}
 /* #1414: venue picker */
 .sg-venue-search{display:flex;gap:.5rem}
 .sg-venue-search input{flex:1;padding:.55rem .7rem;border:2px solid var(--link,#1a6eb5);border-radius:20px;font-size:.95rem}
@@ -911,6 +918,7 @@ document.addEventListener('DOMContentLoaded', function(){
     if (t) toEl.value = t;
     if (txtEl && document.activeElement !== txtEl) txtEl.value = sgFormatDateForDisplay(fromEl.value);
     window.sgDatePickerSet(fromEl.value, toEl.value);
+    if (window.sgCheckSourceDate) window.sgCheckSourceDate(); // #1417
   };
   if (txtEl) {
     txtEl.addEventListener('change', function(){
@@ -1078,6 +1086,70 @@ function applyTimeDefaults(dateFrom, dateTo) {
     document.getElementById('sg-end').value   = endH ? fmtDT(new Date(dateTo + 'T' + endH + ':00')) : '';
   });
 })();
+// ── Source-date cross-check (#1417) ───────────────────────────────────────
+// The import tab's prefill and the website field's /events/suggest/url-dates
+// lookup give the start date(s) the source itself names. When the wizard's
+// date (start day only — times differ too often) matches none of them, an
+// amber note shows under the date and the URL, with a one-click fix when
+// there is exactly one source date. Advisory only: the source can be wrong.
+(function(){
+  var MSG_ONE = {{$.Strings.T "sg_src_date_one" | jsStr}};
+  var MSG_MANY = {{$.Strings.T "sg_src_date_many" | jsStr}};
+  var srcDates = [];
+  var lastURL = '';
+  function fmt(iso) {
+    var d = new Date(iso + 'T12:00:00');
+    var wd = isNaN(d) ? '' : new Intl.DateTimeFormat(document.documentElement.lang || 'de', {weekday: 'short'}).format(d) + ' ';
+    return wd + sgFormatDateForDisplay(iso);
+  }
+  function check() {
+    var from = (document.getElementById('sg-date-from') || {}).value || '';
+    var show = from !== '' && srcDates.length > 0 && srcDates.indexOf(from) === -1;
+    var msg = '';
+    if (show) {
+      msg = srcDates.length === 1
+        ? MSG_ONE.replace('%s', fmt(srcDates[0])).replace('%s', fmt(from))
+        : MSG_MANY.replace('%s', srcDates.slice(0, 3).map(fmt).join(', ')).replace('%s', fmt(from));
+    }
+    document.querySelectorAll('.sg-src-date-warn').forEach(function(p){
+      p.hidden = !show;
+      p.querySelector('.sg-src-date-msg').textContent = show ? '⚠ ' + msg : '';
+      p.querySelector('.sg-src-date-use').hidden = srcDates.length !== 1;
+    });
+  }
+  window.sgCheckSourceDate = check;
+  window.sgSetSourceDates = function(dates) { srcDates = (dates || []).filter(Boolean); check(); };
+  document.querySelectorAll('.sg-src-date-use').forEach(function(b){
+    b.addEventListener('click', function(){
+      if (srcDates.length !== 1 || !window.sgDateApply) return;
+      var fromEl = document.getElementById('sg-date-from'), toEl = document.getElementById('sg-date-to');
+      // Keep a multi-day selection's length when moving it to the source date.
+      var days = 0;
+      if (fromEl.value && toEl.value && toEl.value > fromEl.value) {
+        days = Math.round((new Date(toEl.value + 'T12:00:00') - new Date(fromEl.value + 'T12:00:00')) / 86400000);
+      }
+      var to = new Date(srcDates[0] + 'T12:00:00'); to.setDate(to.getDate() + days);
+      var pad = function(n){ return String(n).padStart(2, '0'); };
+      var toISO = to.getFullYear() + '-' + pad(to.getMonth() + 1) + '-' + pad(to.getDate());
+      var txt = document.getElementById('sg-date-text');
+      if (txt) txt.value = sgFormatDateForDisplay(srcDates[0]);
+      window.sgDateApply(srcDates[0], toISO);
+    });
+  });
+  // Website field: look the URL up once per change, only with a date set.
+  var urlInp = document.getElementById('sg-url');
+  if (urlInp) urlInp.addEventListener('change', function(){
+    var u = urlInp.value.trim();
+    var from = (document.getElementById('sg-date-from') || {}).value || '';
+    if (!/^https?:\/\//i.test(u) || u === lastURL || !from) return;
+    lastURL = u;
+    fetch('/events/suggest/url-dates?url=' + encodeURIComponent(u))
+      .then(function(r){ return r.ok ? r.json() : {dates: []}; })
+      .then(function(res){ if (urlInp.value.trim() === u && res.dates && res.dates.length) window.sgSetSourceDates(res.dates); })
+      .catch(function(){});
+  });
+})();
+
 // ── Venue picker (#1414) ──────────────────────────────────────────────────
 // The search box only picks: known venues (GET /search/locations) come first
 // and become a chip; an OpenStreetMap result or "venue not listed" opens the
@@ -1316,6 +1388,10 @@ function applyWizardData(data) {
   setVal('sg-country',  data.country);  setVal('sg-address', data.address);
   setVal('sg-zipcode',  data.zipcode);
   if (window.sgVenuePrefill) window.sgVenuePrefill(data); // #1414
+  // #1417: remember the date the source itself names, to warn if it's edited away.
+  // Import only — on the manage link the prefill is the event's own stored
+  // date, not an independent source.
+  if ({{if $.Data.IsImportMode}}true{{else}}false{{end}} && window.sgSetSourceDates) window.sgSetSourceDates(data.start_time ? [data.start_time.split('T')[0]] : []);
   if (data.start_time) {
     var dt = data.start_time.split('T');
     var fromD = dt[0] || '';

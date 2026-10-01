@@ -194,6 +194,7 @@ func main() {
 
 		r.HandleFunc("GET /events/suggest", suggestPageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /events/suggest", suggestPreviewHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("GET /events/suggest/url-dates", suggestURLDatesHandler(cfg, client))
 		r.HandleFunc("POST /events/suggest/submit", suggestSubmitHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /events/suggest/done", suggestDoneHandler(cfg, tmpls, i18n))
 		r.HandleFunc("GET /events/suggest/verify/{token}", suggestVerifyHandler(cfg, tmpls, client, i18n))

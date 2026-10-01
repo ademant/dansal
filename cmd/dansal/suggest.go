@@ -148,7 +148,14 @@ func suggestPreviewHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if feedType == "" {
-		feedType = "ical"
+		// #1417: a plain event page (pretix & co.) carries its event as
+		// JSON-LD inside HTML — defaulting it to iCal made every such URL
+		// fail to parse, in the import tab and for the wizard's date check.
+		if looksLikeHTML(body) {
+			feedType = "jsonld"
+		} else {
+			feedType = "ical"
+		}
 	}
 	src.Type = feedType
 
@@ -511,4 +518,16 @@ func startOfTodayUnix() int64 {
 func sameLocalDay(a, b int64) bool {
 	ta, tb := time.Unix(a, 0).In(instanceTimezone), time.Unix(b, 0).In(instanceTimezone)
 	return ta.Year() == tb.Year() && ta.YearDay() == tb.YearDay()
+}
+
+// looksLikeHTML reports whether body is an HTML document rather than a feed:
+// an HTML doctype/root element near the start, or an ld+json block anywhere
+// in the first 256 KiB (#1417).
+func looksLikeHTML(body []byte) bool {
+	head := strings.ToLower(string(body[:min(len(body), 1024)]))
+	head = strings.TrimSpace(strings.TrimPrefix(head, "\ufeff"))
+	if strings.HasPrefix(head, "<!doctype html") || strings.Contains(head, "<html") {
+		return true
+	}
+	return strings.Contains(strings.ToLower(string(body[:min(len(body), 256<<10)])), "application/ld+json")
 }

@@ -88,6 +88,7 @@
       <div>
         <label for="date">{{$.Strings.T "evt_date"}}</label>
         <input id="date" type="date" name="date" value="{{isoDate .Event.StartTime}}" data-on="input" data-fn="onStartDateChange" data-args='["@value"]' data-on2="change" data-fn2="onStartDateChangeAndShift" data-args2='["@value"]'>
+        <small id="date-warn-note" class="date-warn-note" hidden data-past="{{$.Strings.T "date_note_past"}}" data-far="{{$.Strings.T "date_note_far"}}"></small>
       </div>
       {{end}}
       <div>
@@ -2239,6 +2240,46 @@ function safeGoBack(){
   _formDirty=false;
   if(window.history.length>1){history.back();}else{location.href='/admin/events';}
 }
+// ── #1413: unusual-date warning ─────────────────────────────────────────
+// While editing: amber #date + note when the date is in the past or more
+// than 2 years ahead. On save: the shared confirm dialog, but only when that
+// date was set/changed in this edit or "published" is being switched on —
+// re-saving an old archive event without touching its date never prompts.
+function _updateDateWarn(){
+  var d=document.getElementById('date'), note=document.getElementById('date-warn-note');
+  if(!d||!note) return;
+  var kind=dateUnusual(d.value);
+  d.classList.toggle('date-warn', kind!=='');
+  note.hidden=!kind;
+  note.textContent=kind?'⚠ '+note.dataset[kind]:'';
+}
+(function(){
+  var form=document.getElementById('evt-form');
+  var d=document.getElementById('date');
+  if(!form||!d) return; // template mode has no date
+  var isNew={{if $.Data.IsNew}}true{{else}}false{{end}};
+  var pub=form.querySelector('input[name="is_published"]');
+  d.addEventListener('input',_updateDateWarn);
+  d.addEventListener('change',_updateDateWarn);
+  document.addEventListener('DOMContentLoaded',_updateDateWarn);
+  // Document capture phase: runs before the form's own submit listeners
+  // (timetable shift, dirty-flag reset), so a "back to edit" stops them all.
+  document.addEventListener('submit',function(e){
+    if(e.target!==form||form.dataset.dateConfirmed==='1') return;
+    var kind=dateUnusual(d.value);
+    if(!kind) return;
+    var dateChanged=isNew||d.value!==d.defaultValue;
+    var publishing=pub&&pub.checked&&!pub.defaultChecked;
+    if(!dateChanged&&!publishing) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var sub=e.submitter;
+    confirmUnusualDate(kind,d.value,publishing?'publish':'save',function(){
+      form.dataset.dateConfirmed='1';
+      if(sub) form.requestSubmit(sub); else form.requestSubmit();
+    },function(){ d.focus(); });
+  },true);
+})();
 (function(){
   var form=document.querySelector('.evt-form');
   if(!form) return;
@@ -2404,6 +2445,7 @@ document.addEventListener('DOMContentLoaded', function(){
       next:  document.getElementById('ef-cal-next'),
       from:  dateInp.value,
       to:    endInp.value,
+      markPast: true, // #1413: grey past days, still selectable for archive entries
       onSelect: function(f, t){
         dateInp.value = f;
         // Let onStartDateChange auto-fill end_date (marks it data-auto),
@@ -2411,6 +2453,7 @@ document.addEventListener('DOMContentLoaded', function(){
         onStartDateChange(f);
         endInp.value = t;
         endInp.removeAttribute('data-auto');
+        _updateDateWarn();
       }
     });
   }

@@ -27,6 +27,9 @@ type webContextKey int
 const ctxDashboardAttention webContextKey = 1
 
 type TemplateData struct {
+	// PublishFlash (#1413): one-time warning after publishing events with an
+	// unusual date, read from ?pubmsg= for logged-in users; see base.html.
+	PublishFlash           []PublishedUnusualEvent
 	Title                  string
 	Domain                 string
 	SiteName               string // display name; defaults to Domain when empty
@@ -198,11 +201,18 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 		bannerSrcsetVal = bannerSrcset(cfg.ImagesDir)
 	}
 
+	var publishFlash []PublishedUnusualEvent
+	user := getSessionUser(r)
+	if tok := r.URL.Query().Get("pubmsg"); tok != "" && user != nil {
+		publishFlash = flashTake(tok).PublishedUnusual
+	}
+
 	return TemplateData{
+		PublishFlash: publishFlash,
 		Title:        title,
 		Domain:       cfg.Domain,
 		SiteName:     siteName,
-		User:         getSessionUser(r),
+		User:         user,
 		Strings:      strs,
 		LangCode:     lang,
 		Languages:    i18n.Options(lang),

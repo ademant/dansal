@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"html/template"
 	"io"
 	"log"
@@ -681,9 +682,13 @@ func suggestManageSubmitHandler(cfg *Config, tmpls *Templates, client *DansalCli
 		needsReview, err := client.PatchSuggestManageEvent(r.Context(), token, req)
 		if err != nil {
 			log.Printf("dansal-web: suggest manage patch failed ip_hash=%s err=%v", hashIP(getClientIP(r)), err)
+			errKey := "suggest_error_submit"
+			if ae, ok := errors.AsType[*apiHTTPError](err); ok && ae.ErrorCode == "start_time_past" {
+				errKey = "suggest_date_past" // #1413
+			}
 			title := i18n.T(r, "suggest_event_title")
 			renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
-				Error:       i18n.T(r, "suggest_error_submit"),
+				Error:       i18n.T(r, errKey),
 				ManageToken: token,
 			}))
 			return

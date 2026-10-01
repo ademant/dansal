@@ -104,7 +104,8 @@ func patchSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var isPublished int
-	if err := db.QueryRow("SELECT is_published FROM events WHERE id=?", eventID).Scan(&isPublished); err != nil {
+	var storedStart int64
+	if err := db.QueryRow("SELECT is_published, start_time FROM events WHERE id=?", eventID).Scan(&isPublished, &storedStart); err != nil {
 		writeInternalError(w, err)
 		return
 	}
@@ -112,6 +113,13 @@ func patchSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 	startTime, err := parseTimeToUnix(req.StartTime)
 	if err != nil {
 		writeError(w, "invalid start_time: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	// #1413: same rule as a new suggestion (#1411), but only when the date
+	// actually moves — a suggester editing an event that is already over
+	// (e.g. adding a photo afterwards) must still be able to save it.
+	if startTime < startOfTodayUnix() && !sameLocalDay(startTime, storedStart) {
+		writeErrorCode(w, "start_time_past", "start_time must not be moved into the past", http.StatusBadRequest)
 		return
 	}
 	endTime := startTime + 3600

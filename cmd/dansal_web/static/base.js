@@ -510,14 +510,83 @@ function langConsentDeny(){
 // opts: {btn, popup, grid, title, prev, next, from, to, placeholder, onSelect}
 // onSelect(fromISO, toISO) is called when the user completes a selection.
 // Same-day: first click = half-circle; second click on same date = full circle.
+// dateUnusual (#1413) classifies an ISO date (YYYY-MM-DD) for the
+// "are you sure about this date?" warnings: 'past' (before today), 'far'
+// (more than 2 years ahead — usually a year typo) or '' (fine / empty).
+// Shared by the date picker, the admin event form and the publish dialogs.
+function dateUnusual(iso){
+  if(!iso) return '';
+  var t=new Date(), pad=function(n){return n<10?'0'+n:''+n;};
+  var today=t.getFullYear()+'-'+pad(t.getMonth()+1)+'-'+pad(t.getDate());
+  var far=(t.getFullYear()+2)+'-'+pad(t.getMonth()+1)+'-'+pad(t.getDate());
+  return iso<today?'past':(iso>far?'far':'');
+}
+
+// confirmUnusualDate (#1413) opens the shared #unusual-date-dialog
+// (base.html, logged-in users only). kind is 'past', 'far' or 'bulk'; arg
+// fills the message's %s (a date, or a count for 'bulk'); okKind picks the
+// confirm label ('save' or 'publish'). Calls onOk on confirm, onBack (if
+// given) on "back to edit"; closing with Esc counts as back. Without the
+// dialog on the page it just proceeds — the server-side flash after
+// publishing (#1413) is the safety net either way.
+function confirmUnusualDate(kind, arg, okKind, onOk, onBack){
+  var dlg=document.getElementById('unusual-date-dialog');
+  if(!dlg||typeof dlg.showModal!=='function'){ onOk(); return; }
+  var key='msg'+kind.charAt(0).toUpperCase()+kind.slice(1);
+  dlg.querySelector('.ud-msg').textContent=(dlg.dataset[key]||'').replace('%s',arg);
+  var ok=dlg.querySelector('.ud-ok'), back=dlg.querySelector('.ud-back');
+  ok.textContent=okKind==='publish'?dlg.dataset.okPublish:dlg.dataset.okSave;
+  var confirmed=false;
+  ok.onclick=function(){ confirmed=true; dlg.close(); };
+  back.onclick=function(){ dlg.close(); };
+  dlg.onclose=function(){
+    dlg.onclose=null;
+    if(confirmed) onOk(); else if(onBack) onBack();
+  };
+  dlg.showModal();
+  back.focus();
+}
+
+// Publish forms opt in with data-date-check="YYYY-MM-DD" (single event) —
+// or a submit button with data-date-check-bulk="<checkbox selector>", whose
+// checked boxes carry data-date — and get the unusual-date dialog before
+// submitting (#1413). Runs after data-confirm (click) since this is submit.
+document.addEventListener('submit', function(e){
+  var form=e.target;
+  if(!(form instanceof HTMLFormElement)||form.dataset.dateConfirmed==='1') return;
+  var sub=e.submitter, kind='', arg='';
+  if(sub&&sub.hasAttribute('data-date-check-bulk')){
+    var n=0;
+    document.querySelectorAll(sub.getAttribute('data-date-check-bulk')).forEach(function(cb){
+      if(cb.checked&&dateUnusual(cb.dataset.date)) n++;
+    });
+    if(n){ kind='bulk'; arg=String(n); }
+  } else if(form.hasAttribute('data-date-check')){
+    kind=dateUnusual(form.getAttribute('data-date-check'));
+    arg=form.getAttribute('data-date-label')||form.getAttribute('data-date-check');
+  }
+  if(!kind) return;
+  e.preventDefault();
+  confirmUnusualDate(kind, arg, 'publish', function(){
+    form.dataset.dateConfirmed='1';
+    if(sub&&form.requestSubmit) form.requestSubmit(sub); else form.submit();
+  });
+}, true);
+
+// initDateRangePicker options beyond the elements: markPast greys days
+// before today (still clickable — admins may record past events), blockPast
+// also makes them unclickable (public suggest form). With either, the
+// button turns amber while the chosen start date is unusual (#1413).
 function initDateRangePicker(opts){
   var pendingStart=null;
   var from=opts.from||'', to=opts.to||'';
   var calYear, calMonth;
+  var checkPast=opts.markPast||opts.blockPast;
   function pad(n){return n<10?'0'+n:''+n;}
   function iso(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
   function updateBtn(){
     opts.btn.textContent = from&&to ? (from===to ? from : from+' → '+to) : (opts.placeholder||'📅');
+    if(checkPast) opts.btn.classList.toggle('dpr-btn-warn', dateUnusual(from)!=='');
   }
   updateBtn();
   function render(){
@@ -527,6 +596,7 @@ function initDateRangePicker(opts){
     opts.title.textContent=fmtMY.format(new Date(calYear,calMonth,1));
     var cur=new Date(calYear,calMonth,1);
     var dow=cur.getDay(); cur.setDate(cur.getDate()-(dow===0?6:dow-1));
+    var today=iso(new Date());
     var selS=pendingStart||from, selE=pendingStart?pendingStart:to;
     if(selS>selE){var t=selS;selS=selE;selE=t;}
     var h='<thead><tr>';
@@ -541,6 +611,8 @@ function initDateRangePicker(opts){
         if(d===selS) cls+=' dpr-range-start';
         if(d===selE&&!pendingStart) cls+=' dpr-range-end';
         if(pendingStart&&d===pendingStart) cls+=' dpr-range-start dpr-range-end';
+        if(d===today) cls+=' dpr-today';
+        if(checkPast&&d<today) cls+=opts.blockPast?' dpr-past dpr-blocked':' dpr-past';
         h+='<td class="'+cls.trim()+'" data-iso="'+d+'">'+cur.getDate()+'</td>';
         cur.setDate(cur.getDate()+1);
       }
@@ -552,6 +624,7 @@ function initDateRangePicker(opts){
     opts.grid.querySelectorAll('td').forEach(function(td){
       td.addEventListener('click',function(){
         var d=this.dataset.iso;
+        if(this.classList.contains('dpr-blocked')) return;
         if(!pendingStart){
           pendingStart=d;
           setTimeout(render,0);

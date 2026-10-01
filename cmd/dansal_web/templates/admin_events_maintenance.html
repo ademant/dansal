@@ -135,7 +135,7 @@
     <button type="submit" formaction="/admin/events/merge" class="btn-sm btn-merge" id="em-btn-merge"
             data-confirm="{{$.Strings.T "evt_merge_confirm"}}">{{$.Strings.T "evt_merge_btn"}}</button>
     <button type="submit" formaction="/admin/events/bulk-publish" class="btn-sm btn-publish-bulk" id="em-btn-publish"
-            data-confirm="{{$.Strings.T "admin_event_confirm_publish"}}">{{$.Strings.T "evt_bulk_publish_btn"}}</button>
+            data-confirm="{{$.Strings.T "admin_event_confirm_publish"}}" data-date-check-bulk=".em-cb">{{$.Strings.T "evt_bulk_publish_btn"}}</button>
     <button type="submit" formaction="/admin/events/bulk-cancel" class="btn-sm btn-cancel-bulk" id="em-btn-cancel"
             data-confirm="{{$.Strings.T "admin_event_confirm_cancel"}}">{{$.Strings.T "evt_bulk_cancel_btn"}}</button>
     <button type="submit" formaction="/admin/events/bulk-recheck-source" class="btn-sm btn-assign" id="em-btn-recheck-source"
@@ -181,9 +181,9 @@
   {{if .Location}}{{if and .Location.ShortName .Location.Town}}{{$locName = printf "%s, %s" .Location.ShortName .Location.Town}}{{else if .Location.ShortName}}{{$locName = .Location.ShortName}}{{else if .Location.Location}}{{$locName = .Location.Location}}{{end}}{{end}}
   <tr class="{{if .IsCancelled}}ev-cancelled{{else if not .IsPublished}}ev-unpublished{{end}}"
       data-tags="{{join .Tags}}" data-dances="{{join .DanceNames}}">
-    <td class="col-cb"><input type="checkbox" name="event_ids" value="{{.ID}}" class="em-cb"></td>
+    <td class="col-cb"><input type="checkbox" name="event_ids" value="{{.ID}}" class="em-cb"{{if not .IsPublished}} data-date="{{isoDate .StartTime}}"{{end}}></td>
     <td class="col-id muted">{{.ID}}</td>
-    <td class="col-title"><a href="/events/{{.ID}}" class="ev-link">{{.Title}}</a>{{if not .IsPublished}}<span class="badge unpub" title="{{$.Strings.T "musician_unpublished"}}">⊘</span>{{end}}</td>
+    <td class="col-title"><a href="/events/{{.ID}}" class="ev-link">{{.Title}}</a>{{if not .IsPublished}}<span class="badge unpub" title="{{$.Strings.T "musician_unpublished"}}">⊘</span>{{with unusualDate .StartTime}} <span class="badge-unusual-date">⚠ {{if eq . "past"}}{{$.Strings.T "date_note_past"}}{{else}}{{$.Strings.T "date_note_far"}}{{end}}</span>{{end}}{{end}}</td>
     <td class="col-time" style="white-space:nowrap" data-val="{{.StartTime}}">
       {{if $sameDay}}
         {{$startDate}} {{$startTime}}–{{$endTime}}

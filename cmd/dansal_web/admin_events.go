@@ -33,6 +33,11 @@ func parseChangedAt(changedAt string) int64 {
 // ── Events ────────────────────────────────────────────────────────────────────
 
 type AdminEventsData struct {
+	// UnpublishedPastCount/URL (#1413): on the unfiltered default view only,
+	// how many unpublished events have a past date — the default view hides
+	// past events, so these would otherwise be invisible.
+	UnpublishedPastCount   int
+	UnpublishedPastURL     string
 	Events                 []Event
 	Organizations          []Organization
 	OrgMap                 map[int]string
@@ -227,7 +232,7 @@ func adminEventPublishHandler(cfg *Config, client *DansalClient) http.HandlerFun
 			http.Error(w, "publish failed: "+err.Error(), http.StatusBadGateway)
 			return
 		}
-		http.Redirect(w, r, safeReferer(r, "/admin/events?unpublished=1"), http.StatusSeeOther)
+		publishFlashRedirect(w, r, "/admin/events?unpublished=1", unusualPublished(r.Context(), client, token, []int{id}))
 	}
 }
 
@@ -320,7 +325,7 @@ func adminEventBulkPublishHandler(cfg *Config, client *DansalClient) http.Handle
 			}
 		}
 		go notifyIndexNow(cfg.publicBaseURL(), siteCfg.IndexNowKey(), publishedIDs)
-		http.Redirect(w, r, safeReferer(r, "/admin/events/maintenance"), http.StatusSeeOther)
+		publishFlashRedirect(w, r, "/admin/events/maintenance", unusualPublished(r.Context(), client, token, publishedIDs))
 	}
 }
 
@@ -1420,6 +1425,11 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			http.Error(w, "could not load events", http.StatusBadGateway)
 			return
 		}
+		var unpublishedPast int
+		var unpublishedPastURL string
+		if !hasFilter && offset == 0 {
+			unpublishedPast, unpublishedPastURL = countUnpublishedPast(r.Context(), client, token)
+		}
 		// org filter: -1 = no org assigned, >0 = specific org
 		if orgID == -1 {
 			filtered := events[:0]
@@ -1587,6 +1597,8 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			}
 		}
 		renderTemplate(w, tmpls.adminEvents, tmplData(r, cfg, i18n, title, AdminEventsData{
+			UnpublishedPastCount:   unpublishedPast,
+			UnpublishedPastURL:     unpublishedPastURL,
 			Events:                 events,
 			Organizations:          orgs,
 			OrgMap:                 orgMap,
@@ -3860,4 +3872,24 @@ func adminMusicianQuickCreateHandler(client *DansalClient) http.HandlerFunc {
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]any{"id": m.ID, "bandname": m.Bandname, "existing": false})
 	}
+}
+
+// countUnpublishedPast (#1413) returns how many unpublished events visible to
+// the caller start before today, plus the /admin/events filter URL listing
+// them. Only the X-Total-Count is needed, so it asks for a single row.
+// Errors are swallowed (count 0): the notice is advisory.
+func countUnpublishedPast(ctx context.Context, client *DansalClient, token string) (int, string) {
+	now := time.Now()
+	startOfToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	params := url.Values{
+		"is_published":      {"false"},
+		"include_past":      {"true"},
+		"start_time_before": {strconv.FormatInt(startOfToday.Unix(), 10)},
+		"limit":             {"1"},
+	}
+	_, n, err := client.GetAdminEventsWithTotal(ctx, token, params)
+	if err != nil || n == 0 {
+		return 0, ""
+	}
+	return n, "/admin/events?unpublished=1&include_past=1&date_to=" + startOfToday.AddDate(0, 0, -1).Format("2006-01-02")
 }

@@ -57,6 +57,7 @@
     <a href="{{if .Data.FilterEmailNotVerified}}/admin/events{{else}}/admin/events?email_not_verified=1{{end}}" class="evt-hdr-btn evt-hdr-unpub{{if .Data.FilterEmailNotVerified}} evt-hdr-active{{end}}{{if .NotVerifiedEventCount}} has-badge{{end}}" role="button" aria-pressed="{{if .Data.FilterEmailNotVerified}}true{{else}}false{{end}}" title="{{if .Data.FilterEmailNotVerified}}{{.Strings.T "filter_clear"}}{{else}}{{.Strings.T "admin_filter_email_not_verified"}}{{end}}" aria-label="{{if .Data.FilterEmailNotVerified}}{{.Strings.T "filter_clear"}}{{else}}{{.Strings.T "admin_filter_email_not_verified"}}{{end}}"><span class="ehb-icon">📪</span><span class="ehb-label">{{.Strings.T "admin_filter_email_not_verified"}}{{if .NotVerifiedEventCount}} *{{end}}</span></a>
   </div>
 </div>
+{{with .Data}}{{if .UnpublishedPastCount}}<p class="unpublished-past-notice">⚠ {{$.Strings.TF "unpublished_past_notice" .UnpublishedPastCount}} <a href="{{.UnpublishedPastURL}}">{{$.Strings.T "unpublished_past_show"}}</a></p>{{end}}{{end}}
 {{with .Data}}{{if .FilterCreatedAfter}}
 <p class="import-notice">{{$.Strings.T "admin_import_recent_filter"}} — <a href="/admin/events">{{$.Strings.T "filter_clear"}}</a></p>
 {{end}}
@@ -163,7 +164,7 @@
     <td class="cell-status">
       {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>
       {{else if .IsPublished}}<span class="badge pub" title="{{$.Strings.T "evt_published"}}">✓</span>
-      {{else}}<span class="badge unpub">{{$.Strings.T "musician_unpublished"}}</span>{{end}}
+      {{else}}<span class="badge unpub">{{$.Strings.T "musician_unpublished"}}</span>{{with unusualDate .StartTime}} <span class="badge-unusual-date" title="{{if eq . "past"}}{{$.Strings.T "date_note_past"}}{{else}}{{$.Strings.T "date_note_far"}}{{end}}">⚠ {{if eq . "past"}}{{$.Strings.T "date_note_past"}}{{else}}{{$.Strings.T "date_note_far"}}{{end}}</span>{{end}}{{end}}
       {{if .PendingEditJSON}}<span class="badge" style="background:#fff3cd;color:#856404;border:1px solid #ffc107" title="{{$.Strings.T "badge_pending_edit"}}">✏</span>{{end}}
       {{if not .EmailVerified}}<span class="badge" style="background:#fff3cd;color:#856404;border:1px solid #ffc107" title="{{$.Strings.T "admin_filter_email_not_verified"}}">📪</span>{{end}}
     </td>

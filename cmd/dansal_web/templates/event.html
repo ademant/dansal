@@ -209,13 +209,14 @@
   {{if not .IsPublished}}
   <div class="evt-draft-banner">
     <span>{{$.Strings.T "evt_draft_notice"}}</span>
+    {{if $.User}}{{with unusualDate .StartTime}}<span class="badge-unusual-date">⚠ {{if eq . "past"}}{{$.Strings.T "date_note_past"}}{{else}}{{$.Strings.T "date_note_far"}}{{end}}</span>{{end}}{{end}}
     {{if $.User}}
       {{if eq $.User.Role "admin"}}
-      <form method="post" action="/admin/events/{{.ID}}/publish" style="display:inline">
+      <form method="post" action="/admin/events/{{.ID}}/publish" class="form-inline" data-date-check="{{isoDate .StartTime}}" data-date-label="{{formatDate $.LangCode $.DateFormat .StartTime}}">
         <button type="submit" class="btn-pub-event">{{$.Strings.T "admin_event_publish"}}</button>
       </form>
       {{else if and $.Data.UserOrgs .OrganizationID}}
-      <form method="post" action="/admin/events/{{.ID}}/publish" style="display:inline">
+      <form method="post" action="/admin/events/{{.ID}}/publish" class="form-inline" data-date-check="{{isoDate .StartTime}}" data-date-label="{{formatDate $.LangCode $.DateFormat .StartTime}}">
         <button type="submit" class="btn-pub-event">{{$.Strings.T "admin_event_publish"}}</button>
       </form>
       {{else if $.Data.UserOrgs}}

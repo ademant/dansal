@@ -828,6 +828,7 @@ document.addEventListener('DOMContentLoaded', function(){
     next: document.getElementById('sg-cal-next'),
     from: '', to: '',
     placeholder: '📅',
+    blockPast: true, // #1411/#1413: suggested dates can't be in the past
     onSelect: function(f, t) {
       window.sgDateApply(f, t);
       applyTimeDefaults(f, t || f);

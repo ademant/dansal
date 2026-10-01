@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -42,7 +44,20 @@ type FlashMsg struct {
 	// ("image", "avatar", "site_plan", …) for pages with more than one.
 	ImageUploadError  string
 	ImageUploadWidget string
-	expires           time.Time
+	// PublishedUnusual (#1413) lists events just published whose date is in
+	// the past or more than 2 years ahead. Carried on its own ?pubmsg= token
+	// (publishFlashRedirect) and rendered by base.html for any page, since
+	// the publish actions redirect back to whichever page they came from.
+	PublishedUnusual []PublishedUnusualEvent
+	expires          time.Time
+}
+
+// PublishedUnusualEvent is one entry of FlashMsg.PublishedUnusual; Kind is
+// unusualDate's "past" or "far".
+type PublishedUnusualEvent struct {
+	ID    int
+	Title string
+	Kind  string
 }
 
 // imageUploadErrorKey classifies err (from a DansalClient image/avatar
@@ -95,6 +110,10 @@ func flashToken(err error) string {
 // flashRedirect stores msg under tok and redirects to path with ?msg=tok
 // appended (path may already carry its own query string).
 func flashRedirect(w http.ResponseWriter, r *http.Request, path, tok string, msg FlashMsg) {
+	flashRedirectParam(w, r, path, "msg", tok, msg)
+}
+
+func flashRedirectParam(w http.ResponseWriter, r *http.Request, path, param, tok string, msg FlashMsg) {
 	msg.expires = time.Now().Add(flashTTL)
 	flashMu.Lock()
 	flashStore[tok] = msg
@@ -103,7 +122,45 @@ func flashRedirect(w http.ResponseWriter, r *http.Request, path, tok string, msg
 	if strings.Contains(path, "?") {
 		sep = "&"
 	}
-	http.Redirect(w, r, path+sep+"msg="+tok, http.StatusSeeOther)
+	http.Redirect(w, r, path+sep+param+"="+tok, http.StatusSeeOther)
+}
+
+// publishFlashRedirect (#1413) redirects a publish action back to the page it
+// came from (fallback when there's no usable Referer). When any of the just
+// published events has an unusual date, the redirect carries a one-time
+// ?pubmsg= flash that base.html turns into a warning with edit links. A
+// stale pubmsg from an earlier redirect is dropped from the referer first.
+func publishFlashRedirect(w http.ResponseWriter, r *http.Request, fallback string, items []PublishedUnusualEvent) {
+	dest := safeReferer(r, fallback)
+	if u, err := url.Parse(dest); err == nil {
+		q := u.Query()
+		if q.Has("pubmsg") {
+			q.Del("pubmsg")
+			u.RawQuery = q.Encode()
+			dest = u.String()
+		}
+	}
+	if len(items) == 0 {
+		http.Redirect(w, r, dest, http.StatusSeeOther)
+		return
+	}
+	flashRedirectParam(w, r, dest, "pubmsg", newErrorID(), FlashMsg{PublishedUnusual: items})
+}
+
+// unusualPublished fetches each event and keeps those whose date is unusual
+// (see unusualDate). A failed fetch is skipped — the warning is advisory.
+func unusualPublished(ctx context.Context, client *DansalClient, token string, ids []int) []PublishedUnusualEvent {
+	var out []PublishedUnusualEvent
+	for _, id := range ids {
+		ev, err := client.GetEventAuthed(ctx, id, token)
+		if err != nil {
+			continue
+		}
+		if kind := unusualDate(ev.StartTime); kind != "" {
+			out = append(out, PublishedUnusualEvent{ID: id, Title: ev.Title, Kind: kind})
+		}
+	}
+	return out
 }
 
 // flashTake retrieves and deletes the flash for tok — a one-time read, so

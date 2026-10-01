@@ -263,6 +263,23 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
 .dpr-range-start{background:var(--heading);color:#fff!important;border-radius:50% 0 0 50%}
 .dpr-range-end{background:var(--heading);color:#fff!important;border-radius:0 50% 50% 0}
 .dpr-range-start.dpr-range-end{border-radius:50%}
+/* #1413: today marker, past days, amber button for an unusual date */
+.dpr-today{box-shadow:inset 0 0 0 1px var(--link)}
+.dpr-cal-grid td.dpr-past{color:var(--fg-faint);opacity:.55}
+.dpr-cal-grid td.dpr-blocked{cursor:not-allowed}
+.dpr-btn.dpr-btn-warn,.date-warn{border-color:#d97706!important;box-shadow:0 0 0 1px #d97706;background:var(--badge-warn-bg)!important;color:var(--badge-warn-fg)!important}
+.badge-unusual-date{display:inline-block;padding:.1rem .45rem;border-radius:3px;font-size:.78rem;font-weight:600;background:var(--badge-warn-bg);color:var(--badge-warn-fg);border:1px solid #d97706;white-space:nowrap}
+.form-inline{display:inline}
+.publish-unusual-flash{margin:.75rem 0;padding:.6rem 1rem;border:1px solid #d97706;border-radius:4px;background:var(--badge-warn-bg);color:var(--badge-warn-fg);font-size:.9rem}
+.publish-unusual-flash ul{margin:.25rem 0 .25rem 1.2rem}
+.publish-unusual-flash a{color:inherit;font-weight:600}
+.unpublished-past-notice{margin:.5rem 0;padding:.4rem .8rem;border-left:3px solid #d97706;background:var(--badge-warn-bg);color:var(--badge-warn-fg);font-size:.88rem}
+.unpublished-past-notice a{color:inherit;font-weight:600}
+.date-warn-note{display:block;font-size:.8rem;color:var(--badge-warn-fg);margin-top:.2rem}
+.unusual-date-dialog{max-width:28rem;width:calc(100% - 2rem);border:1px solid var(--border-mid);border-radius:8px;padding:1rem 1.2rem;background:var(--bg-card);color:var(--fg)}
+.unusual-date-dialog::backdrop{background:rgba(0,0,0,.4)}
+.unusual-date-dialog h2{font-size:1.05rem;margin:0 0 .5rem}
+.unusual-date-dialog .ud-actions{display:flex;justify-content:flex-end;gap:.5rem;margin-top:1rem;flex-wrap:wrap}
 /* media links (#1360/#1361): plain external links, never embedded */
 .media-notice{font-size:.85rem;color:var(--fg-muted);margin:.2rem 0 .6rem}
 .media-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.35rem}
@@ -443,9 +460,33 @@ var DANSAL_TILE_TOKEN="{{$.TileToken}}";
      executing top-level script -- is now wrapped in DOMContentLoaded too. -->
 <script nonce="{{$.Nonce}}" defer src="/static/base.js?v={{.AppVersion}}"></script>
 <main>
+{{if .PublishFlash}}
+<div class="publish-unusual-flash" role="status">
+  {{$past := false}}{{$far := false}}{{range .PublishFlash}}{{if eq .Kind "past"}}{{$past = true}}{{else}}{{$far = true}}{{end}}{{end}}
+  {{if $past}}<p>⚠ {{$.Strings.T "published_unusual_past"}}</p>
+  <ul>{{range .PublishFlash}}{{if eq .Kind "past"}}<li>{{.Title}} — <a href="/admin/events/{{.ID}}/edit">{{$.Strings.T "admin_edit"}}</a></li>{{end}}{{end}}</ul>{{end}}
+  {{if $far}}<p>⚠ {{$.Strings.T "published_unusual_far"}}</p>
+  <ul>{{range .PublishFlash}}{{if eq .Kind "far"}}<li>{{.Title}} — <a href="/admin/events/{{.ID}}/edit">{{$.Strings.T "admin_edit"}}</a></li>{{end}}{{end}}</ul>{{end}}
+</div>
+{{end}}
 {{block "breadcrumb" .}}{{end}}
 {{block "content" .}}{{end}}
 </main>
+{{if .User}}
+<!-- #1413: shared "are you sure about this date?" dialog, driven by
+     confirmUnusualDate() in base.js. %s placeholders are filled client-side. -->
+<dialog id="unusual-date-dialog" class="unusual-date-dialog" aria-labelledby="ud-title"
+        data-msg-past="{{.Strings.T "unusual_date_past"}}" data-msg-far="{{.Strings.T "unusual_date_far"}}"
+        data-msg-bulk="{{.Strings.T "unusual_date_bulk"}}"
+        data-ok-save="{{.Strings.T "unusual_date_save_anyway"}}" data-ok-publish="{{.Strings.T "unusual_date_publish_anyway"}}">
+  <h2 id="ud-title">⚠ {{.Strings.T "unusual_date_title"}}</h2>
+  <p class="ud-msg"></p>
+  <div class="ud-actions">
+    <button type="button" class="btn-secondary ud-back">{{.Strings.T "unusual_date_back"}}</button>
+    <button type="button" class="btn-primary ud-ok"></button>
+  </div>
+</dialog>
+{{end}}
 <button id="back-to-top" data-fn="scrollToTop" data-args="[]" aria-label="Back to top">↑</button>
 <footer>
   <div class="footer-inner">

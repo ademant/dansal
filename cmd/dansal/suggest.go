@@ -240,9 +240,7 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 	// event that already occurred. Catches e.g. a day/month swap in the
 	// suggest wizard's free-text date field landing months in the past,
 	// which client-side validation alone can't be trusted to prevent.
-	now := time.Now().In(instanceTimezone)
-	startOfToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, instanceTimezone).Unix()
-	if startTime < startOfToday {
+	if startTime < startOfTodayUnix() {
 		writeError(w, "start_time must not be in the past", http.StatusBadRequest)
 		return
 	}
@@ -498,4 +496,19 @@ func notifyAdminsSuggestion(title, startTime string) {
 	forEachAdmin(func(id int, email, chatID, matrixID string, matrixVerified bool) {
 		notifyUser(chatID, matrixID, matrixVerified, email, "New event suggestion", msg+" — "+adminReviewLink(id, "/admin/events?unpublished=1&include_past=1"))
 	})
+}
+
+// startOfTodayUnix is midnight today in the instance timezone — "the past"
+// for suggested events means before this, so an event later today (even if
+// already started) still counts as current (#1411, #1413).
+func startOfTodayUnix() int64 {
+	now := time.Now().In(instanceTimezone)
+	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, instanceTimezone).Unix()
+}
+
+// sameLocalDay reports whether two unix timestamps fall on the same calendar
+// day in the instance timezone.
+func sameLocalDay(a, b int64) bool {
+	ta, tb := time.Unix(a, 0).In(instanceTimezone), time.Unix(b, 0).In(instanceTimezone)
+	return ta.Year() == tb.Year() && ta.YearDay() == tb.YearDay()
 }

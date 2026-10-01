@@ -89,6 +89,26 @@ func isPastDate(s string) bool {
 	return t.Before(startOfToday)
 }
 
+// unusualDate classifies an event start time for the #1413 "are you sure
+// about this date?" warnings: "past" (before today, same rule as
+// isPastDate), "far" (more than 2 years ahead — usually a year typo) or "".
+// The server-side twin of dateUnusual() in static/base.js.
+func unusualDate(s string) string {
+	t, ok := parseTime(s)
+	if !ok {
+		return ""
+	}
+	now := time.Now()
+	startOfToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	switch {
+	case t.Before(startOfToday):
+		return "past"
+	case t.After(startOfToday.AddDate(2, 0, 1)):
+		return "far"
+	}
+	return ""
+}
+
 // parseISODate parses a "2006-01-02" calendar-date string (the ?from=/?to=
 // query-param format), reporting ok=false for empty or malformed input. Handlers
 // use it to validate date params instead of repeating time.Parse("2006-01-02", …).
@@ -437,7 +457,8 @@ var tmplFuncsTime = template.FuncMap{
 		}
 		return s
 	},
-	"isPastDate": isPastDate,
+	"isPastDate":  isPastDate,
+	"unusualDate": unusualDate,
 	// isoEndDate is like isoDate but treats 00:00–04:59 end times as
 	// belonging to the previous calendar day — but only when start and end
 	// are already on different dates (an event starting and ending on the

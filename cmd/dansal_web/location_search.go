@@ -77,8 +77,20 @@ func matchLocations(q string, locs []Location) []LocationHit {
 	slices.SortStableFunc(out, func(a, b scored) int {
 		return cmp.Or(cmp.Compare(a.score, b.score), strings.Compare(a.hit.Label, b.hit.Label))
 	})
+	// Venues with the same stored name and town (duplicate rows awaiting an
+	// admin merge) can't be told apart — the form submits by name and
+	// ensureLocation takes the first match anyway — so offer them once.
 	hits := make([]LocationHit, 0, min(len(out), locationSearchMax))
-	for _, s := range out[:min(len(out), locationSearchMax)] {
+	seen := map[string]bool{}
+	for _, s := range out {
+		if len(hits) == locationSearchMax {
+			break
+		}
+		k := strings.ToLower(s.hit.Name) + "|" + strings.ToLower(s.hit.Town)
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
 		hits = append(hits, s.hit)
 	}
 	return hits

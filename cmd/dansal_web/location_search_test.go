@@ -42,6 +42,12 @@ func TestMatchLocations(t *testing.T) {
 			t.Errorf("matchLocations(%q) = %q, want %q", c.q, got, c.want)
 		}
 	}
+	// Duplicate rows (same name + town) are offered once.
+	dups := append([]Location{}, locs...)
+	dups = append(dups, Location{ID: 9, Location: "Karlsburg Durlach", Town: "Karlsruhe"})
+	if got := names(matchLocations("karlsburg", dups)); len(got) != 1 {
+		t.Errorf("duplicates: got %q, want one Karlsburg Durlach", got)
+	}
 	// Name matches rank before town-only matches.
 	locs = append(locs, Location{ID: 5, Location: "Saal am Markt", Town: "Freiburg Kulturhaus"})
 	if got := names(matchLocations("kulturhaus", locs)); len(got) != 2 || got[0] != "Kulturhaus Mitte" {

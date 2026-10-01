@@ -69,6 +69,17 @@ func TestMatchPeople(t *testing.T) {
 	}
 }
 
+func TestMatchPeopleDedupesCandidates(t *testing.T) {
+	entries := peopleEntriesFrom(
+		[]Musician{{Bandname: "Trio Test"}, {Bandname: "Trio Test"}, {Bandname: "Trio Test"}},
+		[]Instructor{{Name: "Trio Test"}},
+	)
+	res := matchPeople([]string{"Trio Tst"}, "musician", entries)
+	if got := res[0].Candidates; len(got) != 2 {
+		t.Fatalf("candidates = %+v, want one musician + one instructor", got)
+	}
+}
+
 func TestPeopleFromForm(t *testing.T) {
 	r := &http.Request{Form: url.Values{
 		"dansal_musicians":      {"Legacy Band"},

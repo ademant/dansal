@@ -205,8 +205,15 @@ func matchPeople(names []string, kind string, entries []peopleEntry) []PeopleRes
 				return cmp.Or(cmp.Compare(a.score, b.score), strings.Compare(a.c.Name, b.c.Name))
 			})
 			res.Status = "similar"
-			for _, c := range cands[:min(len(cands), peopleSearchMaxCands)] {
-				res.Candidates = append(res.Candidates, c.c)
+			// Identical name+kind pairs (duplicate DB rows awaiting a merge)
+			// would otherwise show up as several indistinguishable options.
+			for _, c := range cands {
+				if len(res.Candidates) == peopleSearchMaxCands {
+					break
+				}
+				if !slices.Contains(res.Candidates, c.c) {
+					res.Candidates = append(res.Candidates, c.c)
+				}
 			}
 		}
 		results = append(results, res)

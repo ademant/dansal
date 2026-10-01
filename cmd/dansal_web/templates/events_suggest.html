@@ -447,7 +447,7 @@
 .musician-chip.is-known{background:#e3f4e6}
 .musician-chip.is-similar{background:#fff3cd}
 .musician-chip.is-new{background:#eef0f3}
-.people-dialog{max-width:32rem;width:calc(100% - 2rem);border:1px solid var(--border-mid,#ccc);border-radius:8px;padding:1rem 1.2rem;background:var(--bg,#fff);color:var(--fg,#222)}
+.people-dialog{margin:auto;max-width:32rem;width:calc(100% - 2rem);border:1px solid var(--border-mid,#ccc);border-radius:8px;padding:1rem 1.2rem;background:var(--bg,#fff);color:var(--fg,#222)}
 .people-dialog::backdrop{background:rgba(0,0,0,.4)}
 .people-dialog h2{font-size:1.1rem;margin:0 0 .5rem}
 .people-dialog fieldset{border:1px solid var(--border-mid,#ddd);border-radius:6px;margin:0 0 .7rem;padding:.4rem .7rem}
@@ -589,6 +589,15 @@ document.addEventListener('click', function(e){
 
   function renderChips(kind) {
     var f = fields[kind];
+    // Resolving a typo to a stored name can turn two entries into the same
+    // name (the text field already merged them via writeNames) — keep one chip.
+    var seen = {};
+    f.results = f.results.filter(function(r){
+      var k = r.name.toLowerCase();
+      if (seen[k]) return false;
+      seen[k] = true;
+      return true;
+    });
     f.chips.innerHTML = '';
     f.results.forEach(function(r){
       var chip = document.createElement('div');
@@ -712,8 +721,14 @@ document.addEventListener('click', function(e){
       });
     }
     dialog.close();
+    afterDialog();
   });
-  dialog.addEventListener('close', function(){ dialogCtx = null; nextDialog(); });
+  // Advance the queue directly after closing — the async 'close' event isn't
+  // dispatched in a hidden tab (see confirmUnusualDate in base.js); it stays
+  // as the path for Esc, guarded so a late event can't clobber a dialog that
+  // is already showing the next entry.
+  function afterDialog() { dialogCtx = null; nextDialog(); }
+  dialog.addEventListener('close', function(){ if (!dialog.open && dialogCtx) afterDialog(); });
 
   Object.keys(fields).forEach(function(kind){
     var inp = fields[kind].input;

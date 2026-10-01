@@ -536,13 +536,20 @@ function confirmUnusualDate(kind, arg, okKind, onOk, onBack){
   dlg.querySelector('.ud-msg').textContent=(dlg.dataset[key]||'').replace('%s',arg);
   var ok=dlg.querySelector('.ud-ok'), back=dlg.querySelector('.ud-back');
   ok.textContent=okKind==='publish'?dlg.dataset.okPublish:dlg.dataset.okSave;
-  var confirmed=false;
-  ok.onclick=function(){ confirmed=true; dlg.close(); };
-  back.onclick=function(){ dlg.close(); };
-  dlg.onclose=function(){
-    dlg.onclose=null;
+  // Resolve straight from the button/Esc handlers rather than the dialog's
+  // 'close' event: Chrome dispatches 'close' asynchronously in its rendering
+  // steps, which don't run at all in a hidden tab (found while testing in a
+  // background tab) — the dialog closed but neither callback ever fired.
+  var done=false;
+  function finish(confirmed){
+    if(done) return;
+    done=true;
+    dlg.close();
     if(confirmed) onOk(); else if(onBack) onBack();
-  };
+  }
+  ok.onclick=function(){ finish(true); };
+  back.onclick=function(){ finish(false); };
+  dlg.oncancel=function(e){ e.preventDefault(); finish(false); }; // Esc
   dlg.showModal();
   back.focus();
 }

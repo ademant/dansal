@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/gen2brain/avif"
 )
 
 // realPNGFixture returns a tiny, real, decodable PNG (unlike the other
@@ -381,6 +383,25 @@ func TestTileProxyBearerAPIKey(t *testing.T) {
 	}
 	if apikeysHits != 2 {
 		t.Fatalf("expected the second identical key to be served from cache (still 2 calls), got %d", apikeysHits)
+	}
+}
+
+// TestWarmAVIFEncoder covers #1410: avif.InitEncoder() (the function this
+// used to call) was removed in the v0.6.0 upgrade with no public
+// replacement, so warmAVIFEncoder now triggers the package's lazy WASM init
+// with a throwaway Encode call instead. This guards that the replacement
+// doesn't panic and genuinely warms the encoder — a real Encode call right
+// after must still succeed.
+func TestWarmAVIFEncoder(t *testing.T) {
+	warmAVIFEncoder()
+
+	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	var buf bytes.Buffer
+	if err := avif.Encode(&buf, img); err != nil {
+		t.Fatalf("Encode after warmAVIFEncoder: %v", err)
+	}
+	if buf.Len() == 0 {
+		t.Fatal("Encode produced no output")
 	}
 }
 

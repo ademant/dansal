@@ -329,8 +329,14 @@ func encodeTileAVIF(pngData []byte) ([]byte, error) {
 // measured) at server startup instead of inline on whichever visitor's
 // request happens to trigger the process's first tile (or image upload)
 // AVIF encode. Safe to call even if no tile/image ever needs AVIF.
+//
+// avif.InitEncoder() was removed in v0.6.0 (#1410) with no public
+// replacement — the package now lazily initializes its WASM runtime on the
+// first Encode/Decode call via an unexported sync.OnceFunc. A throwaway
+// encode of a 1x1 image triggers that same lazy init as a side effect and
+// discards the result, preserving the warm-up without relying on removed API.
 func warmAVIFEncoder() {
-	avif.InitEncoder()
+	avif.Encode(io.Discard, image.NewRGBA(image.Rect(0, 0, 1, 1)))
 }
 
 // writeTileResponse sends a cached or freshly-fetched tile image. Tiles for

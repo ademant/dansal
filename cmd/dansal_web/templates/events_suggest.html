@@ -202,33 +202,61 @@
 
     <!-- Step 3: Where? -->
     <div class="wiz-step" data-step="3" hidden>
-      <div class="form-row">
-        <label class="form-label-sm" for="nominatim-q">{{$.Strings.T "suggest_location_search"}} {{template "sg-help" (dict "id" "location_search" "S" $.Strings)}}</label>
-        <div style="display:flex;gap:.5rem">
-          <input type="text" id="nominatim-q" placeholder="{{$.Strings.T "suggest_location_search_placeholder"}}" style="flex:1;padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem">
-          <button type="button" id="nominatim-btn" class="btn-primary" style="padding:.45rem .9rem;margin-top:0;font-size:.88rem">{{$.Strings.T "suggest_location_search_btn"}}</button>
+      <!-- #1414: venue picker (like the admin form): the search only picks —
+           a known venue becomes a chip, anything else opens the separate
+           "new venue" block with its own name and address fields. -->
+      <div class="form-row" id="sg-venue-picker">
+        <label class="form-label-sm" for="nominatim-q">🔍 {{$.Strings.T "sg_venue_search_label"}} {{template "sg-help" (dict "id" "location_search" "S" $.Strings)}}</label>
+        <div class="sg-venue-search">
+          <input type="search" id="nominatim-q" placeholder="{{$.Strings.T "sg_venue_search_placeholder"}}" autocomplete="off">
+          <button type="button" id="nominatim-btn" class="btn-primary">{{$.Strings.T "suggest_location_search_btn"}}</button>
         </div>
-        <ul id="nominatim-results" hidden style="list-style:none;margin:.25rem 0 0;padding:0;border:1px solid #ccc;border-radius:4px;background:#fff;max-height:180px;overflow-y:auto"></ul>
+        <div id="nominatim-results" class="sg-venue-results" hidden>
+          <p class="sg-venue-group" id="sg-venue-known-head" hidden>{{$.Strings.T "sg_venue_known"}}</p>
+          <ul id="sg-venue-known"></ul>
+          <p class="sg-venue-group" id="sg-venue-osm-head" hidden>OpenStreetMap</p>
+          <ul id="sg-venue-osm"></ul>
+        </div>
+        <button type="button" id="sg-venue-new-btn" class="sg-venue-new-btn">{{$.Strings.T "sg_venue_not_listed"}}</button>
       </div>
-      <div class="form-row form-row-2col">
-        <label for="sg-location">{{$.Strings.T "col_location"}} {{template "sg-help" (dict "id" "location" "S" $.Strings)}}
-          <input type="text" id="sg-location" name="location" maxlength="100" placeholder="{{$.Strings.T "loc_name_placeholder"}}">
-        </label>
-        <label for="sg-town">{{$.Strings.T "col_location"}} ({{$.Strings.T "filter_all_towns"}}) {{template "sg-help" (dict "id" "town" "S" $.Strings)}}
-          <input type="text" id="sg-town" name="town" maxlength="100" placeholder="{{$.Strings.T "suggest_town_placeholder"}}">
-        </label>
+      <div id="sg-venue-chip" class="sg-venue-chip" hidden>
+        <span>✓ <strong id="sg-venue-chip-name"></strong></span>
+        <button type="button" id="sg-venue-change" class="sg-venue-change">{{$.Strings.T "sg_venue_change"}}</button>
       </div>
-      <div class="form-row">
-        <label for="sg-country">{{$.Strings.T "col_country"}} {{template "sg-help" (dict "id" "country" "S" $.Strings)}}
-          <input type="text" id="sg-country" name="country" maxlength="2" placeholder="DE, FR, BE…" style="width:6rem">
-        </label>
-      </div>
+      <fieldset id="sg-venue-new" class="sg-venue-new" hidden>
+        <legend>{{$.Strings.T "sg_venue_new_title"}}</legend>
+        <div class="form-row">
+          <label for="sg-location">{{$.Strings.T "sg_venue_name"}} * {{template "sg-help" (dict "id" "location" "S" $.Strings)}}
+            <input type="text" id="sg-location" name="location" maxlength="100" placeholder="{{$.Strings.T "loc_name_placeholder"}}">
+          </label>
+          <small id="sg-venue-name-note" class="date-warn-note" hidden></small>
+        </div>
+        <div class="form-row">
+          <label for="sg-address">{{$.Strings.T "sg_venue_street"}} {{template "sg-help" (dict "id" "address" "S" $.Strings)}}
+            <input type="text" id="sg-address" name="address" maxlength="200">
+          </label>
+        </div>
+        <div class="form-row sg-venue-ziptown">
+          <label for="sg-zipcode">{{$.Strings.T "sg_venue_zip"}}
+            <input type="text" id="sg-zipcode" name="zipcode" maxlength="12">
+          </label>
+          <label for="sg-town">{{$.Strings.T "sg_venue_town"}} * {{template "sg-help" (dict "id" "town" "S" $.Strings)}}
+            <input type="text" id="sg-town" name="town" maxlength="100" placeholder="{{$.Strings.T "suggest_town_placeholder"}}">
+          </label>
+        </div>
+        <div class="form-row">
+          <label for="sg-country">{{$.Strings.T "col_country"}} {{template "sg-help" (dict "id" "country" "S" $.Strings)}}
+            <input type="text" id="sg-country" name="country" maxlength="2" placeholder="DE, FR, BE…" class="sg-country-input">
+          </label>
+        </div>
+        <p class="sg-venue-pos"><span id="sg-venue-pos-status" data-found="📍 {{$.Strings.T "sg_venue_pos_found"}}" data-missing="{{$.Strings.T "sg_venue_pos_missing"}}"></span>
+          <button type="button" id="sg-venue-geocode" class="btn-secondary">{{$.Strings.T "sg_venue_find_pos"}}</button></p>
+        <p id="sg-venue-err" class="form-error" hidden>{{$.Strings.T "sg_venue_incomplete"}}</p>
+      </fieldset>
       <input type="hidden" id="sg-lat"      name="lat">
       <input type="hidden" id="sg-lon"      name="lon">
       <input type="hidden" id="sg-osm-id"   name="osm_id">
       <input type="hidden" id="sg-osm-type" name="osm_type">
-      <input type="hidden" id="sg-address"  name="address">
-      <input type="hidden" id="sg-zipcode"  name="zipcode">
       <div class="form-row">
         <label class="form-label-sm">{{$.Strings.T "food_label"}} {{template "sg-help" (dict "id" "food" "S" $.Strings)}}</label>
         <div class="check-row">
@@ -420,9 +448,26 @@
 .drop-filename{font-size:.88rem;color:var(--fg-2,#555);margin-top:.3rem}
 /* #1386: the URL path is a peer of the drop zone, not a subordinate afterthought */
 #import-url{padding:.7rem .8rem;font-size:1rem}
-#nominatim-results li{padding:.4rem .65rem;cursor:pointer;font-size:.88rem;border-bottom:1px solid #eee}
-#nominatim-results li:last-child{border-bottom:none}
-#nominatim-results li:hover{background:#f0f4ff}
+/* #1414: venue picker */
+.sg-venue-search{display:flex;gap:.5rem}
+.sg-venue-search input{flex:1;padding:.55rem .7rem;border:2px solid var(--link,#1a6eb5);border-radius:20px;font-size:.95rem}
+.sg-venue-search .btn-primary{margin-top:0;padding:.45rem .9rem;font-size:.88rem;border-radius:20px}
+.sg-venue-results{margin:.3rem 0 0;border:1px solid #ccc;border-radius:6px;background:var(--bg-card,#fff);max-height:260px;overflow-y:auto}
+.sg-venue-results ul{list-style:none;margin:0;padding:0}
+.sg-venue-results li{padding:.4rem .65rem;cursor:pointer;font-size:.88rem;border-bottom:1px solid #eee}
+.sg-venue-results li:last-child{border-bottom:none}
+.sg-venue-results li:hover,.sg-venue-results li:focus{background:#f0f4ff;outline:none}
+.sg-venue-results li.sg-venue-none{cursor:default;color:var(--fg-muted,#666)}
+.sg-venue-group{margin:0;padding:.3rem .65rem;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--fg-muted,#666);background:var(--bg-subtle,#f5f5f5)}
+.sg-venue-new-btn{margin-top:.4rem;background:none;border:none;padding:0;color:var(--link,#1a6eb5);cursor:pointer;font-size:.88rem;text-decoration:underline}
+.sg-venue-chip{display:flex;align-items:center;gap:.6rem;margin:0 0 1rem;padding:.5rem .8rem;border:1px solid #9ccc9c;border-radius:6px;background:#eef8ee}
+.sg-venue-change{background:none;border:none;color:var(--link,#1a6eb5);cursor:pointer;text-decoration:underline;font-size:.85rem}
+.sg-venue-new{border:1px solid var(--border-mid,#ccc);border-radius:6px;padding:.6rem 1rem .2rem;margin:0 0 1rem;background:var(--bg-subtle,#fafafa)}
+.sg-venue-new legend{font-weight:700;padding:0 .3rem}
+.sg-venue-ziptown{display:grid;grid-template-columns:8rem 1fr;gap:1rem}
+.sg-country-input{width:6rem!important}
+.sg-venue-pos{font-size:.85rem;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin:0 0 .6rem}
+.sg-venue-pos .btn-secondary{padding:.25rem .6rem;font-size:.82rem}
 .suggest-details{border:1px solid var(--border-mid,#ddd);border-radius:6px;padding:.6rem .9rem;margin-bottom:1rem}
 .suggest-details summary{cursor:pointer;font-weight:600;font-size:.92rem}
 .suggest-details[open] summary{margin-bottom:.75rem}
@@ -1033,63 +1078,186 @@ function applyTimeDefaults(dateFrom, dateTo) {
     document.getElementById('sg-end').value   = endH ? fmtDT(new Date(dateTo + 'T' + endH + ':00')) : '';
   });
 })();
-// Nominatim location search
+// ── Venue picker (#1414) ──────────────────────────────────────────────────
+// The search box only picks: known venues (GET /search/locations) come first
+// and become a chip; an OpenStreetMap result or "venue not listed" opens the
+// separate new-venue block, whose name is never filled from a house number.
+// The form fields (location/address/zipcode/town/country + hidden geo) are
+// the same either way, so the submit handlers didn't change.
 (function(){
   var btn = document.getElementById('nominatim-btn');
   if (!btn) return;
-  function clearGeoFields() {
-    ['sg-lat','sg-lon','sg-osm-id','sg-osm-type','sg-address','sg-zipcode'].forEach(function(id){
-      document.getElementById(id).value = '';
+  var q = document.getElementById('nominatim-q');
+  var results = document.getElementById('nominatim-results');
+  var knownUl = document.getElementById('sg-venue-known'), osmUl = document.getElementById('sg-venue-osm');
+  var knownHead = document.getElementById('sg-venue-known-head'), osmHead = document.getElementById('sg-venue-osm-head');
+  var picker = document.getElementById('sg-venue-picker');
+  var chip = document.getElementById('sg-venue-chip'), chipName = document.getElementById('sg-venue-chip-name');
+  var box = document.getElementById('sg-venue-new');
+  var nameInp = document.getElementById('sg-location'), nameNote = document.getElementById('sg-venue-name-note');
+  var posStatus = document.getElementById('sg-venue-pos-status');
+  var errEl = document.getElementById('sg-venue-err');
+  var NAME_NEEDED = {{$.Strings.T "sg_venue_name_needed" | jsStr}};
+  var LOOKS_ADDRESS = {{$.Strings.T "sg_venue_looks_like_address" | jsStr}};
+  var NO_RESULTS = {{$.Strings.T "suggest_location_no_results" | jsStr}};
+  var mode = 'none'; // 'none' | 'known' | 'new'
+
+  function val(id, v) { var el = document.getElementById(id); if (v === undefined) return el.value; el.value = v == null ? '' : v; }
+  function clearVenue() {
+    ['sg-location','sg-address','sg-zipcode','sg-town','sg-country','sg-lat','sg-lon','sg-osm-id','sg-osm-type'].forEach(function(id){ val(id, ''); });
+  }
+  function updatePos() {
+    var has = val('sg-lat') !== '' && val('sg-lon') !== '';
+    posStatus.textContent = has ? posStatus.dataset.found : posStatus.dataset.missing;
+  }
+  // sgLooksLikeAddress: a leading postcode, "<street word> <number>", or a
+  // comma followed by a postcode — e.g. "76227 Karlsruhe-Durlach,
+  // Pfinztalstraße 9". Only warns: "Halle 7" is a perfectly good venue name.
+  function looksLikeAddress(s) {
+    s = (s || '').trim();
+    if (!s) return false;
+    if (/^\d{4,5}\b/.test(s)) return true;
+    if (/,\s*\d{4,5}\b/.test(s)) return true;
+    return /(stra(ss|ß)e|str\.|weg|gasse|platz|allee|ring|damm|ufer|rue|avenue|av\.|boulevard|bd|chemin|street|st\.|road|rd\.|lane|laan|straat|plein|via|viale|piazza|calle|carrer|rua|ulica|ul\.|ulice|вул)\s*\d+[a-z]?\b/i.test(s);
+  }
+  function checkName() {
+    var v = nameInp.value.trim();
+    var msg = !v && mode === 'new' && nameInp.dataset.needed ? NAME_NEEDED : (looksLikeAddress(v) ? LOOKS_ADDRESS : '');
+    nameNote.textContent = msg ? '⚠ ' + msg : '';
+    nameNote.hidden = !msg;
+    nameInp.classList.toggle('date-warn', !!msg);
+  }
+  function setMode(m, label) {
+    mode = m;
+    picker.hidden = (m !== 'none');
+    chip.hidden = (m !== 'known');
+    box.hidden = (m !== 'new');
+    results.hidden = true;
+    errEl.hidden = true;
+    if (m === 'known') chipName.textContent = label;
+    if (m === 'new') { updatePos(); checkName(); }
+  }
+  function pickKnown(h) {
+    clearVenue();
+    val('sg-location', h.name); val('sg-address', h.address); val('sg-zipcode', h.zipcode);
+    val('sg-town', h.town); val('sg-country', h.country);
+    if (h.osm_id) { val('sg-osm-id', h.osm_id); val('sg-osm-type', h.osm_type); }
+    setMode('known', h.label);
+  }
+  function pickOSM(res) {
+    var a = res.address || {};
+    clearVenue();
+    // Never a house number/road as the name (#1414): only a real place name.
+    val('sg-location', res.name || a.amenity || a.building || a.leisure || '');
+    var road = a.road || a.pedestrian || a.path || '', hn = a.house_number || '';
+    val('sg-address', road && hn ? road + ' ' + hn : road || hn);
+    val('sg-zipcode', a.postcode || '');
+    val('sg-town', a.city || a.town || a.village || a.municipality || a.suburb || '');
+    val('sg-country', (a.country_code || '').toUpperCase());
+    val('sg-lat', res.lat || ''); val('sg-lon', res.lon || '');
+    val('sg-osm-id', res.osm_id || ''); val('sg-osm-type', (res.osm_type || '').toLowerCase());
+    nameInp.dataset.needed = '1';
+    setMode('new');
+    if (!nameInp.value) nameInp.focus();
+  }
+  function li(text, onPick, cls) {
+    var el = document.createElement('li');
+    el.textContent = text;
+    el.tabIndex = 0;
+    if (cls) el.className = cls;
+    if (onPick) {
+      el.addEventListener('click', onPick);
+      el.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); onPick(); } });
+    }
+    return el;
+  }
+  function search() {
+    var term = q.value.trim();
+    if (!term || btn.disabled) return;
+    btn.disabled = true;
+    knownUl.innerHTML = ''; osmUl.innerHTML = '';
+    knownHead.hidden = true; osmHead.hidden = true;
+    results.hidden = false;
+    var pending = 2, anyHit = false;
+    function done() {
+      if (--pending > 0) return;
+      if (!anyHit) osmUl.appendChild(li(NO_RESULTS, null, 'sg-venue-none'));
+    }
+    fetch('/search/locations?q=' + encodeURIComponent(term))
+      .then(function(r){ return r.ok ? r.json() : []; })
+      .then(function(hits){
+        (hits || []).forEach(function(h){ knownUl.appendChild(li(h.label, function(){ pickKnown(h); })); });
+        if (hits && hits.length) { knownHead.hidden = false; anyHit = true; }
+      })
+      .catch(function(){})
+      .then(done);
+    var start = Date.now();
+    nominatimSearch(term, document.documentElement.lang || 'en', 5, function(res) {
+      (res || []).forEach(function(r){ osmUl.appendChild(li(r.display_name, function(){ pickOSM(r); })); });
+      if (res && res.length) { osmHead.hidden = false; anyHit = true; }
+      done();
+      // Same "disabled for at least 2s" anti-spam pacing as before.
+      setTimeout(function(){ btn.disabled = false; }, Math.max(0, 2000 - (Date.now() - start)));
     });
   }
-  btn.addEventListener('click', function() {
-    var q = document.getElementById('nominatim-q').value.trim();
-    if (!q) return;
-    btn.disabled = true;
-    clearGeoFields();
-    var lang = document.documentElement.lang || 'en';
-    var start = Date.now();
-    nominatimSearch(q, lang, 5, function(results) {
-      var ul = document.getElementById('nominatim-results');
-      ul.innerHTML = '';
-      if (!results.length) {
-        var li = document.createElement('li');
-        li.textContent = '{{$.Strings.T "suggest_location_no_results"}}';
-        ul.appendChild(li);
-      } else {
-        results.forEach(function(res) {
-          var li = document.createElement('li');
-          li.textContent = res.display_name;
-          li.addEventListener('click', function() {
-            var a = res.address || {};
-            document.getElementById('sg-location').value = res.name || a.amenity || a.building || a.house_number || '';
-            document.getElementById('sg-town').value = a.city || a.town || a.village || a.municipality || a.suburb || '';
-            document.getElementById('sg-country').value = (a.country_code || '').toUpperCase();
-            document.getElementById('sg-lat').value = res.lat || '';
-            document.getElementById('sg-lon').value = res.lon || '';
-            document.getElementById('sg-osm-id').value = res.osm_id || '';
-            document.getElementById('sg-osm-type').value = (res.osm_type || '').toLowerCase();
-            var road = a.road || a.pedestrian || a.path || '';
-            var hn   = a.house_number || '';
-            document.getElementById('sg-address').value = road && hn ? road + ' ' + hn : road || hn;
-            document.getElementById('sg-zipcode').value = a.postcode || '';
-            ul.hidden = true;
-          });
-          ul.appendChild(li);
-        });
-      }
-      ul.hidden = false;
-      // Same "disabled for at least 2s" anti-spam pacing as before, just
-      // measured around the callback instead of chained onto a fetch promise.
-      setTimeout(function(){ btn.disabled = false; }, Math.max(0, 2000 - (Date.now() - start)));
+  btn.addEventListener('click', search);
+  q.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); search(); } });
+  document.getElementById('sg-venue-new-btn').addEventListener('click', function(){
+    clearVenue();
+    nameInp.dataset.needed = '';
+    setMode('new');
+    nameInp.focus();
+  });
+  document.getElementById('sg-venue-change').addEventListener('click', function(){
+    clearVenue();
+    setMode('none');
+    q.focus();
+  });
+  nameInp.addEventListener('input', checkName);
+  nameInp.addEventListener('change', function(){ nameInp.dataset.needed = '1'; checkName(); });
+  // Typing an address by hand makes the old position stale.
+  ['sg-address','sg-zipcode','sg-town','sg-country'].forEach(function(id){
+    document.getElementById(id).addEventListener('input', function(){ val('sg-lat', ''); val('sg-lon', ''); updatePos(); });
+  });
+  document.getElementById('sg-venue-geocode').addEventListener('click', function(){
+    var gb = this;
+    var parts = [val('sg-address'), (val('sg-zipcode') + ' ' + val('sg-town')).trim(), val('sg-country')].filter(Boolean);
+    if (!parts.length || gb.disabled) return;
+    gb.disabled = true;
+    nominatimSearch(parts.join(', '), document.documentElement.lang || 'en', 1, function(res){
+      if (res && res[0]) { val('sg-lat', res[0].lat); val('sg-lon', res[0].lon); }
+      updatePos();
+      setTimeout(function(){ gb.disabled = false; }, 2000);
     });
   });
   document.addEventListener('click', function(e) {
-    if (!e.target.closest('#nominatim-results') && e.target !== document.getElementById('nominatim-q')) {
-      var ul = document.getElementById('nominatim-results');
-      if (ul) ul.hidden = true;
-    }
+    if (!e.target.closest('#nominatim-results') && e.target !== q && e.target !== btn) results.hidden = true;
   });
+
+  // Step validation (wizard "next" and submit): a venue is optional, but a
+  // new one needs a name and a town.
+  window.sgVenueValid = function() {
+    if (mode !== 'new') return true;
+    var ok = nameInp.value.trim() !== '' && val('sg-town').trim() !== '';
+    errEl.hidden = ok;
+    if (!ok) { nameInp.dataset.needed = '1'; checkName(); (nameInp.value.trim() ? document.getElementById('sg-town') : nameInp).focus(); }
+    return ok;
+  };
+  // Prefill (manage link / import): a stored venue becomes the chip when the
+  // name matches a known venue exactly, otherwise the new-venue block opens
+  // with the imported values, editable.
+  window.sgVenuePrefill = function(data) {
+    if (!data || !data.location) return;
+    var label = data.location + (data.town ? ', ' + data.town : '');
+    setMode('new');
+    fetch('/search/locations?q=' + encodeURIComponent(data.location))
+      .then(function(r){ return r.ok ? r.json() : []; })
+      .then(function(hits){
+        var exact = (hits || []).find(function(h){ return h.name.toLowerCase() === data.location.toLowerCase(); });
+        if (exact && mode === 'new') setMode('known', exact.label || label);
+      })
+      .catch(function(){});
+  };
 })();
 // ── Wizard prefill: shared by manage-link (#928) and import ───────────────
 var _ttTypeOpts = '<option value="bal">'+{{$.Strings.T "tt_type_bal" | jsStr}}+'</option><option value="workshop">'+{{$.Strings.T "tt_type_workshop" | jsStr}}+'</option>';
@@ -1147,6 +1315,7 @@ function applyWizardData(data) {
   setVal('sg-location', data.location); setVal('sg-town', data.town);
   setVal('sg-country',  data.country);  setVal('sg-address', data.address);
   setVal('sg-zipcode',  data.zipcode);
+  if (window.sgVenuePrefill) window.sgVenuePrefill(data); // #1414
   if (data.start_time) {
     var dt = data.start_time.split('T');
     var fromD = dt[0] || '';
@@ -1257,6 +1426,8 @@ document.addEventListener('DOMContentLoaded', function(){
         return;
       }
     }
+    // #1414: a new venue needs a name and a town before leaving "Where?".
+    if (steps[current - 1] && steps[current - 1].querySelector('#sg-venue-new') && window.sgVenueValid && !window.sgVenueValid()) return;
     goTo(current + 1);
   });
   backBtn.addEventListener('click', function() { goTo(current - 1); });

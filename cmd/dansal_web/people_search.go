@@ -86,6 +86,20 @@ func normalizePersonName(s string) []string {
 	if i := strings.LastIndex(s, ":"); i >= 0 && strings.TrimSpace(s[i+1:]) != "" {
 		s = s[i+1:]
 	}
+	words := foldWords(s)
+	out := words[:0]
+	for _, w := range words {
+		if !peopleTitleTokens[w] {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+// foldWords lower-cases s, strips diacritics (é → e, ß → ss) and splits it
+// into its letter/digit words — the shared base of the people (#1412) and
+// venue (#1414) lookups.
+func foldWords(s string) []string {
 	s = strings.ReplaceAll(strings.ToLower(s), "ß", "ss")
 	var b strings.Builder
 	for _, r := range norm.NFD.String(s) {
@@ -98,14 +112,7 @@ func normalizePersonName(s string) []string {
 			b.WriteRune(' ')
 		}
 	}
-	words := strings.Fields(b.String())
-	out := words[:0]
-	for _, w := range words {
-		if !peopleTitleTokens[w] {
-			out = append(out, w)
-		}
-	}
-	return out
+	return strings.Fields(b.String())
 }
 
 // levenshtein returns the rune-level edit distance between a and b.

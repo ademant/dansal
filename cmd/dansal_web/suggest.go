@@ -671,6 +671,12 @@ func suggestManageSubmitHandler(cfg *Config, tmpls *Templates, client *DansalCli
 				Country:  r.FormValue("country"),
 				Address:  r.FormValue("address"),
 				Zipcode:  r.FormValue("zipcode"),
+				// #1414: the manage link uses the same venue picker, so carry
+				// the picked position/OSM identity like the initial submit does.
+				Latitude:  parseLatLng(r.FormValue("lat")),
+				Longitude: parseLatLng(r.FormValue("lon")),
+				OsmID:     parseOsmID(r.FormValue("osm_id")),
+				OsmType:   r.FormValue("osm_type"),
 			},
 			ContactName:  strings.TrimSpace(r.FormValue("contact_name")),
 			ContactEmail: strings.TrimSpace(r.FormValue("contact_email")),

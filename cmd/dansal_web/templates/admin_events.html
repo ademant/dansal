@@ -164,7 +164,7 @@
     <td class="cell-status">
       {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>
       {{else if .IsPublished}}<span class="badge pub" title="{{$.Strings.T "evt_published"}}">✓</span>
-      {{else}}<span class="badge unpub">{{$.Strings.T "musician_unpublished"}}</span>{{with unusualDate .StartTime}} <span class="badge-unusual-date" title="{{if eq . "past"}}{{$.Strings.T "date_note_past"}}{{else}}{{$.Strings.T "date_note_far"}}{{end}}">⚠ {{if eq . "past"}}{{$.Strings.T "date_note_past"}}{{else}}{{$.Strings.T "date_note_far"}}{{end}}</span>{{end}}{{end}}
+      {{else}}<span class="badge unpub">{{$.Strings.T "musician_unpublished"}}</span>{{if index $.Data.NewVenueEventIDs .ID}} <a class="badge-new-venue" href="/admin/locations/{{derefInt .LocationID}}/edit" title="{{$.Strings.T "venue_new_badge_title"}}">🆕 {{$.Strings.T "venue_new_badge"}}</a>{{end}}{{with unusualDate .StartTime}} <span class="badge-unusual-date" title="{{if eq . "past"}}{{$.Strings.T "date_note_past"}}{{else}}{{$.Strings.T "date_note_far"}}{{end}}">⚠ {{if eq . "past"}}{{$.Strings.T "date_note_past"}}{{else}}{{$.Strings.T "date_note_far"}}{{end}}</span>{{end}}{{end}}
       {{if .PendingEditJSON}}<span class="badge" style="background:#fff3cd;color:#856404;border:1px solid #ffc107" title="{{$.Strings.T "badge_pending_edit"}}">✏</span>{{end}}
       {{if not .EmailVerified}}<span class="badge" style="background:#fff3cd;color:#856404;border:1px solid #ffc107" title="{{$.Strings.T "admin_filter_email_not_verified"}}">📪</span>{{end}}
     </td>

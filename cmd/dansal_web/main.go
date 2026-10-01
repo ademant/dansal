@@ -352,6 +352,7 @@ func main() {
 		r.HandleFunc("GET /city/{slug}", cityHubHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /city/{slug}/past-events", cityPastEventsHandler(tmpls, i18n, client))
 		r.HandleFunc("GET /search/people", peopleSearchHandler(client))
+		r.HandleFunc("GET /search/locations", locationSearchHandler(client))
 		r.HandleFunc("GET /musicians", musiciansHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /musicians/{id}", musicianHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /instructors", instructorsHandler(cfg, tmpls, client, i18n))

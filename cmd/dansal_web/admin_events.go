@@ -33,6 +33,10 @@ func parseChangedAt(changedAt string) int64 {
 // ── Events ────────────────────────────────────────────────────────────────────
 
 type AdminEventsData struct {
+	// NewVenueEventIDs (#1414): unpublished events whose venue was created
+	// together with the event — i.e. a suggestion that introduced a new
+	// venue, flagged so the admin can rename/merge it right away.
+	NewVenueEventIDs map[int]bool
 	// UnpublishedPastCount/URL (#1413): on the unfiltered default view only,
 	// how many unpublished events have a past date — the default view hides
 	// past events, so these would otherwise be invisible.
@@ -1597,6 +1601,7 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			}
 		}
 		renderTemplate(w, tmpls.adminEvents, tmplData(r, cfg, i18n, title, AdminEventsData{
+			NewVenueEventIDs:       newVenueEventIDs(events, locs),
 			UnpublishedPastCount:   unpublishedPast,
 			UnpublishedPastURL:     unpublishedPastURL,
 			Events:                 events,
@@ -3892,4 +3897,31 @@ func countUnpublishedPast(ctx context.Context, client *DansalClient, token strin
 		return 0, ""
 	}
 	return n, "/admin/events?unpublished=1&include_past=1&date_to=" + startOfToday.AddDate(0, 0, -1).Format("2006-01-02")
+}
+
+// newVenueEventIDs (#1414) marks unpublished events whose venue row was
+// created within two minutes of the event itself — the venue came in with
+// this suggestion/import rather than being an existing one. Both created_at
+// values are SQLite UTC timestamps, so comparing them directly is safe.
+func newVenueEventIDs(events []Event, locs []Location) map[int]bool {
+	created := make(map[int]time.Time, len(locs))
+	for _, l := range locs {
+		if t, ok := parseTime(l.CreatedAt); ok {
+			created[l.ID] = t
+		}
+	}
+	out := map[int]bool{}
+	for _, e := range events {
+		if e.IsPublished || e.LocationID == nil {
+			continue
+		}
+		lt, ok := created[*e.LocationID]
+		if !ok {
+			continue
+		}
+		if et, ok := parseTime(e.CreatedAt); ok && et.Sub(lt).Abs() <= 2*time.Minute {
+			out[e.ID] = true
+		}
+	}
+	return out
 }

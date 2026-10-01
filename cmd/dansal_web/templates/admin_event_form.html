@@ -799,7 +799,7 @@
   </section>
   {{end}}
 
-  {{if and (not .IsNew) (not .IsTemplateMode) .Event.ID}}
+  {{if and $.SyndicationEnabled (not .IsNew) (not .IsTemplateMode) .Event.ID}}
   <!-- Syndication (#971, #953) -->
   <section class="form-section" id="sec-syndication">
     <h2>External Syndication</h2>

@@ -8,9 +8,25 @@ import (
 	"net/http"
 )
 
+// requireSyndicationEnabled (#1409) is the single guard all 4 syndication
+// routes check first — the feature hasn't been tested end-to-end yet, so
+// it's off by default (web.yaml's enable_syndication, Go zero value false)
+// until explicitly opted into per-instance. Writes 404 and returns false
+// when disabled, same convention as requireExistingOrgMember etc.
+func requireSyndicationEnabled(w http.ResponseWriter, cfg *Config) bool {
+	if !cfg.EnableSyndication {
+		http.Error(w, "syndication is not enabled on this instance", http.StatusNotFound)
+		return false
+	}
+	return true
+}
+
 // GET /admin/orgs/{id}/syndication — fetch current syndication config.
 func adminSyndicationGetHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !requireSyndicationEnabled(w, cfg) {
+			return
+		}
 		su, ok := requireLogin(w, r)
 		if !ok {
 			return
@@ -36,6 +52,9 @@ func adminSyndicationGetHandler(cfg *Config, client *DansalClient) http.HandlerF
 // POST /admin/orgs/{id}/syndication — save syndication config.
 func adminSyndicationSaveHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !requireSyndicationEnabled(w, cfg) {
+			return
+		}
 		su, ok := requireLogin(w, r)
 		if !ok {
 			return
@@ -65,6 +84,9 @@ func adminSyndicationSaveHandler(cfg *Config, client *DansalClient) http.Handler
 // POST /admin/events/{id}/syndicate/{platform} — trigger sync for one platform.
 func adminSyndicatePlatformHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !requireSyndicationEnabled(w, cfg) {
+			return
+		}
 		su, ok := requireLogin(w, r)
 		if !ok {
 			return
@@ -95,6 +117,9 @@ func adminSyndicatePlatformHandler(cfg *Config, client *DansalClient) http.Handl
 // GET /admin/events/{id}/syndication — fetch current sync status.
 func adminGetSyncStatusHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !requireSyndicationEnabled(w, cfg) {
+			return
+		}
 		su, ok := requireLogin(w, r)
 		if !ok {
 			return

@@ -93,6 +93,13 @@ type Config struct {
 	ExternalOverlayAPIKey   string                  `yaml:"external_overlay_api_key"`   // dansal API key (admin-scoped, see POST /api/v1/apikeys) sent as the Bearer token
 	ExternalOverlayPollMins int                     `yaml:"external_overlay_poll_mins"` // default 30
 
+	// EnableSyndication (#1409) gates the multi-platform syndication admin UI
+	// (org-level platform config, per-event "syndicate to X" buttons) and its
+	// 4 proxy routes in admin_syndication.go. Off by default (Go zero value)
+	// since the feature hasn't been tested end-to-end yet — set to true to
+	// opt in once it has been for a given instance.
+	EnableSyndication bool `yaml:"enable_syndication"`
+
 	pagesContent *PagesContent
 	configPath   string // path from which config was loaded; used for reload
 

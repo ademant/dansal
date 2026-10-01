@@ -134,6 +134,15 @@ dark_mode: auto
 # external_overlay_api_key: ""
 # external_overlay_poll_mins: 30
 
+# --- External syndication (#1409) ---
+#
+# Pushes events to external platforms (Eventbrite, social-dance.today) from
+# the org and event admin pages. Off by default — the feature hasn't been
+# tested end-to-end yet. Set to true to opt in once it has been; the
+# matching routes return 404 and both admin UI sections are hidden while
+# this is unset/false.
+# enable_syndication: false
+
 # --- Telegram ---
 
 # Optional secret token to validate incoming Telegram webhook calls.

@@ -165,6 +165,7 @@
 {{$orgID := .Org.ID}}
 {{if $orgID}}
 
+{{if $.SyndicationEnabled}}
 <!-- Syndication (#971, #953) -->
 <fieldset class="members-fieldset" id="sec-syndication">
   <legend>External Syndication</legend>
@@ -237,6 +238,7 @@
   })();
   </script>
 </fieldset>
+{{end}}
 
 <fieldset class="members-fieldset">
   <legend>Members</legend>

@@ -47,6 +47,7 @@ type TemplateData struct {
 	AppBuildTime           string
 	SuggestAvailable       bool
 	RegistrationEnabled    bool
+	SyndicationEnabled     bool // #1409: gates the org/event syndication admin UI, off by default (untested)
 	SessionIdleTimeoutMins int
 	PendingRegCount        int    // verified pending registrations awaiting action (scoped to caller)
 	PendingSuggestionCount int    // unpublished events awaiting review (scoped to caller)
@@ -223,6 +224,7 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 		AppBuildTime:           BuildTime,
 		SuggestAvailable:       suggestAvailable(cfg),
 		RegistrationEnabled:    registrationEnabled(cfg),
+		SyndicationEnabled:     cfg.EnableSyndication,
 		SessionIdleTimeoutMins: cfg.SessionIdleTimeoutMins,
 		PendingRegCount:        dashAttention(r).PendingRegistrations,
 		PendingSuggestionCount: dashAttention(r).PendingEventSuggestions,

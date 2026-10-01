@@ -1,4 +1,11 @@
 {{template "base" .}}
+{{/* #1418: ⓘ help button + inline help text. The text is a disclosure
+     toggled below the label (not a hover tooltip — those never fire on touch).
+     Labels wrapping their input need an explicit for= when they contain this
+     button, or the button becomes the label's control. */}}
+{{define "sg-help-btn"}}<button type="button" class="help-btn" aria-expanded="false" aria-controls="sg-help-{{.id}}" aria-label="{{.S.T "nav_help"}}">i</button>{{end}}
+{{define "sg-help-text"}}<small id="sg-help-{{.id}}" class="field-help" hidden>{{.S.T (printf "sg_help_%s" .id)}}</small>{{end}}
+{{define "sg-help"}}{{template "sg-help-btn" .}}{{template "sg-help-text" .}}{{end}}
 {{define "content"}}
 <div class="suggest-wrap">
   <h1>{{if .Data.ManageToken}}{{.Strings.T "suggest_manage_title"}}{{else}}{{.Strings.T "suggest_event_title"}}{{end}}</h1>
@@ -50,7 +57,7 @@
     <!-- Step 1: What? -->
     <div class="wiz-step" data-step="1">
       <div class="form-row">
-        <label>{{$.Strings.T "evt_title"}} *
+        <label for="wiz-title">{{$.Strings.T "evt_title"}} * {{template "sg-help" (dict "id" "title" "S" $.Strings)}}
           <input type="text" id="wiz-title" name="dansal_title" required maxlength="200" placeholder="{{$.Strings.T "evt_title_placeholder"}}">
         </label>
       </div>
@@ -63,7 +70,9 @@
           <label class="check-label"><input type="checkbox" name="dansal_tags" value="open-air"{{if index .PrefillTags "open-air"}} checked{{end}}> {{$.Strings.T "tag_open_air"}}</label>
           <label class="check-label"><input type="checkbox" name="dansal_tags" value="session"{{if index .PrefillTags "session"}} checked{{end}}> {{$.Strings.T "tag_session"}}</label>
           <label class="check-label"><input type="checkbox" name="dansal_tags" value="concert"{{if index .PrefillTags "concert"}} checked{{end}}> {{$.Strings.T "tag_concert"}}</label>
+          {{template "sg-help-btn" (dict "id" "tags" "S" $.Strings)}}
         </div>
+        {{template "sg-help-text" (dict "id" "tags" "S" $.Strings)}}
         <div id="workshop-difficulty" hidden style="margin-top:.5rem">
           <div class="check-row">
             <label class="check-label"><input type="checkbox" name="dansal_tags" value="beginners"{{if index .PrefillTags "beginners"}} checked{{end}}> {{$.Strings.T "tag_beginners"}}</label>
@@ -74,7 +83,7 @@
       </div>
       {{if $.Data.Dances}}
       <div class="form-row">
-        <label class="form-label-sm">{{$.Strings.T "admin_dances_title"}}</label>
+        <label class="form-label-sm">{{$.Strings.T "admin_dances_title"}} {{template "sg-help" (dict "id" "dances" "S" $.Strings)}}</label>
         <div class="check-row">
           {{range $.Data.Dances}}
           <label class="check-label"><input type="checkbox" name="dance_ids" value="{{.ID}}"{{if index $.Data.PrefillDanceIDs .ID}} checked{{end}}> {{.Name}}</label>
@@ -84,13 +93,13 @@
       {{end}}
       <!-- #1412: comma-separated text is what gets submitted; chips below are a preview -->
       <div class="form-row">
-        <label class="form-label-sm" for="sg-musicians">{{$.Strings.T "evt_musicians"}}</label>
+        <label class="form-label-sm" for="sg-musicians">{{$.Strings.T "evt_musicians"}} {{template "sg-help" (dict "id" "musicians" "S" $.Strings)}}</label>
         <input id="sg-musicians" type="text" name="dansal_musicians_text" maxlength="2000" placeholder="{{$.Strings.T "people_list_placeholder"}}" autocomplete="off" aria-describedby="sg-people-hint-m">
         <small id="sg-people-hint-m" class="people-hint">{{$.Strings.T "people_list_hint"}}</small>
         <div id="sg-musician-chips" class="chip-wrap" aria-live="polite"></div>
       </div>
       <div class="form-row">
-        <label class="form-label-sm" for="sg-instructors">{{$.Strings.T "evt_instructors"}}</label>
+        <label class="form-label-sm" for="sg-instructors">{{$.Strings.T "evt_instructors"}} {{template "sg-help" (dict "id" "instructors" "S" $.Strings)}}</label>
         <input id="sg-instructors" type="text" name="dansal_instructors_text" maxlength="2000" placeholder="{{$.Strings.T "people_list_placeholder"}}" autocomplete="off" aria-describedby="sg-people-hint-i">
         <small id="sg-people-hint-i" class="people-hint">{{$.Strings.T "people_list_hint"}}</small>
         <div id="sg-instructor-chips" class="chip-wrap" aria-live="polite"></div>
@@ -127,11 +136,11 @@
           <!-- itself still lives in the #sg-date-from/#sg-date-to hidden inputs; -->
           <!-- this mirrors that value so it can be read and edited directly. -->
           <div class="sg-date-col">
-            <label class="sg-time-col-label" for="sg-date-text">{{$.Strings.T "evt_date"}}</label>
+            <label class="sg-time-col-label" for="sg-date-text">{{$.Strings.T "evt_date"}} {{template "sg-help-btn" (dict "id" "date" "S" $.Strings)}}</label>
             <input type="text" id="sg-date-text" class="sg-date-text" inputmode="numeric" placeholder="{{if eq $.DateFormat "de"}}DD.MM.YYYY{{else}}YYYY-MM-DD{{end}}" autocomplete="off" spellcheck="false">
           </div>
           <div class="sg-time-col">
-            <label class="sg-time-col-label" for="sg-start-time">{{$.Strings.T "suggest_start_time"}} *</label>
+            <label class="sg-time-col-label" for="sg-start-time">{{$.Strings.T "suggest_start_time"}} * {{template "sg-help-btn" (dict "id" "start" "S" $.Strings)}}</label>
             <input type="time" id="sg-start-time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" class="sg-time-input" value="18:00">
             <div class="sg-time-swipe" id="sg-start-time-swipe">
               <div class="sg-ts-col" data-part="h"><span class="sg-ts-digits">18</span><div class="sg-ts-btns"><button type="button" class="sg-ts-btn" data-dir="1">+</button><button type="button" class="sg-ts-btn" data-dir="-1">−</button></div></div>
@@ -140,7 +149,7 @@
             </div>
           </div>
           <div class="sg-time-col">
-            <label class="sg-time-col-label" for="sg-end-time">{{$.Strings.T "suggest_end_time"}} *</label>
+            <label class="sg-time-col-label" for="sg-end-time">{{$.Strings.T "suggest_end_time"}} * {{template "sg-help-btn" (dict "id" "end" "S" $.Strings)}}</label>
             <input type="time" id="sg-end-time" lang="{{if eq $.TimeFormat "12h"}}en-US{{else}}de{{end}}" class="sg-time-input" value="23:00">
             <div class="sg-time-swipe" id="sg-end-time-swipe">
               <div class="sg-ts-col" data-part="h"><span class="sg-ts-digits">23</span><div class="sg-ts-btns"><button type="button" class="sg-ts-btn" data-dir="1">+</button><button type="button" class="sg-ts-btn" data-dir="-1">−</button></div></div>
@@ -149,6 +158,9 @@
             </div>
           </div>
         </div>
+        {{template "sg-help-text" (dict "id" "date" "S" $.Strings)}}
+        {{template "sg-help-text" (dict "id" "start" "S" $.Strings)}}
+        {{template "sg-help-text" (dict "id" "end" "S" $.Strings)}}
         <p id="sg-date-err" class="form-error" style="display:none;margin-top:.25rem"></p>
         <p id="sg-time-err" class="form-error" style="display:none;margin-top:.25rem"></p>
       </div>
@@ -158,7 +170,7 @@
       <input type="hidden" id="sg-end" name="end_time">
 
       <div class="form-row">
-        <label for="sg-pricing-type">{{$.Strings.T "evt_admission"}}</label>
+        <label for="sg-pricing-type">{{$.Strings.T "evt_admission"}} {{template "sg-help" (dict "id" "admission" "S" $.Strings)}}</label>
         <select id="sg-pricing-type" name="pricing_type" data-on="change" data-fn="sgTogglePricing" data-args="[]">
           <option value="none" selected>— {{$.Strings.T "evt_none"}} —</option>
           <option value="free">{{$.Strings.T "evt_free"}}</option>
@@ -191,7 +203,7 @@
     <!-- Step 3: Where? -->
     <div class="wiz-step" data-step="3" hidden>
       <div class="form-row">
-        <label class="form-label-sm">{{$.Strings.T "suggest_location_search"}}</label>
+        <label class="form-label-sm" for="nominatim-q">{{$.Strings.T "suggest_location_search"}} {{template "sg-help" (dict "id" "location_search" "S" $.Strings)}}</label>
         <div style="display:flex;gap:.5rem">
           <input type="text" id="nominatim-q" placeholder="{{$.Strings.T "suggest_location_search_placeholder"}}" style="flex:1;padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem">
           <button type="button" id="nominatim-btn" class="btn-primary" style="padding:.45rem .9rem;margin-top:0;font-size:.88rem">{{$.Strings.T "suggest_location_search_btn"}}</button>
@@ -199,15 +211,15 @@
         <ul id="nominatim-results" hidden style="list-style:none;margin:.25rem 0 0;padding:0;border:1px solid #ccc;border-radius:4px;background:#fff;max-height:180px;overflow-y:auto"></ul>
       </div>
       <div class="form-row form-row-2col">
-        <label>{{$.Strings.T "col_location"}}
+        <label for="sg-location">{{$.Strings.T "col_location"}} {{template "sg-help" (dict "id" "location" "S" $.Strings)}}
           <input type="text" id="sg-location" name="location" maxlength="100" placeholder="{{$.Strings.T "loc_name_placeholder"}}">
         </label>
-        <label>{{$.Strings.T "col_location"}} ({{$.Strings.T "filter_all_towns"}})
+        <label for="sg-town">{{$.Strings.T "col_location"}} ({{$.Strings.T "filter_all_towns"}}) {{template "sg-help" (dict "id" "town" "S" $.Strings)}}
           <input type="text" id="sg-town" name="town" maxlength="100" placeholder="{{$.Strings.T "suggest_town_placeholder"}}">
         </label>
       </div>
       <div class="form-row">
-        <label>{{$.Strings.T "col_country"}}
+        <label for="sg-country">{{$.Strings.T "col_country"}} {{template "sg-help" (dict "id" "country" "S" $.Strings)}}
           <input type="text" id="sg-country" name="country" maxlength="2" placeholder="DE, FR, BE…" style="width:6rem">
         </label>
       </div>
@@ -218,7 +230,7 @@
       <input type="hidden" id="sg-address"  name="address">
       <input type="hidden" id="sg-zipcode"  name="zipcode">
       <div class="form-row">
-        <label class="form-label-sm">{{$.Strings.T "food_label"}}</label>
+        <label class="form-label-sm">{{$.Strings.T "food_label"}} {{template "sg-help" (dict "id" "food" "S" $.Strings)}}</label>
         <div class="check-row">
           <label class="check-label"><input type="radio" name="food" value=""> {{$.Strings.T "food_unset"}}</label>
           <label class="check-label"><input type="radio" name="food" value="sold"> {{$.Strings.T "food_sold"}}</label>
@@ -227,7 +239,7 @@
         </div>
       </div>
       <div class="form-row">
-        <label class="form-label-sm">{{$.Strings.T "drink_label"}}</label>
+        <label class="form-label-sm">{{$.Strings.T "drink_label"}} {{template "sg-help" (dict "id" "drink" "S" $.Strings)}}</label>
         <div class="check-row">
           <label class="check-label"><input type="radio" name="drink" value=""> {{$.Strings.T "drink_unset"}}</label>
           <label class="check-label"><input type="radio" name="drink" value="alcohol"> {{$.Strings.T "drink_alcohol"}}</label>
@@ -240,28 +252,29 @@
     <!-- Step 4: Details -->
     <div class="wiz-step" data-step="4" hidden>
       <div class="form-row">
-        <label>{{$.Strings.T "evt_description"}}
-          <textarea name="description" rows="4" placeholder="{{$.Strings.T "suggest_description_placeholder"}}"></textarea>
+        <label for="sg-description">{{$.Strings.T "evt_description"}} {{template "sg-help" (dict "id" "description" "S" $.Strings)}}
+          <textarea id="sg-description" name="description" rows="4" placeholder="{{$.Strings.T "suggest_description_placeholder"}}"></textarea>
         </label>
       </div>
       <div class="form-row">
-        <label>{{$.Strings.T "evt_website"}}
-          <input type="url" name="url" placeholder="https://...">
+        <label for="sg-url">{{$.Strings.T "evt_website"}} {{template "sg-help" (dict "id" "website" "S" $.Strings)}}
+          <input type="url" id="sg-url" name="url" placeholder="https://...">
         </label>
       </div>
       <div class="form-row form-row-2col">
-        <label>{{$.Strings.T "evt_contact_name"}}
-          <input type="text" name="contact_name">
+        <label for="sg-contact-name">{{$.Strings.T "evt_contact_name"}} {{template "sg-help" (dict "id" "contact_name" "S" $.Strings)}}
+          <input type="text" id="sg-contact-name" name="contact_name">
         </label>
-        <label>{{$.Strings.T "evt_contact_email"}}
-          <input type="email" name="contact_email">
+        <label for="sg-contact-email">{{$.Strings.T "evt_contact_email"}} {{template "sg-help" (dict "id" "contact_email" "S" $.Strings)}}
+          <input type="email" id="sg-contact-email" name="contact_email">
         </label>
       </div>
     </div>
 
     <!-- Step 5: Timetable -->
     <div class="wiz-step" data-step="5" hidden>
-      <p class="suggest-hint hint-review">{{$.Strings.T "suggest_timetable_hint"}}</p>
+      <p class="suggest-hint hint-review">{{$.Strings.T "suggest_timetable_hint"}} {{template "sg-help-btn" (dict "id" "timetable" "S" $.Strings)}}</p>
+      {{template "sg-help-text" (dict "id" "timetable" "S" $.Strings)}}
       <table class="growing-table" id="sg-tt-table">
         <thead>
           <tr>
@@ -295,15 +308,15 @@
     <div class="wiz-step" data-step="6" hidden>
       {{if not $.Data.ManageToken}}<p class="suggest-hint hint-review">{{$.Strings.T "suggest_wizard_review_hint"}}</p>{{end}}
       <div class="form-row">
-        <label>{{$.Strings.T "suggest_name_label"}}
-          <input type="text" name="suggester_name" maxlength="100">
+        <label for="sg-suggester-name">{{$.Strings.T "suggest_name_label"}} {{template "sg-help" (dict "id" "suggester_name" "S" $.Strings)}}
+          <input type="text" id="sg-suggester-name" name="suggester_name" maxlength="100">
         </label>
       </div>
       {{if not .ManageToken}}
         {{if $.Data.HintSMTP}}
         <div class="form-row">
-          <label>{{$.Strings.T "suggest_email_label"}} *
-            <input type="email" name="email" required>
+          <label for="sg-email">{{$.Strings.T "suggest_email_label"}} * {{template "sg-help" (dict "id" "email" "S" $.Strings)}}
+            <input type="email" id="sg-email" name="email" required>
           </label>
         </div>
         {{end}}
@@ -313,8 +326,8 @@
         {{end}}
         {{if $.Data.CanUploadImageNow}}
         <div class="form-row">
-          <label>{{$.Strings.T "suggest_manage_image_label"}}
-            <input type="file" name="image" accept="image/*">
+          <label for="sg-image">{{$.Strings.T "suggest_manage_image_label"}} {{template "sg-help" (dict "id" "image" "S" $.Strings)}}
+            <input type="file" id="sg-image" name="image" accept="image/*">
           </label>
           <p class="hint">{{$.Strings.T "suggest_manage_image_hint"}}</p>
         </div>
@@ -325,8 +338,8 @@
       {{if $.Data.ManageToken}}
       <div class="form-row">
         {{if $.Data.ExistingImageURL}}<img src="{{$.Data.ExistingImageURL}}" alt="" style="max-width:100%;max-height:180px;display:block;margin-bottom:.5rem;border-radius:4px">{{end}}
-        <label>{{$.Strings.T "suggest_manage_image_label"}}
-          <input type="file" name="image" accept="image/*">
+        <label for="sg-image">{{$.Strings.T "suggest_manage_image_label"}} {{template "sg-help" (dict "id" "image" "S" $.Strings)}}
+          <input type="file" id="sg-image" name="image" accept="image/*">
         </label>
         <p class="hint">{{$.Strings.T "suggest_manage_image_hint"}}</p>
       </div>
@@ -346,13 +359,13 @@
   <form id="import-form" method="post" action="/events/suggest" enctype="multipart/form-data">
     <div class="form-row">
       <div id="drop-zone" class="drop-zone">
-        <span id="drop-label">{{$.Strings.T "suggest_drop_zone_label"}}</span>
+        <span id="drop-label">{{$.Strings.T "suggest_drop_zone_label"}}</span> {{template "sg-help" (dict "id" "import_file" "S" $.Strings)}}
         <input type="file" id="import-file" name="file" accept=".ics,.json" style="display:none">
       </div>
       <p id="drop-filename" class="drop-filename" hidden></p>
     </div>
     <div class="form-row">
-      <label for="import-url">{{$.Strings.T "suggest_import_url_label"}}</label>
+      <label for="import-url">{{$.Strings.T "suggest_import_url_label"}} {{template "sg-help" (dict "id" "import_url" "S" $.Strings)}}</label>
       <input type="url" id="import-url" name="url" placeholder="{{$.Strings.T "suggest_import_url_placeholder"}}">
     </div>
     <button type="submit" class="btn-primary">{{$.Strings.T "admin_import_preview_btn"}}</button>
@@ -422,6 +435,12 @@
 .musician-chip{display:inline-flex;align-items:center;gap:.3rem;background:#e8eaf6;border-radius:20px;padding:.2rem .6rem .2rem .8rem;font-size:.85rem}
 .btn-chip-del{background:none;border:none;cursor:pointer;color:#777;font-size:1rem;padding:0;line-height:1}
 .btn-chip-del:hover{color:#c0392b}
+/* #1418: ⓘ help buttons */
+.help-btn{display:inline-flex;align-items:center;justify-content:center;width:1.15rem;height:1.15rem;margin-left:.2rem;padding:0;border:1px solid var(--link,#1a6eb5);border-radius:50%;background:transparent;color:var(--link,#1a6eb5);font:italic 700 .72rem/1 Georgia,serif;cursor:pointer;vertical-align:middle;touch-action:manipulation}
+.help-btn[aria-expanded="true"]{background:var(--link,#1a6eb5);color:#fff}
+.help-btn:focus-visible{outline:2px solid var(--link,#1a6eb5);outline-offset:2px}
+.field-help{display:block;font-weight:400;font-size:.82rem;line-height:1.4;color:var(--fg-2,#444);background:var(--bg-hover,#f0f4ff);border-left:3px solid var(--link,#1a6eb5);border-radius:3px;padding:.35rem .6rem;margin:.3rem 0 .4rem}
+.field-help[hidden]{display:none}
 /* #1412: musician/instructor list preview chips + "did you mean" dialog */
 .people-hint{display:block;font-size:.8rem;color:var(--fg-muted,#666);margin:.2rem 0 .4rem}
 .chip-status{font-size:.75rem;color:#555}
@@ -522,6 +541,21 @@ function sgGrowTTTable(el) {
     tbody.appendChild(row2);
   }
 }
+
+// ── ⓘ help buttons (#1418): toggle the inline help text. Capture phase +
+// stopPropagation so the button inside the import drop zone doesn't also
+// open the file picker.
+document.addEventListener('click', function(e){
+  var btn = e.target.closest && e.target.closest('.help-btn');
+  if (!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  var txt = document.getElementById(btn.getAttribute('aria-controls'));
+  if (!txt) return;
+  var open = btn.getAttribute('aria-expanded') !== 'true';
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  txt.hidden = !open;
+}, true);
 
 // ── Musicians / Instructors (#1412): one comma-separated text field each.
 // The text is what gets submitted (dansal_*_text, split server-side); on

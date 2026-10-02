@@ -102,7 +102,7 @@
     {{end}}
     {{if .UnpinnedTemplates}}
     <form method="post" action="" class="dash-preset-add-row" id="dash-preset-add-form">
-      <select name="template_id" id="dash-preset-select">
+      <select name="template_id" id="dash-preset-select" aria-label="{{$.Strings.T "dashboard_preset_select_label"}}">
         {{range .UnpinnedTemplates}}
         {{$scope := index $.Data.TemplateOrgMap (derefInt .OrgID)}}
         <option value="{{.ID}}">{{.Name}}{{if $scope}} ({{$scope}}){{end}}</option>
@@ -183,7 +183,7 @@
 .dash-hint{display:block;padding:.6rem 1rem;border-radius:6px;font-size:.92rem;font-weight:600;text-decoration:none}
 .dash-hint-warn{background:var(--badge-warn-bg,#fff3cd);color:var(--badge-warn-fg,#856404)}
 .dash-hint-info{background:var(--badge-info-bg,#d1ecf1);color:var(--badge-info-fg,#0c5460)}
-.dash-hint-danger{background:#fde2e1;color:#c0392b}
+.dash-hint-danger{background:var(--badge-danger-bg,#f8d7da);color:var(--badge-danger-fg,#721c24)} /* #1420: theme tokens — #c0392b on #fde2e1 was 4.44:1 and ignored dark mode */
 .dash-hint:hover{filter:brightness(0.96)}
 .dash-stats{display:flex;align-items:center;gap:1.5rem;margin-bottom:2rem;flex-wrap:wrap}
 .dash-stat{background:var(--card-bg,#fff);border:1px solid var(--border-mid,#ddd);border-radius:8px;padding:1rem 1.5rem;min-width:140px;text-align:center}

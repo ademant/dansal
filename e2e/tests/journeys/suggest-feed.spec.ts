@@ -210,7 +210,7 @@ test.describe("Suggest a feed (#1333)", () => {
       }
 
       // -- Approval created a real fetch source and ran a real import --
-      const sourcesResp = await page.request.fetch(`${API_BASE}/api/v1/fetchurl`, {
+      const sourcesResp = await page.request.fetch(`${API_BASE}/api/v1/feeds`, {
         headers: { Authorization: `Bearer ${adminToken}` },
       });
       const sources = await sourcesResp.json();
@@ -305,7 +305,7 @@ test.describe("Suggest a feed (#1333)", () => {
       );
       try {
         const deniedResp = await page.request.fetch(
-          `${API_BASE}/api/v1/fetchurl-suggestions/${suggestionId}/approve`,
+          `${API_BASE}/api/v1/feeds/suggestions/${suggestionId}/approve`,
           { method: "POST", headers: { Authorization: `Bearer ${outsiderToken}` } }
         );
         expect(
@@ -335,7 +335,7 @@ test.describe("Suggest a feed (#1333)", () => {
       const createdOrg = Array.isArray(orgs) ? orgs.find((o: any) => o.name === orgName) : undefined;
       expect(createdOrg, "admin approval must create the proposed organization").toBeTruthy();
 
-      const sourcesResp = await page.request.fetch(`${API_BASE}/api/v1/fetchurl`, {
+      const sourcesResp = await page.request.fetch(`${API_BASE}/api/v1/feeds`, {
         headers: { Authorization: `Bearer ${adminToken}` },
       });
       const sources = await sourcesResp.json();

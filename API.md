@@ -172,8 +172,8 @@ OPTIONS /api/v1/musicians
 OPTIONS /api/v1/musicians/{id}
 OPTIONS /api/v1/instructors
 OPTIONS /api/v1/instructors/{id}
-OPTIONS /api/v1/fetchurl
-OPTIONS /api/v1/fetchurl/{id}
+OPTIONS /api/v1/feeds
+OPTIONS /api/v1/feeds/{id}
 OPTIONS /api/v1/events/{id}/contact-posts
 OPTIONS /api/v1/contact-posts/{id}
 OPTIONS /api/v1/events/{id}/location
@@ -1107,51 +1107,44 @@ Both per-entry endpoints journal a full-timetable snapshot to `GET .../timetable
 
 ## Images
 
+Uploading or deleting an image addresses its owner: `/api/v1/{owners}/{id}/image` or `.../avatar` (#1384). The URL an image is *served* from is separate and stays stable: the `image_url`/`avatar_url` fields in the owner's JSON point to it, and it is published in places dansal can't update (ActivityPub actors on other servers, OpenGraph, JSON-LD), so those GET paths are permanent.
+
 ```
+# upload (multipart/form-data, field "image") / delete — auth required
+POST|DELETE /api/v1/events/{id}/image                # admin, or user/publisher in the event's org
+POST|DELETE /api/v1/musicians/{id}/image             # admin, user
+POST|DELETE /api/v1/organizations/{id}/image         # admin, or user in the org
+POST|DELETE /api/v1/series/{id}/image                # admin, or user in the series' org
+POST|DELETE /api/v1/locations/{id}/site-plan         # location write access
+
+# served from (public)
 GET    /api/v1/images/{event_id}
-POST   /api/v1/images/{event_id}          # upload event image (multipart/form-data, field "image"), auth required
-DELETE /api/v1/images/{event_id}          # auth required
-
 GET    /api/v1/musician-images/{id}
-POST   /api/v1/musician-images/{id}       # auth required
-DELETE /api/v1/musician-images/{id}       # auth required
+GET    /api/v1/org-images/{id}
+GET    /api/v1/series-images/{id}
+GET    /api/v1/location-images/{id}       # a location's site-plan image
 
+# musician gallery (#1362)
 GET    /api/v1/gallery-images/{id}               # a gallery picture; ?thumb=sq for the square thumbnail
 POST   /api/v1/musicians/{id}/gallery-images     # add a picture (multipart: image, caption, ai_generated); 201 with the picture, 409 when full
 PUT    /api/v1/musicians/{id}/gallery            # {"items":[{"id","caption","ai_generated"}]}: order, captions, AI flags; pictures left out are deleted
 DELETE /api/v1/musicians/{id}/gallery/{gid}      # delete one picture
-
-GET    /api/v1/org-images/{id}
-POST   /api/v1/org-images/{id}            # auth required
-DELETE /api/v1/org-images/{id}            # auth required
-
-GET    /api/v1/series-images/{id}
-POST   /api/v1/series-images/{id}         # auth required
-DELETE /api/v1/series-images/{id}         # auth required
-
-GET    /api/v1/location-images/{id}       # a location's site-plan image
-POST   /api/v1/locations/{id}/site-plan   # auth required (location write access)
-DELETE /api/v1/locations/{id}/site-plan   # auth required (location write access)
 ```
 
-Images are stored as AVIF (or JPEG fallback) and resized on upload to fit within 1024×1024 pixels. Served directly via `http.ServeFile`.
+Images are stored as AVIF (or JPEG fallback) and resized on upload to fit within 1024×1024 pixels. Served directly via `http.ServeFile`. The pre-#1384 upload/delete paths (`POST`/`DELETE` on the GET paths above) still work as [deprecated aliases](#deprecated-routes).
 
 ### Avatars
 
 A smaller, separate image slot from the main image above — square, JPEG, served with a longer cache lifetime. Org avatar upload/delete is allowed for an admin or a member of that org; musician/instructor avatar upload/delete is admin-only (there's no "musician/instructor member" concept to check against).
 
 ```
+POST|DELETE /api/v1/organizations/{id}/avatar   # auth required (admin or org member)
+POST|DELETE /api/v1/musicians/{id}/avatar       # auth required (admin only)
+POST|DELETE /api/v1/instructors/{id}/avatar     # auth required (admin only)
+
 GET    /api/v1/org-avatars/{id}
-POST   /api/v1/org-avatars/{id}           # auth required (admin or org member)
-DELETE /api/v1/org-avatars/{id}           # auth required (admin or org member)
-
 GET    /api/v1/musician-avatars/{id}
-POST   /api/v1/musician-avatars/{id}      # auth required (admin only)
-DELETE /api/v1/musician-avatars/{id}      # auth required (admin only)
-
 GET    /api/v1/instructor-avatars/{id}
-POST   /api/v1/instructor-avatars/{id}    # auth required (admin only)
-DELETE /api/v1/instructor-avatars/{id}    # auth required (admin only)
 ```
 
 ### Upload errors
@@ -1163,20 +1156,26 @@ See also [Contact Posts](#contact-posts) for `contact-post-images`, a fourth ima
 ## Fetch Sources
 
 ```
-GET    /api/v1/fetchurl
-GET    /api/v1/fetchurl/{id}
-POST   /api/v1/fetchurl
-PATCH  /api/v1/fetchurl/{id}
-DELETE /api/v1/fetchurl/{id}
-POST   /api/v1/fetchurl/{id}/fetch       # trigger a single fetch
-POST   /api/v1/fetchurl/bulk-fetch       # trigger fetch for multiple IDs
-POST   /api/v1/fetchurl/bulk-delete
-POST   /api/v1/fetchurl/bulk-assign-org
+GET    /api/v1/feeds
+GET    /api/v1/feeds/{id}
+POST   /api/v1/feeds
+PATCH  /api/v1/feeds/{id}
+DELETE /api/v1/feeds/{id}
+POST   /api/v1/feeds/{id}/fetch       # trigger a single fetch
+POST   /api/v1/feeds/bulk-fetch       # trigger fetch for multiple IDs
+POST   /api/v1/feeds/bulk-delete
+POST   /api/v1/feeds/bulk-assign-org
+
+POST   /api/v1/feeds/suggest-preview  # public: preview a visitor's feed suggestion
+POST   /api/v1/feeds/suggest          # public: submit it
+GET    /api/v1/feeds/suggestions                 # pending suggestions (admin, or member of the suggested org)
+POST   /api/v1/feeds/suggestions/{id}/approve
+POST   /api/v1/feeds/suggestions/{id}/reject
 ```
 
-Authentication required. Fetch sources are iCal/JSON/RSS feeds imported automatically by the `dansal-fetch` timer.
+Authentication required except where marked public. Fetch sources are iCal/JSON/RSS feeds imported automatically by the `dansal-fetch` timer.
 
-**Note:** The path is `/api/v1/fetchurl` (no trailing `s`).
+**Note:** until #1384 this collection was `/api/v1/fetchurl` (and `/api/v1/fetchurl-suggestions`); those paths still work as [deprecated aliases](#deprecated-routes).
 
 **`category_filter` (array of strings, optional, iCal sources only):** when set, only VEVENTs whose `CATEGORIES` intersect the filter (case-insensitively) are imported — an empty/unset filter imports everything, same as before. Useful for a shared feed that mixes multiple event types (e.g. import only `CATEGORIES:Balfolk` entries from a venue's general events calendar) without needing separate title-keyword heuristics.
 
@@ -1266,7 +1265,7 @@ Public (Telegram calls directly). Optional validation via `telegram_webhook_secr
 
 ## Deprecated routes
 
-These routes still work but have a canonical replacement (phase-22: #1379, #1380, #1381). Every response from one of them carries a `Deprecation` header (RFC 9745, `@1790899200` = 2026-10-02) and a `Link: <…>; rel="successor-version"` header naming the replacement for that very request. They are scheduled for removal with the next major API version.
+These routes still work but have a canonical replacement (phase-22: #1379, #1380, #1381; phase-23: #1384). Every response from one of them carries a `Deprecation` header (RFC 9745, `@1790899200` = 2026-10-02) and a `Link: <…>; rel="successor-version"` header naming the replacement for that very request. They are scheduled for removal with the next major API version.
 
 | Deprecated | Use instead |
 |---|---|
@@ -1282,8 +1281,15 @@ These routes still work but have a canonical replacement (phase-22: #1379, #1380
 | `GET`/`DELETE /api/v1/user/webauthn/credentials[/{id}]` | `/api/v1/me/webauthn/credentials[/{id}]` |
 | `POST /api/v1/user/webauthn/register/{begin,finish}` | `POST /api/v1/me/webauthn/register/{begin,finish}` |
 | `GET /api/v1/auth/totp/setup`, `POST /api/v1/auth/totp/confirm`, `DELETE /api/v1/auth/totp` | `/api/v1/me/totp/setup`, `/api/v1/me/totp/confirm`, `/api/v1/me/totp` |
+| `/api/v1/fetchurl[/…]` | `/api/v1/feeds[/…]` |
+| `/api/v1/fetchurl-suggestions[/{id}/approve\|reject]` | `/api/v1/feeds/suggestions[/{id}/approve\|reject]` |
+| `POST`/`DELETE /api/v1/images/{event_id}` | `POST`/`DELETE /api/v1/events/{id}/image` |
+| `POST`/`DELETE /api/v1/org-images/{id}`, `/org-avatars/{id}` | `POST`/`DELETE /api/v1/organizations/{id}/image`, `/avatar` |
+| `POST`/`DELETE /api/v1/musician-images/{id}`, `/musician-avatars/{id}` | `POST`/`DELETE /api/v1/musicians/{id}/image`, `/avatar` |
+| `POST`/`DELETE /api/v1/instructor-avatars/{id}` | `POST`/`DELETE /api/v1/instructors/{id}/avatar` |
+| `POST`/`DELETE /api/v1/series-images/{id}` | `POST`/`DELETE /api/v1/series/{id}/image` |
 
-`/api/v1/users/{id}` (an admin acting on another account) and `/api/v1/auth/webauthn/login/*` (the login ceremony, before there is a caller) are not affected.
+`/api/v1/users/{id}` (an admin acting on another account) and `/api/v1/auth/webauthn/login/*` (the login ceremony, before there is a caller) are not affected, and neither are the `GET` image URLs (see [Images](#images)).
 
 ## Status Codes
 

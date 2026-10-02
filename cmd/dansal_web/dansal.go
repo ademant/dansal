@@ -1493,11 +1493,11 @@ func (c *DansalClient) deleteLocation(ctx context.Context, id, reassignTo int, t
 }
 
 func (c *DansalClient) UploadMusicianImage(ctx context.Context, id int, data []byte, filename, token string) error {
-	return c.uploadAvatar(ctx, fmt.Sprintf("/api/v1/musician-images/%d", id), data, filename, token)
+	return c.uploadAvatar(ctx, fmt.Sprintf("/api/v1/musicians/%d/image", id), data, filename, token)
 }
 
 func (c *DansalClient) UploadOrgImage(ctx context.Context, id int, data []byte, filename, token string) error {
-	return c.uploadAvatar(ctx, fmt.Sprintf("/api/v1/org-images/%d", id), data, filename, token)
+	return c.uploadAvatar(ctx, fmt.Sprintf("/api/v1/organizations/%d/image", id), data, filename, token)
 }
 
 func (c *DansalClient) UploadLocationSitePlan(ctx context.Context, id int, data []byte, filename, token string) error {
@@ -1612,7 +1612,7 @@ func (c *DansalClient) CreateFetchSource(ctx context.Context, rawURL, typ string
 	}
 	body, _ := json.Marshal(payload)
 	var events []any
-	if err := c.do(ctx, http.MethodPost, "/api/v1/fetchurl", token, body, &events, http.StatusOK, http.StatusCreated); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/api/v1/feeds", token, body, &events, http.StatusOK, http.StatusCreated); err != nil {
 		return 0, err
 	}
 	return len(events), nil
@@ -1620,12 +1620,12 @@ func (c *DansalClient) CreateFetchSource(ctx context.Context, rawURL, typ string
 
 func (c *DansalClient) GetFetchSources(ctx context.Context, token string) ([]FetchSource, error) {
 	var sources []FetchSource
-	return sources, c.do(ctx, http.MethodGet, "/api/v1/fetchurl", token, nil, &sources)
+	return sources, c.do(ctx, http.MethodGet, "/api/v1/feeds", token, nil, &sources)
 }
 
 func (c *DansalClient) GetFetchSource(ctx context.Context, id int, token string) (FetchSource, error) {
 	var src FetchSource
-	return src, c.do(ctx, http.MethodGet, fmt.Sprintf("/api/v1/fetchurl/%d", id), token, nil, &src)
+	return src, c.do(ctx, http.MethodGet, fmt.Sprintf("/api/v1/feeds/%d", id), token, nil, &src)
 }
 
 func (c *DansalClient) UpdateFetchSource(ctx context.Context, id int, typ string, tags []string, danceIDs []int, orgID *int, templateID *int, templateMode, templateData string, kuferConfig string, token string) error {
@@ -1640,7 +1640,7 @@ func (c *DansalClient) UpdateFetchSource(ctx context.Context, id int, typ string
 		"kufer_config":    kuferConfig,
 	}
 	body, _ := json.Marshal(payload)
-	return c.do(ctx, http.MethodPatch, fmt.Sprintf("/api/v1/fetchurl/%d", id), token, body, nil)
+	return c.do(ctx, http.MethodPatch, fmt.Sprintf("/api/v1/feeds/%d", id), token, body, nil)
 }
 
 func (c *DansalClient) GetLocations(ctx context.Context) ([]Location, error) {
@@ -1790,7 +1790,7 @@ func (c *DansalClient) DeleteLocationChild(ctx context.Context, childID int, tok
 }
 
 func (c *DansalClient) DeleteFetchSource(ctx context.Context, id int, token string) error {
-	return c.do(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/fetchurl/%d", id), token, nil, nil, http.StatusNoContent)
+	return c.do(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/feeds/%d", id), token, nil, nil, http.StatusNoContent)
 }
 
 type FetchRunResult struct {
@@ -1822,7 +1822,7 @@ func (c *DansalClient) RunFetchSource(ctx context.Context, id int, token string)
 	if timeout <= 0 {
 		timeout = fastCallTimeout
 	}
-	if err := c.doWithTimeout(ctx, timeout, http.MethodPost, fmt.Sprintf("/api/v1/fetchurl/%d/fetch", id), token, nil, &body, http.StatusOK, http.StatusCreated); err != nil {
+	if err := c.doWithTimeout(ctx, timeout, http.MethodPost, fmt.Sprintf("/api/v1/feeds/%d/fetch", id), token, nil, &body, http.StatusOK, http.StatusCreated); err != nil {
 		return FetchRunResult{}, err
 	}
 	return FetchRunResult{Count: len(body.Events), New: body.New, Updated: body.Updated,
@@ -1831,7 +1831,7 @@ func (c *DansalClient) RunFetchSource(ctx context.Context, id int, token string)
 
 func (c *DansalClient) BulkDeleteFetchSources(ctx context.Context, ids []int, token string) error {
 	body, _ := json.Marshal(map[string]any{"ids": ids})
-	return c.do(ctx, http.MethodPost, "/api/v1/fetchurl/bulk-delete", token, body, nil, http.StatusNoContent)
+	return c.do(ctx, http.MethodPost, "/api/v1/feeds/bulk-delete", token, body, nil, http.StatusNoContent)
 }
 
 func (c *DansalClient) BulkRunFetchSources(ctx context.Context, ids []int, token string) error {
@@ -1844,12 +1844,12 @@ func (c *DansalClient) BulkRunFetchSources(ctx context.Context, ids []int, token
 	if timeout <= 0 {
 		timeout = fastCallTimeout
 	}
-	return c.doWithTimeout(ctx, timeout, http.MethodPost, "/api/v1/fetchurl/bulk-fetch", token, body, nil, http.StatusOK, http.StatusCreated)
+	return c.doWithTimeout(ctx, timeout, http.MethodPost, "/api/v1/feeds/bulk-fetch", token, body, nil, http.StatusOK, http.StatusCreated)
 }
 
 func (c *DansalClient) BulkAssignFetchSourceOrg(ctx context.Context, ids []int, orgID *int, token string) error {
 	body, _ := json.Marshal(map[string]any{"ids": ids, "organization_id": orgID})
-	return c.do(ctx, http.MethodPost, "/api/v1/fetchurl/bulk-assign-org", token, body, nil, http.StatusNoContent)
+	return c.do(ctx, http.MethodPost, "/api/v1/feeds/bulk-assign-org", token, body, nil, http.StatusNoContent)
 }
 
 func (c *DansalClient) UnassignLocationOrg(ctx context.Context, locationID, orgID int, token string) error {
@@ -2135,7 +2135,7 @@ func (c *DansalClient) EnrichEvent(ctx context.Context, eventID int, req EnrichE
 }
 
 func (c *DansalClient) DeleteEventImage(ctx context.Context, eventID int, token string) error {
-	return c.deleteAvatar(ctx, fmt.Sprintf("/api/v1/images/%d", eventID), token)
+	return c.deleteAvatar(ctx, fmt.Sprintf("/api/v1/events/%d/image", eventID), token)
 }
 
 // GalleryImage is one uploaded gallery picture (#1362).
@@ -2199,19 +2199,19 @@ func (c *DansalClient) UpdateMusicianGallery(ctx context.Context, id int, items 
 }
 
 func (c *DansalClient) DeleteMusicianImage(ctx context.Context, id int, token string) error {
-	return c.deleteAvatar(ctx, fmt.Sprintf("/api/v1/musician-images/%d", id), token)
+	return c.deleteAvatar(ctx, fmt.Sprintf("/api/v1/musicians/%d/image", id), token)
 }
 
 func (c *DansalClient) DeleteOrgImage(ctx context.Context, id int, token string) error {
-	return c.deleteAvatar(ctx, fmt.Sprintf("/api/v1/org-images/%d", id), token)
+	return c.deleteAvatar(ctx, fmt.Sprintf("/api/v1/organizations/%d/image", id), token)
 }
 
 func (c *DansalClient) UploadSeriesImage(ctx context.Context, id int, data []byte, filename, token string) error {
-	return c.uploadAvatar(ctx, fmt.Sprintf("/api/v1/series-images/%d", id), data, filename, token)
+	return c.uploadAvatar(ctx, fmt.Sprintf("/api/v1/series/%d/image", id), data, filename, token)
 }
 
 func (c *DansalClient) DeleteSeriesImage(ctx context.Context, id int, token string) error {
-	return c.deleteAvatar(ctx, fmt.Sprintf("/api/v1/series-images/%d", id), token)
+	return c.deleteAvatar(ctx, fmt.Sprintf("/api/v1/series/%d/image", id), token)
 }
 
 // multipartForm builds a single-file multipart body with the form field
@@ -2258,15 +2258,15 @@ func (c *DansalClient) uploadAvatar(ctx context.Context, path string, data []byt
 }
 
 func (c *DansalClient) UploadOrgAvatar(ctx context.Context, id int, data []byte, filename, token string) error {
-	return c.uploadAvatar(ctx, fmt.Sprintf("/api/v1/org-avatars/%d", id), data, filename, token)
+	return c.uploadAvatar(ctx, fmt.Sprintf("/api/v1/organizations/%d/avatar", id), data, filename, token)
 }
 
 func (c *DansalClient) UploadMusicianAvatar(ctx context.Context, id int, data []byte, filename, token string) error {
-	return c.uploadAvatar(ctx, fmt.Sprintf("/api/v1/musician-avatars/%d", id), data, filename, token)
+	return c.uploadAvatar(ctx, fmt.Sprintf("/api/v1/musicians/%d/avatar", id), data, filename, token)
 }
 
 func (c *DansalClient) UploadInstructorAvatar(ctx context.Context, id int, data []byte, filename, token string) error {
-	return c.uploadAvatar(ctx, fmt.Sprintf("/api/v1/instructor-avatars/%d", id), data, filename, token)
+	return c.uploadAvatar(ctx, fmt.Sprintf("/api/v1/instructors/%d/avatar", id), data, filename, token)
 }
 
 func (c *DansalClient) deleteAvatar(ctx context.Context, path, token string) error {
@@ -2274,15 +2274,15 @@ func (c *DansalClient) deleteAvatar(ctx context.Context, path, token string) err
 }
 
 func (c *DansalClient) DeleteOrgAvatar(ctx context.Context, id int, token string) error {
-	return c.deleteAvatar(ctx, fmt.Sprintf("/api/v1/org-avatars/%d", id), token)
+	return c.deleteAvatar(ctx, fmt.Sprintf("/api/v1/organizations/%d/avatar", id), token)
 }
 
 func (c *DansalClient) DeleteMusicianAvatar(ctx context.Context, id int, token string) error {
-	return c.deleteAvatar(ctx, fmt.Sprintf("/api/v1/musician-avatars/%d", id), token)
+	return c.deleteAvatar(ctx, fmt.Sprintf("/api/v1/musicians/%d/avatar", id), token)
 }
 
 func (c *DansalClient) DeleteInstructorAvatar(ctx context.Context, id int, token string) error {
-	return c.deleteAvatar(ctx, fmt.Sprintf("/api/v1/instructor-avatars/%d", id), token)
+	return c.deleteAvatar(ctx, fmt.Sprintf("/api/v1/instructors/%d/avatar", id), token)
 }
 
 func (c *DansalClient) UploadSuggestManageImage(ctx context.Context, manageToken string, data []byte, filename string) error {
@@ -2290,7 +2290,7 @@ func (c *DansalClient) UploadSuggestManageImage(ctx context.Context, manageToken
 }
 
 func (c *DansalClient) UploadEventImage(ctx context.Context, eventID int, data []byte, filename, token string) error {
-	return c.uploadAvatar(ctx, fmt.Sprintf("/api/v1/images/%d", eventID), data, filename, token)
+	return c.uploadAvatar(ctx, fmt.Sprintf("/api/v1/events/%d/image", eventID), data, filename, token)
 }
 
 func (c *DansalClient) UpdateEvent(ctx context.Context, id int, req EventUpdateReq, token string) (Event, error) {
@@ -3753,13 +3753,13 @@ type FetchSuggestionReq struct {
 	LocationMappings []FetchSuggestionLocationMapping `json:"location_mappings,omitempty"`
 }
 
-// SuggestFetchPreview calls POST /api/v1/fetchurl/suggest-preview with a
+// SuggestFetchPreview calls POST /api/v1/feeds/suggest-preview with a
 // multipart body — the anonymous, no-org-required dry-run parse backing the
 // public "suggest a feed" form's preview step (#1333 phase 1). Mirrors
 // SuggestEventPreview's shape exactly since both endpoints return the same
 // []EventCreateRequest JSON shape.
 func (c *DansalClient) SuggestFetchPreview(ctx context.Context, body io.Reader, contentType string) ([]PreviewEvent, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/fetchurl/suggest-preview", body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/feeds/suggest-preview", body)
 	if err != nil {
 		return nil, err
 	}
@@ -3779,12 +3779,12 @@ func (c *DansalClient) SuggestFetchPreview(ctx context.Context, body io.Reader, 
 	return events, nil
 }
 
-// SubmitFetchSuggestion calls POST /api/v1/fetchurl/suggest. baseURL is
+// SubmitFetchSuggestion calls POST /api/v1/feeds/suggest. baseURL is
 // forwarded as X-Base-URL (#1336) so the confirmation email's "create an
 // account" link points at dansal_web's own public URL, not the API's.
 func (c *DansalClient) SubmitFetchSuggestion(ctx context.Context, req FetchSuggestionReq, baseURL string) error {
 	body, _ := json.Marshal(req)
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/fetchurl/suggest", bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/feeds/suggest", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -3955,21 +3955,21 @@ type PendingFetchSuggestion struct {
 	CreatedAt  string `json:"created_at"`
 }
 
-// ListFetchSuggestions calls GET /api/v1/fetchurl-suggestions.
+// ListFetchSuggestions calls GET /api/v1/feeds/suggestions.
 func (c *DansalClient) ListFetchSuggestions(ctx context.Context, token string) ([]PendingFetchSuggestion, error) {
 	var suggestions []PendingFetchSuggestion
-	return suggestions, c.do(ctx, http.MethodGet, "/api/v1/fetchurl-suggestions", token, nil, &suggestions)
+	return suggestions, c.do(ctx, http.MethodGet, "/api/v1/feeds/suggestions", token, nil, &suggestions)
 }
 
-// ApproveFetchSuggestion calls POST /api/v1/fetchurl-suggestions/{id}/approve.
+// ApproveFetchSuggestion calls POST /api/v1/feeds/suggestions/{id}/approve.
 func (c *DansalClient) ApproveFetchSuggestion(ctx context.Context, token string, id int) error {
-	path := fmt.Sprintf("/api/v1/fetchurl-suggestions/%d/approve", id)
+	path := fmt.Sprintf("/api/v1/feeds/suggestions/%d/approve", id)
 	return c.do(ctx, http.MethodPost, path, token, nil, nil)
 }
 
-// RejectFetchSuggestion calls POST /api/v1/fetchurl-suggestions/{id}/reject.
+// RejectFetchSuggestion calls POST /api/v1/feeds/suggestions/{id}/reject.
 func (c *DansalClient) RejectFetchSuggestion(ctx context.Context, token string, id int) error {
-	path := fmt.Sprintf("/api/v1/fetchurl-suggestions/%d/reject", id)
+	path := fmt.Sprintf("/api/v1/feeds/suggestions/%d/reject", id)
 	return c.do(ctx, http.MethodPost, path, token, nil, nil)
 }
 

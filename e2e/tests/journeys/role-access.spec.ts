@@ -171,7 +171,7 @@ test.describe("Role-based access boundaries", () => {
     });
     expect(categoryResp.status()).toBe(403);
 
-    const fetchSourceResp = await editorPage.request.fetch(`${API_BASE}/api/v1/fetchurl`, {
+    const fetchSourceResp = await editorPage.request.fetch(`${API_BASE}/api/v1/feeds`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -224,7 +224,7 @@ test.describe("Role-based access boundaries", () => {
     // create/delete, which allow role=user — cmd/dansal/fetchurl.go's
     // bulkAssignFetchSourceOrg checks X-User-Role directly for "admin").
     const bulkAssignResp = await viewerPage.request.fetch(
-      `${API_BASE}/api/v1/fetchurl/bulk-assign-org`,
+      `${API_BASE}/api/v1/feeds/bulk-assign-org`,
       {
         method: "POST",
         headers: {

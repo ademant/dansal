@@ -82,6 +82,17 @@ var writeSchemaExemptions = map[string]string{
 	"/api/v1/events/{id}/syndicate/social-dance-today":    "events",
 	"/api/v1/events/{id}/timetable":                       "events",
 	"/api/v1/events/{id}/timetable/{entry_id}":            "events",
+	// feeds (#1384, formerly /fetchurl — the fetchurl* entries below are its
+	// deprecated aliases): bulk operations, suggestion flow, suggestion review,
+	// manual refetch — same reasons as their fetchurl* twins
+	"/api/v1/feeds/bulk-assign-org":          "feeds",
+	"/api/v1/feeds/bulk-delete":              "feeds",
+	"/api/v1/feeds/bulk-fetch":               "feeds",
+	"/api/v1/feeds/suggest":                  "feeds",
+	"/api/v1/feeds/suggest-preview":          "feeds",
+	"/api/v1/feeds/suggestions/{id}/approve": "feeds",
+	"/api/v1/feeds/suggestions/{id}/reject":  "feeds",
+	"/api/v1/feeds/{id}/fetch":               "feeds",
 	// fetchurl-suggestions: admin feed-suggestion review
 	"/api/v1/fetchurl-suggestions/{id}/approve": "fetchurl-suggestions",
 	"/api/v1/fetchurl-suggestions/{id}/reject":  "fetchurl-suggestions",
@@ -95,6 +106,14 @@ var writeSchemaExemptions = map[string]string{
 	// fetchurl-fetch: admin manual feed refetch
 	"/api/v1/fetchurl/{id}/fetch": "fetchurl-fetch",
 	// images: multipart image upload; not a JSON body, so JSON-only reflection has nothing to describe
+	// (owner-scoped since #1384; the *-images/*-avatars paths are deprecated aliases)
+	"/api/v1/events/{event_id}/image":       "images",
+	"/api/v1/instructors/{id}/avatar":       "images",
+	"/api/v1/musicians/{id}/avatar":         "images",
+	"/api/v1/musicians/{id}/image":          "images",
+	"/api/v1/organizations/{id}/avatar":     "images",
+	"/api/v1/organizations/{id}/image":      "images",
+	"/api/v1/series/{id}/image":             "images",
 	"/api/v1/images/{event_id}":             "images",
 	"/api/v1/instructor-avatars/{id}":       "images",
 	"/api/v1/musician-avatars/{id}":         "images",

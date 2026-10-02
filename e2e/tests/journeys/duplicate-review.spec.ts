@@ -30,7 +30,7 @@ async function authed(page: Page, method: string, path: string, body?: unknown):
 const created: number[] = [];
 
 async function flaggedPair(page: Page): Promise<{ a: number; b: number; title: string }> {
-  const sources = await authed(page, "GET", "/api/v1/fetchurl");
+  const sources = await authed(page, "GET", "/api/v1/feeds");
   test.skip(!Array.isArray(sources) || sources.length === 0, "needs at least one fetch source on the target to build a tier-5 pair");
   const sourceId = sources[0].id;
   const d = isoDate(randomFutureDate(EVENT_DATE_MIN_DAYS, EVENT_DATE_MAX_DAYS));

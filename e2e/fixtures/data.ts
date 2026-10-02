@@ -138,7 +138,15 @@ export function seedEvents(
   const nonce = Math.random().toString(36).slice(2, 6);
   const balDate = randomFutureDate(EVENT_DATE_MIN_DAYS, maxDays);
   const workshopDate = randomFutureDate(EVENT_DATE_MIN_DAYS, maxDays);
-  const festDate = randomFutureDate(EVENT_DATE_MIN_DAYS, maxDays);
+  // "Bal" (20:30) and "Bal et Atelier" (20:00) share the venue: on the same
+  // day they'd be a tier-3 collision — flagged as a possible duplicate since
+  // #1424 (merged before), leaving review-queue clutter. Keep them on
+  // different days; the window is always ≥ 2 days wide (safeMaxDaysOut).
+  let festDate = randomFutureDate(EVENT_DATE_MIN_DAYS, maxDays);
+  for (let i = 0; i < 20 && isoDate(festDate) === isoDate(balDate); i++) {
+    festDate = randomFutureDate(EVENT_DATE_MIN_DAYS, maxDays);
+  }
+  if (isoDate(festDate) === isoDate(balDate)) festDate.setDate(festDate.getDate() + 1);
 
   return [
     {

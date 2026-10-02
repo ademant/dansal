@@ -38,7 +38,16 @@ func sqlPlaceholders(n int) string {
 // itself become a request error) — note this actually improves on
 // notifyApprovers' prior behavior, which silently ignored the query error.
 func forEachAdmin(fn func(id int, email, chatID, matrixID string, matrixVerified bool)) {
-	rows, err := db.Query(`SELECT id, COALESCE(email,''), COALESCE(telegram_chat_id,''), COALESCE(matrix,''), COALESCE(matrix_verified,0) FROM users WHERE role = 'admin'`)
+	// Read the package handle once and bail out when it's nil: admin
+	// notifications run in goroutines (go notifyAdmins…) that can outlive a
+	// test which swaps db for a temporary DB and restores it to nil — that
+	// late goroutine used to crash the whole test binary with a nil-pointer
+	// panic (flaky suggest/dedup tests). db is never nil in production.
+	d := db
+	if d == nil {
+		return
+	}
+	rows, err := d.Query(`SELECT id, COALESCE(email,''), COALESCE(telegram_chat_id,''), COALESCE(matrix,''), COALESCE(matrix_verified,0) FROM users WHERE role = 'admin'`)
 	if err != nil {
 		log.Printf("forEachAdmin: %v", err)
 		return

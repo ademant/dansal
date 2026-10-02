@@ -40,6 +40,17 @@ function eventPayload(overrides: Record<string, unknown>): Record<string, unknow
   };
 }
 
+const API_BASE = process.env.API_URL ?? "http://localhost:8000";
+
+async function authedJSON(page: Page, method: string, path: string): Promise<any> {
+  const resp = await page.request.fetch(`${API_BASE}${path}`, {
+    method,
+    headers: { Authorization: `Bearer ${seed.token}` },
+  });
+  if (!resp.ok()) throw new Error(`${method} ${path} → ${resp.status()}`);
+  return resp.status() === 204 ? null : resp.json();
+}
+
 async function postEvent(
   page: Page,
   payload: Record<string, unknown>
@@ -114,7 +125,10 @@ test.describe("Event dedup tiers (API)", () => {
     expect(distinctId).not.toBe(firstId);
   });
 
-  test("Tier 3: same location within 3h merges with no title check", async ({
+  // #1424: tier 3 (same venue, ±3h, no title check) only auto-merges when it
+  // is clearly the same event — a manual creation is inserted and both are
+  // flagged for review (resolved on /admin/duplicates/{id}, #1427).
+  test("Tier 3: a manual event at the same venue within 3h is flagged, not merged", async ({
     page,
   }) => {
     const firstId = await postEvent(
@@ -126,7 +140,7 @@ test.describe("Event dedup tiers (API)", () => {
         end_time: isoDateTime(2, 22, 0),
       })
     );
-    const mergedId = await postEvent(
+    const secondId = await postEvent(
       page,
       eventPayload({
         location_id: dedupLocationId,
@@ -135,15 +149,55 @@ test.describe("Event dedup tiers (API)", () => {
         end_time: isoDateTime(2, 23, 0),
       })
     );
+    try {
+      expect(secondId).not.toBe(firstId);
+      const check = await authedJSON(page, "GET", `/api/v1/events/${secondId}/duplicate-check`);
+      expect(check.flagged).toBe(true);
+      expect(check.partner_id).toBe(firstId);
+      expect(check.reasons).toContain("venue");
+    } finally {
+      // Don't leave the pair in the admin's possible-duplicates list.
+      await authedJSON(page, "DELETE", `/api/v1/events/${secondId}`).catch(() => {});
+      await authedJSON(page, "DELETE", `/api/v1/events/${firstId}`).catch(() => {});
+    }
+  });
+
+  test("Tier 3: the same feed re-sending its event with a new title merges", async ({
+    page,
+  }) => {
+    const sources = await authedJSON(page, "GET", "/api/v1/fetchurl");
+    test.skip(!Array.isArray(sources) || sources.length === 0, "needs a fetch source on the target");
+    const fetch_source_id = sources[0].id;
+    const firstId = await postEvent(
+      page,
+      eventPayload({
+        location_id: dedupLocationId,
+        fetch_source_id,
+        title: `Dedup T3 feed placeholder ${nonce}`,
+        start_time: isoDateTime(7, 20, 0),
+        end_time: isoDateTime(7, 22, 0),
+      })
+    );
+    const mergedId = await postEvent(
+      page,
+      eventPayload({
+        location_id: dedupLocationId,
+        fetch_source_id,
+        title: `Dedup T3 feed lineup announced ${nonce}`,
+        start_time: isoDateTime(7, 20, 30),
+        end_time: isoDateTime(7, 23, 0),
+      })
+    );
     expect(mergedId).toBe(firstId);
 
     const distinctId = await postEvent(
       page,
       eventPayload({
         location_id: dedupLocationId,
-        title: `Dedup T3 later ${nonce}`,
-        start_time: isoDateTime(3, 6, 0),
-        end_time: isoDateTime(3, 8, 0),
+        fetch_source_id,
+        title: `Dedup T3 feed later ${nonce}`,
+        start_time: isoDateTime(8, 6, 0),
+        end_time: isoDateTime(8, 8, 0),
       })
     );
     expect(distinctId).not.toBe(firstId);

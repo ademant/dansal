@@ -114,7 +114,7 @@ If a spec needs an org page's "recurring events" or similar upcoming-events list
 
 ## Fixture dates must dodge dedup, not just each other
 
-`insertEvent`'s tier hierarchy (see the `event-import` skill) runs on *every* create, including a plain admin-form create — not just feed imports. Two fixture events can silently merge into one row if they land within tier 3/4's ±3h window at the same location (tier 3) or with the same title (tier 4, no location). Symptoms look like a missing/wrong event, not an error.
+`insertEvent`'s tier hierarchy (see the `event-import` skill) runs on *every* create, including a plain admin-form create — not just feed imports. Two fixture events can silently merge into one row if they land within tier 4's ±3h window with the same title (no location), or within tier 3's window at the same location *from the same feed source*. Since #1424 two **manually** created (API/admin form) events at the same venue ±3h are no longer merged but both **flagged for duplicate review** — they then show up in the admin's possible-duplicates list, so clean such pairs up (see `event-dedup.spec.ts`). Symptoms look like a missing/wrong event or an unexpected review flag, not an error.
 
 - Space same-location fixture events by **more than 3 hours**, or give them genuinely distinct locations.
 - When two events *should* look like duplicates on purpose (e.g. testing manual merge), make sure at least one dedup signal differs by construction — e.g. one has a real location and the other doesn't, so tier 3 can never fire between them regardless of title (`event-lifecycle.spec.ts`'s merge-tool test relies on exactly this).

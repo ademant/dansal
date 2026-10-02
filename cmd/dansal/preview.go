@@ -114,7 +114,7 @@ func previewEventsHandler(w http.ResponseWriter, r *http.Request) {
 		reqs = []EventCreateRequest{}
 	}
 	for i := range reqs {
-		reqs[i].DuplicateStatus = previewDuplicateStatus(reqs[i])
+		reqs[i].DuplicateStatus, reqs[i].DuplicateHintID = previewDuplicate(reqs[i])
 	}
 	json.NewEncoder(w).Encode(reqs)
 }
@@ -123,6 +123,14 @@ func previewEventsHandler(w http.ResponseWriter, r *http.Request) {
 // shared findExistingEvent dedup hierarchy as insertEvent (#1005) and
 // returns "new", "exists", or "updated".
 func previewDuplicateStatus(req EventCreateRequest) string {
+	status, _ := previewDuplicate(req)
+	return status
+}
+
+// previewDuplicate is previewDuplicateStatus plus, for a "new" row that
+// insertEvent would flag for review (tier-3 review #1424, tier 5), the id of
+// the event it would be flagged against.
+func previewDuplicate(req EventCreateRequest) (string, int) {
 	startStr := req.StartTime
 	if len(req.Date) > 0 {
 		startStr = req.Date[0].StartTime
@@ -148,37 +156,40 @@ func previewDuplicateStatus(req EventCreateRequest) string {
 	}
 
 	found, tier, err := findExistingEvent(db, req.Title, req.URL, startTime, locID, req.UID, req.FetchSourceID)
-	// Tier 5 is a low-confidence review hint, not a real match — preview has
-	// no "flag for review" state, so it reports "new" same as no match.
-	if err != nil || tier == TierNone || tier == TierFuzzyReview {
-		return "new"
+	// Review hints (tier 5, tier-3 review #1424) aren't real matches — preview
+	// has no "flag for review" state, so it reports "new" plus the candidate.
+	if err != nil || tier == TierNone {
+		return "new", 0
+	}
+	if tier.IsReview() {
+		return "new", found.ID
 	}
 
 	// Always check whether the feed's location geodata differs from the DB —
 	// location coordinates can change independently of the event record.
 	if previewLocationUpdated(found.ID, req.Location) {
-		return "updated"
+		return "updated", 0
 	}
 
 	// Match found — determine whether event data has changed.
 	if req.SourceLastModified > 0 {
 		if req.SourceLastModified > found.SourceLastModified {
-			return "updated"
+			return "updated", 0
 		}
-		return "exists"
+		return "exists", 0
 	}
 
 	// No source timestamps — compare key event fields.
 	if startTime != nil && *startTime != found.StartTime {
-		return "updated"
+		return "updated", 0
 	}
 	if req.IsCancelled != found.IsCancelled {
-		return "updated"
+		return "updated", 0
 	}
 	if req.Title != found.Title {
-		return "updated"
+		return "updated", 0
 	}
-	return "exists"
+	return "exists", 0
 }
 
 // previewLocationUpdated returns true when the feed supplies coordinates that

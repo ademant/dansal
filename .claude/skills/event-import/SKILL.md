@@ -20,9 +20,9 @@ Key files (all in `cmd/dansal/`):
 
 1. **UID** — exact `events.uid` match. The only tier that works when start time is unavailable (`startTime` is a `*int64`, nil when the date failed to parse).
 2. **URL** — exact `events.url` match **within ±3h of start_time**. The ±3h window is deliberate: a feed that reuses one generic URL (e.g. its homepage) must not lock this tier onto the first event ever imported with that URL and silently absorb unrelated later events (#702). Do not drop the window.
-3. **`location_id` + start_time ±3h** — same venue + slot. No title check: titles get rewritten over an event's lifetime.
+3. **`location_id` + start_time ±3h** — same venue + slot. No title check: titles get rewritten over an event's lifetime. **Auto-merges only for the same feed source, or another feed with an identical/fuzzy title (#1424)**; a manual creation or an unrelated title from another feed returns `TierLocationReview` — insert + flag both, exactly like tier 5 (`DuplicateTier.IsReview()`).
 4. **`title` + start_time ±3h** — fallback when location is unresolved (feed gave no resolvable name) or tier 3 missed (e.g. after entity-decoding or a rename).
-5. **`fetch_source_id` + start_time ±3h + fuzzy title overlap** (`titlesFuzzyOverlap`) — **low-confidence review hint, NOT an auto-merge match**. Returns `TierFuzzyReview` with the *candidate* row; the caller must insert as new and flag both rows for an admin to resolve via the merge UI. `previewDuplicateStatus` treats `TierFuzzyReview` the same as no match ("new"), since preview has no review state.
+5. **`fetch_source_id` + start_time ±3h + fuzzy title overlap** (`titlesFuzzyOverlap`) — **low-confidence review hint, NOT an auto-merge match**. Returns `TierFuzzyReview` with the *candidate* row; the caller must insert as new and flag both rows for an admin to resolve via the merge UI. `previewDuplicateStatus` treats both review tiers the same as no match ("new"), since preview has no review state; `previewDuplicate` additionally returns the candidate id (`duplicate_hint_id`, shown as "possible duplicate of #N" in the admin import preview).
 
 Constants: `threeHours = 3 * 60 * 60` (seconds), `titlesFuzzyOverlap` in the same package.
 

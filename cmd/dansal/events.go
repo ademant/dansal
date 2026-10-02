@@ -223,6 +223,10 @@ type EventCreateRequest struct {
 	SourceLastModified int64       `json:"source_last_modified,omitempty"`
 	FetchSourceID      int         `json:"fetch_source_id,omitempty"`
 	DuplicateStatus    string      `json:"duplicate_status,omitempty"`
+	// DuplicateHintID (#1424) is preview-response only: the existing event a
+	// row would be flagged against (tier-3 review / tier 5) — reported as
+	// "new", with this as the "possible duplicate of #N" hint.
+	DuplicateHintID int `json:"duplicate_hint_id,omitempty"`
 	// TimezoneFallback (#1392) marks a previewed event whose start time was
 	// anchored from the feed's VTIMEZONE or the instance zone because its TZID
 	// was not resolvable. Preview-response only, so an admin can see which rows
@@ -1131,11 +1135,12 @@ func insertEvent(q querier, in EventInput) (int, string, string, error) {
 	existingIsPublished := existing.IsPublished
 	existingIsCancelled := existing.IsCancelled
 
-	// Tier 5 is a low-confidence review hint, not a match: proceed as if
-	// nothing was found, but remember the candidate to flag after insert.
+	// Tier 5 and a tier-3 review (#1424) are review hints, not matches:
+	// proceed as if nothing was found, but remember the candidate to flag
+	// after insert.
 	var duplicateReviewCandidateID int
 	lookupErr := sql.ErrNoRows
-	if tier == TierFuzzyReview {
+	if tier.IsReview() {
 		duplicateReviewCandidateID = existing.ID
 	} else if tier != TierNone {
 		lookupErr = nil

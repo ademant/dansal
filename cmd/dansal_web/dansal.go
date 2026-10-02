@@ -3513,6 +3513,9 @@ type PreviewEvent struct {
 	OrganizationID *int       `json:"organization_id,omitempty"`
 	Pricing        *Pricing   `json:"pricing,omitempty"`
 	Status         string     `json:"duplicate_status,omitempty"`
+	// DuplicateHintID (#1424): for a "new" row, the existing event it would be
+	// flagged against as a possible duplicate (same venue & time, or tier 5).
+	DuplicateHintID int `json:"duplicate_hint_id,omitempty"`
 	// TimezoneFallback (#1392) marks a previewed event whose start time was
 	// anchored from the feed's VTIMEZONE or the instance zone because its TZID
 	// was not resolvable, so the admin can see which rows were guessed.

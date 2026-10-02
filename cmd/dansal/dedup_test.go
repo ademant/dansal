@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"testing"
 	"time"
 
@@ -205,5 +206,93 @@ func TestFindExistingEventTier5IsReviewHintOnly(t *testing.T) {
 	db.QueryRow("SELECT needs_duplicate_review, duplicate_of_id FROM events WHERE id=?", newID).Scan(&needsReview, &dupOfID)
 	if needsReview != 1 || !dupOfID.Valid || dupOfID.Int64 != int64(seedID) {
 		t.Fatalf("new event not flagged for duplicate review against seed: needs_review=%d duplicate_of=%v", needsReview, dupOfID)
+	}
+}
+
+// TestTier3MergeOrReview covers #1424: tier 3 (same venue, ±3h, no title
+// check) only auto-merges when it is clearly the same event — the same feed
+// re-sending it, or another feed with an identical/fuzzy title. A manual
+// creation or an unrelated title from another feed is inserted and both are
+// flagged for review instead of silently overwriting the existing event.
+// previewDuplicate must report the same: a match, or "new" + the candidate.
+func TestTier3MergeOrReview(t *testing.T) {
+	const start = int64(1_800_000_000)
+	cases := []struct {
+		name                string
+		seedSource, reqSrc  int // 0 = manual, 1/2 = feed ids
+		seedTitle, reqTitle string
+		wantMerge           bool
+	}{
+		{"same feed re-sends with a rewritten title", 1, 1, "Bal mit N.N.", "Bal mit Duo Brotzeit", true},
+		{"other feed, similar title", 1, 2, "Bal Folk de Printemps", "ABGESAGT – Bal Folk de Printemps", true},
+		{"other feed, unrelated title", 1, 2, "Bal Folk de Printemps", "Workshop Bourrée", false},
+		{"manual creation, different event", 0, 0, "Atelier Bourrée", "Bal du soir", false},
+		{"manual creation over a feed event", 1, 0, "Bal Folk de Printemps", "Bal Folk de Printemps", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			setupDedupTestDB(t)
+			for _, id := range []int{1, 2} {
+				db.Exec("INSERT INTO fetch_sources (id, url, type) VALUES (?, ?, 'ical')", id, fmt.Sprintf("http://example.com/%d.ics", id))
+			}
+			res, err := db.Exec("INSERT INTO locations (location) VALUES ('Salle Testville')")
+			if err != nil {
+				t.Fatal(err)
+			}
+			locID, _ := res.LastInsertId()
+
+			seedID, _, _, err := insertEvent(db, EventInput{
+				Title: c.seedTitle, StartTime: start, EndTime: start + 3600, LocationID: locID,
+				FetchSourceID: c.seedSource, IsPublished: true,
+			})
+			if err != nil {
+				t.Fatalf("seed: %v", err)
+			}
+
+			req := EventCreateRequest{
+				EventWriteRequest: EventWriteRequest{
+					Title:     c.reqTitle,
+					StartTime: time.Unix(start+1800, 0).UTC().Format(time.RFC3339),
+					Location:  EventLocationRequest{Location: "Salle Testville"},
+				},
+				FetchSourceID: c.reqSrc,
+			}
+			status, hint := previewDuplicate(req)
+			if c.wantMerge && (status == "new" || hint != 0) {
+				t.Errorf("preview = %q hint %d, want a match", status, hint)
+			}
+			if !c.wantMerge && (status != "new" || hint != seedID) {
+				t.Errorf("preview = %q hint %d, want new + hint %d", status, hint, seedID)
+			}
+
+			newID, _, outcome, err := insertEvent(db, EventInput{
+				Title: c.reqTitle, StartTime: start + 1800, EndTime: start + 5400, LocationID: locID,
+				FetchSourceID: c.reqSrc,
+			})
+			if err != nil {
+				t.Fatalf("insert: %v", err)
+			}
+			if c.wantMerge {
+				if newID != seedID || outcome == outcomeNew {
+					t.Errorf("want merge into %d, got id %d outcome %s", seedID, newID, outcome)
+				}
+				return
+			}
+			if newID == seedID || outcome != outcomeNew {
+				t.Fatalf("want a new row, got id %d outcome %s", newID, outcome)
+			}
+			for _, id := range []int{newID, seedID} {
+				var flagged int
+				db.QueryRow("SELECT COALESCE(needs_duplicate_review,0) FROM events WHERE id=?", id).Scan(&flagged)
+				if flagged != 1 {
+					t.Errorf("event %d not flagged for review", id)
+				}
+			}
+			var title string
+			db.QueryRow("SELECT title FROM events WHERE id=?", seedID).Scan(&title)
+			if title != c.seedTitle {
+				t.Errorf("existing event overwritten: title %q", title)
+			}
+		})
 	}
 }

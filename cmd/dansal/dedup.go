@@ -16,7 +16,18 @@ const (
 	// candidate for admin review. ExistingEvent.ID/Title are the *candidate*
 	// row in this case, not a confirmed duplicate.
 	TierFuzzyReview
+	// TierLocationReview (#1424) is a tier-3 hit (same venue, ±3h) that is not
+	// clearly the same event — a manual creation, or another feed with an
+	// unrelated title. Like TierFuzzyReview it is a review hint, not a match:
+	// the caller inserts the new event and flags both for the admin
+	// (comparison page, #1427), since venues with several rooms/halls can
+	// legitimately host different events at the same time.
+	TierLocationReview
 )
+
+// IsReview reports whether t is a review hint (flag both rows) rather than a
+// match (merge into the existing row).
+func (t DuplicateTier) IsReview() bool { return t == TierFuzzyReview || t == TierLocationReview }
 
 // ExistingEvent holds the event columns needed by both insertEvent (to
 // decide update-vs-insert and which fields to preserve) and
@@ -50,7 +61,10 @@ func scanExistingEvent(row *sql.Row) (ExistingEvent, error) {
 //  1. UID exact match
 //  2. URL exact match, ±3h window around startTime
 //  3. locationID + time, ±3h (no title check — titles get rewritten over an
-//     event's lifetime)
+//     event's lifetime). Auto-merges only when it is clearly the same event:
+//     the same feed source re-sending it, or another feed with an identical /
+//     fuzzy-overlapping title. Otherwise — and always for a manual creation
+//     (fetchSourceID == 0) — TierLocationReview: insert + flag (#1424).
 //  4. title + time, ±3h (used when locationID is unknown or tier 3 missed)
 //  5. fuzzy review candidate: same fetchSourceID + time window + fuzzy title
 //     overlap — too low-confidence to auto-merge, so this is a hint for the
@@ -96,13 +110,25 @@ func findExistingEvent(q querier, title, url string, startTime *int64, locationI
 		}
 	}
 
-	// Tier 3: known location + time, no title check.
+	// Tier 3: known location + time, no title check. Prefer a candidate from
+	// the same feed (and then the closest start) so a feed's own re-sent
+	// event is found even when another event shares the slot.
 	if locationID > 0 {
-		e, err := scanExistingEvent(q.QueryRow(
-			"SELECT "+existingEventCols+" FROM events WHERE location_id = ? AND ABS(start_time - ?) < ?", locationID, st, threeHours,
-		))
+		var e ExistingEvent
+		var candSource int
+		err := q.QueryRow(
+			"SELECT "+existingEventCols+", COALESCE(fetch_source_id,0) FROM events WHERE location_id = ? AND ABS(start_time - ?) < ?"+
+				" ORDER BY (COALESCE(fetch_source_id,0) = ?) DESC, ABS(start_time - ?) LIMIT 1",
+			locationID, st, threeHours, fetchSourceID, st,
+		).Scan(&e.ID, &e.ShortCode, &e.Title, &e.StartTime, &e.IsPublished, &e.IsCancelled, &e.SourceLastModified, &e.ChangedAt, &candSource)
 		if err == nil {
-			return e, TierLocation, nil
+			sameSource := fetchSourceID > 0 && candSource == fetchSourceID
+			otherFeedSameEvent := fetchSourceID > 0 && candSource != fetchSourceID &&
+				(title == e.Title || titlesFuzzyOverlap(title, e.Title))
+			if sameSource || otherFeedSameEvent {
+				return e, TierLocation, nil
+			}
+			return e, TierLocationReview, nil
 		}
 		if err != sql.ErrNoRows {
 			return ExistingEvent{}, TierNone, err

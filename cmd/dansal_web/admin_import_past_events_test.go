@@ -114,3 +114,33 @@ func TestAdminImportPreviewNoPastEventsNoticeWhenNoneFound(t *testing.T) {
 		t.Error("the \"show past events\" toggle should not render when PastEventCount is 0")
 	}
 }
+
+// #1424: a "new" preview row that would be flagged as a possible duplicate
+// (same venue & time) carries a hint linking the existing event.
+func TestImportPreviewDuplicateHint(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.Exec(`CREATE TABLE site_settings (key TEXT PRIMARY KEY, value TEXT)`)
+	siteCfg = newSiteSettingsCache(db)
+	req := withSessionUser(httptest.NewRequest(http.MethodGet, "/admin/events/import", nil), &SessionUser{ID: 1, Role: "admin"})
+	future := time.Now().AddDate(0, 0, 7).Format(time.RFC3339)
+	rec := httptest.NewRecorder()
+	renderTemplate(rec, loadTemplates().adminEventsImport, tmplData(req, &Config{Domain: "example.test"}, loadI18n(""), "test", AdminImportEventsData{
+		PreviewEvents: []PreviewEvent{
+			{Title: "Bal du soir", StartTime: future, Status: "new", DuplicateHintID: 2745},
+			{Title: "Plain new", StartTime: future, Status: "new"},
+		},
+		PreviewJSON: []string{"{}", "{}"},
+	}))
+	html := rec.Body.String()
+	checkInlineJS(t, html)
+	if strings.Count(html, `class="badge status-hint"`) != 1 || !strings.Contains(html, `href="/admin/events/2745/edit"`) {
+		t.Error("expected exactly one possible-duplicate hint linking event 2745")
+	}
+	if strings.Contains(html, "admin_import_possible_duplicate") {
+		t.Error("untranslated hint key")
+	}
+}

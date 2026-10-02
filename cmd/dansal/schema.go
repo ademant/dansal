@@ -114,6 +114,8 @@ var writeSchemaRoutes = []SchemaRoute{
 	{"/api/v1/events/{id}", []string{http.MethodPut, http.MethodPatch}, reflect.TypeFor[EventWriteRequest]()},
 	{"/api/v1/events/{id}/contact-posts", []string{http.MethodPost}, reflect.TypeFor[ContactPostCreateRequest]()},
 	{"/api/v1/events/{id}/duplicate-resolve", []string{http.MethodPost}, reflect.TypeFor[DuplicateResolveRequest]()},
+	{"/api/v1/events/{id}/syndication", []string{http.MethodPost}, reflect.TypeFor[EventSyndicateRequest]()},
+	{"/api/v1/events/bulk-assign-org", []string{http.MethodPost}, reflect.TypeFor[BulkAssignOrgRequest]()},
 	{"/api/v1/events/{id}/location", []string{http.MethodPut}, reflect.TypeFor[EventLocationRefRequest]()},
 	{"/api/v1/events/{id}/organization", []string{http.MethodPut}, reflect.TypeFor[EventOrganizationRefRequest]()},
 	{"/api/v1/contact-posts/{id}", []string{http.MethodPut, http.MethodPatch}, reflect.TypeFor[ContactPostWriteRequest]()},

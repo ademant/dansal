@@ -1307,8 +1307,8 @@ func (c *DansalClient) RecheckEventSource(ctx context.Context, id int, token str
 }
 
 func (c *DansalClient) AssignEventOrg(ctx context.Context, id, orgID int, token string) error {
-	body, _ := json.Marshal(map[string]int{"org_id": orgID})
-	return c.do(ctx, http.MethodPost, fmt.Sprintf("/api/v1/events/%d/assign-org", id), token, body, nil, http.StatusNoContent)
+	body, _ := json.Marshal(map[string]int{"organization_id": orgID})
+	return c.do(ctx, http.MethodPut, fmt.Sprintf("/api/v1/events/%d/organization", id), token, body, nil, http.StatusNoContent)
 }
 
 func (c *DansalClient) GetOrganizations(ctx context.Context) ([]Organization, error) {
@@ -1853,8 +1853,7 @@ func (c *DansalClient) BulkAssignFetchSourceOrg(ctx context.Context, ids []int, 
 }
 
 func (c *DansalClient) UnassignLocationOrg(ctx context.Context, locationID, orgID int, token string) error {
-	body, _ := json.Marshal(map[string]int{"location_id": locationID, "organization_id": orgID})
-	if err := c.do(ctx, http.MethodPost, "/api/v1/locations/unassign-org", token, body, nil, http.StatusNoContent); err != nil {
+	if err := c.do(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/locations/%d/organizations/%d", locationID, orgID), token, nil, nil, http.StatusNoContent); err != nil {
 		return err
 	}
 	c.invalidateLocations()
@@ -3072,7 +3071,7 @@ func (c *DansalClient) SetUserDisabled(ctx context.Context, id int, disabled boo
 }
 
 func (c *DansalClient) DeleteOwnAccount(ctx context.Context, token string) error {
-	return c.do(ctx, http.MethodDelete, "/api/v1/users/me", token, nil, nil, http.StatusNoContent)
+	return c.do(ctx, http.MethodDelete, "/api/v1/me", token, nil, nil, http.StatusNoContent)
 }
 
 func (c *DansalClient) AddOrgMember(ctx context.Context, orgID, userID int, token string) error {
@@ -3283,7 +3282,7 @@ func (c *DansalClient) OIDCCallback(ctx context.Context, flowID, code, state str
 	return &out, nil
 }
 
-// UserIdentity mirrors the JSON returned by GET /api/v1/user/oidc-identities
+// UserIdentity mirrors the JSON returned by GET /api/v1/me/oidc-identities
 // — a linked external identity shown on /settings (#1096).
 type UserIdentity struct {
 	ID          int64  `json:"id"`
@@ -3295,13 +3294,13 @@ type UserIdentity struct {
 // ListOIDCIdentities lists the caller's own linked OIDC identities.
 func (c *DansalClient) ListOIDCIdentities(ctx context.Context, token string) ([]UserIdentity, error) {
 	var items []UserIdentity
-	return items, c.do(ctx, http.MethodGet, "/api/v1/user/oidc-identities", token, nil, &items)
+	return items, c.do(ctx, http.MethodGet, "/api/v1/me/oidc-identities", token, nil, &items)
 }
 
 // DeleteOIDCIdentity unlinks an identity. Fails with a conflict if it's the
 // caller's last login method.
 func (c *DansalClient) DeleteOIDCIdentity(ctx context.Context, id int64, token string) error {
-	return c.do(ctx, http.MethodDelete, "/api/v1/user/oidc-identities/"+strconv.FormatInt(id, 10), token, nil, nil, http.StatusNoContent)
+	return c.do(ctx, http.MethodDelete, "/api/v1/me/oidc-identities/"+strconv.FormatInt(id, 10), token, nil, nil, http.StatusNoContent)
 }
 
 // OIDCLinkStart begins an authorization-code+PKCE flow for an
@@ -3488,7 +3487,7 @@ type APIKey struct {
 
 func (c *DansalClient) ListPasskeys(ctx context.Context, token string) ([]PasskeyInfo, error) {
 	var items []PasskeyInfo
-	return items, c.do(ctx, http.MethodGet, "/api/v1/user/webauthn/credentials", token, nil, &items)
+	return items, c.do(ctx, http.MethodGet, "/api/v1/me/webauthn/credentials", token, nil, &items)
 }
 
 func (c *DansalClient) ListAPIKeys(ctx context.Context, token string) ([]APIKey, error) {
@@ -3559,7 +3558,7 @@ func (c *DansalClient) DeletePublisher(ctx context.Context, publisherID int, tok
 
 func (c *DansalClient) ChangePassword(ctx context.Context, oldPassword, newPassword, token string) error {
 	body, _ := json.Marshal(map[string]string{"old_password": oldPassword, "new_password": newPassword})
-	return c.do(ctx, http.MethodPost, "/api/v1/user/password", token, body, nil, http.StatusNoContent)
+	return c.do(ctx, http.MethodPost, "/api/v1/me/password", token, body, nil, http.StatusNoContent)
 }
 
 // PreviewEvent mirrors the EventCreateRequest JSON returned by POST /api/v1/events/preview.
@@ -4272,7 +4271,7 @@ type TOTPSetupInfo struct {
 }
 
 func (c *DansalClient) TOTPSetup(ctx context.Context, token string) (TOTPSetupInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/v1/auth/totp/setup", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/v1/me/totp/setup", nil)
 	if err != nil {
 		return TOTPSetupInfo{}, err
 	}
@@ -4295,7 +4294,7 @@ func (c *DansalClient) TOTPSetup(ctx context.Context, token string) (TOTPSetupIn
 
 func (c *DansalClient) TOTPConfirm(ctx context.Context, token, code string) error {
 	body, _ := json.Marshal(map[string]string{"code": code})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/auth/totp/confirm", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/me/totp/confirm", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -4315,7 +4314,7 @@ func (c *DansalClient) TOTPConfirm(ctx context.Context, token, code string) erro
 
 func (c *DansalClient) TOTPDisable(ctx context.Context, token, code string) error {
 	body, _ := json.Marshal(map[string]string{"code": code})
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.BaseURL+"/api/v1/auth/totp", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.BaseURL+"/api/v1/me/totp", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -4432,20 +4431,6 @@ func (c *DansalClient) GetEventSyncStatus(ctx context.Context, eventID int, toke
 }
 
 func (c *DansalClient) SyndicateTo(ctx context.Context, eventID int, platform, token string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		fmt.Sprintf("%s/api/v1/events/%d/syndicate/%s", c.BaseURL, eventID, platform), nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	c.setInternalHeader(req)
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		return apiErr(resp)
-	}
-	return nil
+	body, _ := json.Marshal(map[string]string{"target": platform})
+	return c.do(ctx, http.MethodPost, fmt.Sprintf("/api/v1/events/%d/syndication", eventID), token, body, nil)
 }

@@ -266,7 +266,7 @@ func settingsDeleteAPIKeyHandler(cfg *Config, client *DansalClient) http.Handler
 
 // POST /settings/magic-link — generate a self-service magic login link for
 // the current user (e.g. to scan on a second device and add a passkey there).
-// Proxies POST /api/v1/users/me/magic-link and forwards the JSON response.
+// Proxies POST /api/v1/me/magic-link and forwards the JSON response.
 func settingsMagicLinkHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := requireLogin(w, r)
@@ -276,7 +276,7 @@ func settingsMagicLinkHandler(cfg *Config, client *DansalClient) http.HandlerFun
 		token := getSessionToken(r)
 		var result map[string]string
 		w.Header().Set("Content-Type", "application/json")
-		if err := client.do(r.Context(), "POST", "/api/v1/users/me/magic-link", token, nil, &result, http.StatusOK); err != nil {
+		if err := client.do(r.Context(), "POST", "/api/v1/me/magic-link", token, nil, &result, http.StatusOK); err != nil {
 			http.Error(w, `{"error":"failed to generate link"}`, http.StatusInternalServerError)
 			return
 		}
@@ -421,7 +421,7 @@ func settingsPasskeyRegisterBeginHandler(cfg *Config, client *DansalClient) http
 			return
 		}
 		token := getSessionToken(r)
-		webauthnAuthedProxyDo(cfg, client, "/api/v1/user/webauthn/register/begin", token, w, r)
+		webauthnAuthedProxyDo(cfg, client, "/api/v1/me/webauthn/register/begin", token, w, r)
 	}
 }
 
@@ -432,7 +432,7 @@ func settingsPasskeyRegisterFinishHandler(cfg *Config, client *DansalClient) htt
 			return
 		}
 		token := getSessionToken(r)
-		webauthnAuthedProxyDo(cfg, client, "/api/v1/user/webauthn/register/finish", token, w, r)
+		webauthnAuthedProxyDo(cfg, client, "/api/v1/me/webauthn/register/finish", token, w, r)
 	}
 }
 
@@ -444,7 +444,7 @@ func settingsPasskeyDeleteHandler(cfg *Config, client *DansalClient) http.Handle
 		}
 		id := r.PathValue("id")
 		token := getSessionToken(r)
-		resp, err := client.authed(r.Context(), "DELETE", "/api/v1/user/webauthn/credentials/"+id, token, nil)
+		resp, err := client.authed(r.Context(), "DELETE", "/api/v1/me/webauthn/credentials/"+id, token, nil)
 		if err == nil {
 			io.Copy(io.Discard, resp.Body)
 			resp.Body.Close()
@@ -465,7 +465,7 @@ func settingsOIDCIdentityDeleteHandler(cfg *Config, client *DansalClient) http.H
 		}
 		id := r.PathValue("id")
 		token := getSessionToken(r)
-		resp, err := client.authed(r.Context(), "DELETE", "/api/v1/user/oidc-identities/"+id, token, nil)
+		resp, err := client.authed(r.Context(), "DELETE", "/api/v1/me/oidc-identities/"+id, token, nil)
 		if err != nil {
 			http.Redirect(w, r, "/settings?unlinkerr=1", http.StatusSeeOther)
 			return

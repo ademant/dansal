@@ -38,6 +38,7 @@ For the `dansal_web` frontend's own routes (public pages, feeds, `/embed/*` widg
 - [Anonymous Event Suggestions](#anonymous-event-suggestions)
 - [Invites](#invites)
 - [Telegram Webhook](#telegram-webhook)
+- [Deprecated routes](#deprecated-routes)
 - [Status Codes](#status-codes)
 
 ## Base URL
@@ -274,16 +275,34 @@ Authentication required. List or revoke active sessions for the current user.
 GET    /api/v1/users              # admin only
 GET    /api/v1/users/{id}         # any authenticated caller; only the account owner gets full PII
 PUT    /api/v1/users/{id}         # admin or self (see restrictions below)
-DELETE /api/v1/users/me           # self-deletion (not available to admin accounts)
 GET    /api/v1/users/{id}/organizations   # admin or self
-GET    /api/v1/me/stats           # own event-authorship counts
-POST   /api/v1/user/password      # change own password (empty new_password removes it; see OIDC / SSO)
 POST   /api/v1/users/{id}/verify  # admin: send verification email
 POST   /api/v1/users/{id}/magic-link   # admin: generate magic link for user
 POST   /api/v1/users/{id}/telegram/message  # admin: send Telegram message to user
 ```
 
-There is no `GET /api/v1/users/me` endpoint. Use `GET /api/v1/users/{id}` with your own user ID.
+### The caller's own account: `/api/v1/me`
+
+Everything that acts on the authenticated caller lives under one prefix (#1381):
+
+```
+GET    /api/v1/me                              # own profile
+GET    /api/v1/me/stats                        # own event-authorship counts
+DELETE /api/v1/me                              # delete own account (not available to admin accounts)
+POST   /api/v1/me/password                     # change own password (empty new_password removes it; see OIDC / SSO)
+POST   /api/v1/me/magic-link                   # magic login link for yourself
+GET    /api/v1/me/oidc-identities              # linked SSO identities (see OIDC / SSO)
+DELETE /api/v1/me/oidc-identities/{id}
+GET    /api/v1/me/webauthn/credentials         # passkeys (see WebAuthn Credentials)
+DELETE /api/v1/me/webauthn/credentials/{id}
+POST   /api/v1/me/webauthn/register/begin
+POST   /api/v1/me/webauthn/register/finish
+GET    /api/v1/me/totp/setup                   # TOTP (see TOTP)
+POST   /api/v1/me/totp/confirm
+DELETE /api/v1/me/totp
+```
+
+The older spellings `/users/me`, `/user/…` and `/auth/totp` still work but are deprecated — see [Deprecated routes](#deprecated-routes).
 
 There is no user-creation or admin-driven password-reset endpoint, and no `DELETE /api/v1/users/{id}` for deleting another account — account lifecycle (creation, email/role changes by an admin, password resets, full deletion) is CLI-only (`dansal_admin`) or handled through the registration/invite flow. This is intentional (#613): the REST API only exposes self-service actions plus a few narrowly-scoped admin actions (verify, magic-link, Telegram message).
 
@@ -422,7 +441,7 @@ This is the intended shape for any external integration that authenticates as a 
 2. **Location sync — check before creating:**
    - `GET /api/v1/locations?osm_id=<id>&osm_type=<type>` — exact match
    - `GET /api/v1/locations?lat=<lat>&lng=<lng>&radius=<km>` — proximity match (adds `distance_km` to results)
-   - If a match exists but isn't yet linked to the org: `POST /api/v1/locations/{id}/assign-org` with `{"organization_id": <org_id>}` (publishers may only assign orgs they belong to)
+   - If a match exists but isn't yet linked to the org: `PUT /api/v1/locations/{id}/organizations/{org_id}` (no body; publishers may only link orgs they belong to)
    - Otherwise: `POST /api/v1/locations` with `organization_ids: [<org_id>]`
    - Once assigned, `PATCH /api/v1/locations/{id}` edits it like any other org member
 3. **Event sync — create or update, never duplicate:** `POST /api/v1/events` to create; `PATCH /api/v1/events/{id}` to update. The integration should persist the returned event `id` locally (e.g. WordPress post meta) so subsequent saves `PATCH` instead of `POST`. Publishers may only edit events they created themselves (`created_by_id`).
@@ -478,10 +497,10 @@ GET    /api/v1/verify/{token}
 ## WebAuthn Credentials
 
 ```
-GET    /api/v1/user/webauthn/credentials          # list credentials for current user
-POST   /api/v1/user/webauthn/register/begin       # begin adding a new passkey
-POST   /api/v1/user/webauthn/register/finish      # complete adding a new passkey
-DELETE /api/v1/user/webauthn/credentials/{id}     # remove a passkey
+GET    /api/v1/me/webauthn/credentials            # list credentials for current user
+POST   /api/v1/me/webauthn/register/begin         # begin adding a new passkey
+POST   /api/v1/me/webauthn/register/finish        # complete adding a new passkey
+DELETE /api/v1/me/webauthn/credentials/{id}       # remove a passkey
 
 POST   /api/v1/auth/webauthn/login/begin          # begin passkey login (discoverable or with email)
 POST   /api/v1/auth/webauthn/login/finish         # complete passkey login → returns session token or totp_required
@@ -510,8 +529,8 @@ POST   /api/v1/oidc/start                # begin login/invite-redemption flow
 POST   /api/v1/oidc/callback             # complete the flow
 
 POST   /api/v1/oidc/link-start                  # auth required: link a provider to the current account
-GET    /api/v1/user/oidc-identities             # auth required: list caller's linked identities
-DELETE /api/v1/user/oidc-identities/{id}        # auth required: unlink one
+GET    /api/v1/me/oidc-identities               # auth required: list caller's linked identities
+DELETE /api/v1/me/oidc-identities/{id}          # auth required: unlink one
 ```
 
 External SSO login and account-linking (#1095, #1096, #1097). Two provider `kind`s share the same registry:
@@ -576,21 +595,21 @@ Both endpoints are public but rate-limited per client IP, same limiter as passwo
 
 **`POST /api/v1/oidc/link-start`** — authenticated. Same request/response shape as `POST /api/v1/oidc/start` (returns `{flow_id, authorize_url}`), but for a user who already has a password or passkey account and wants to add SSO as an additional login method — the flow is bound to the caller's own `user_id` instead of an invite token. Complete it the same way, via `POST /api/v1/oidc/callback` with the returned `flow_id`; on success it attaches the identity to the caller's account and returns `201` with `{"status":"linked"}` — no new session is issued, since the caller is already logged in. Returns `409` if that `(issuer, subject)` is already linked to a *different* account — one external identity links to exactly one dansal account.
 
-**`GET /api/v1/user/oidc-identities`** — authenticated. Lists the caller's own linked identities:
+**`GET /api/v1/me/oidc-identities`** — authenticated. Lists the caller's own linked identities:
 ```json
 [{ "id": 12, "issuer_url": "https://accounts.example.com", "display_name": "Example SSO", "linked_at": "2026-08-13 10:00:00" }]
 ```
 
-**`DELETE /api/v1/user/oidc-identities/{id}`** — authenticated. Unlinks one. `{id}` is the value from the list response above, not a provider ID. Rejected with `409` if it's the caller's last login method — the same self-lockout guard also applies to deleting a passkey (`DELETE /api/v1/user/webauthn/credentials/{id}`) and to clearing a password (below): all three require at least one other login method (password, passkey, or a linked identity) to remain.
+**`DELETE /api/v1/me/oidc-identities/{id}`** — authenticated. Unlinks one. `{id}` is the value from the list response above, not a provider ID. Rejected with `409` if it's the caller's last login method — the same self-lockout guard also applies to deleting a passkey (`DELETE /api/v1/me/webauthn/credentials/{id}`) and to clearing a password (below): all three require at least one other login method (password, passkey, or a linked identity) to remain.
 
-**Removing a password:** `POST /api/v1/user/password` (see [Users](#users)) accepts an empty `new_password` to mean "remove my password entirely" — allowed only when a passkey or linked identity remains, guarded the same way.
+**Removing a password:** `POST /api/v1/me/password` (see [Users](#users)) accepts an empty `new_password` to mean "remove my password entirely" — allowed only when a passkey or linked identity remains, guarded the same way.
 
 ## TOTP
 
 ```
-GET    /api/v1/auth/totp/setup    # generate TOTP QR code / secret
-POST   /api/v1/auth/totp/confirm  # confirm and enable TOTP
-DELETE /api/v1/auth/totp          # disable TOTP
+GET    /api/v1/me/totp/setup    # generate TOTP QR code / secret
+POST   /api/v1/me/totp/confirm  # confirm and enable TOTP
+DELETE /api/v1/me/totp          # disable TOTP
 ```
 
 Authentication required.
@@ -778,9 +797,9 @@ PUT    /api/v1/locations/{id}         # auth required — full replace
 PATCH  /api/v1/locations/{id}         # auth required — partial merge
 DELETE /api/v1/locations/{id}         # auth required
 POST   /api/v1/locations/merge        # admin: merge duplicate locations
-POST   /api/v1/locations/bulk-assign-org
-POST   /api/v1/locations/unassign-org
-POST   /api/v1/locations/{id}/assign-org  # admin/user (member of the target org)/publisher (member of the target org)
+POST   /api/v1/locations/bulk-assign-org                  # {"ids": [...], "organization_id": N|null}; null (admin) clears all orgs
+PUT    /api/v1/locations/{id}/organizations/{org_id}      # link to an org (locations can have several); admin/user/publisher (member of that org)
+DELETE /api/v1/locations/{id}/organizations/{org_id}      # unlink; admin/user (member of that org)
 GET    /api/v1/locations/event-counts # auth required
 GET    /api/v1/locations/cities       # public — towns with an upcoming event, for dansal-web's /cities and /city/{slug}
 
@@ -912,17 +931,17 @@ DELETE /api/v1/events/{id}        # auth required
 POST   /api/v1/events/{id}/publish
 POST   /api/v1/events/{id}/cancel
 POST   /api/v1/events/{id}/clone            # admin/user: duplicate an event, optionally into another org
-POST   /api/v1/events/{id}/assign-org       # admin/user (member of the target org)/publisher
 POST   /api/v1/events/{id}/enrich           # admin/publisher: attach musicians/pricing from an external lookup
 POST   /api/v1/events/{id}/remove-from-series  # admin/user (member of the event's org)
 POST   /api/v1/events/preview               # admin/user: preview-parse a feed without saving (multipart form)
 POST   /api/v1/events/bulk-set-attributes   # admin/user: bulk-apply org/tags/dances/musicians/instructors/amenities to event IDs
 POST   /api/v1/events/bulk-set-location     # admin/user: bulk-reassign event IDs to a location
 POST   /api/v1/events/bulk-set-time         # admin/user: bulk-update start/end time-of-day for event IDs
+POST   /api/v1/events/bulk-assign-org       # admin/user/publisher: {"ids": [...], "organization_id": N|null} — see below
 
 PUT    /api/v1/events/{id}/location                    # set the event's location
 DELETE /api/v1/events/{id}/location                     # clear the event's location
-PUT    /api/v1/events/{id}/organization                 # set the event's organization
+PUT    /api/v1/events/{id}/organization                 # set the event's organization ({"organization_id": N}); also claims an orphaned event
 DELETE /api/v1/events/{id}/organization                 # clear the event's organization
 PUT    /api/v1/events/{id}/musicians/{musician_id}      # add one musician
 DELETE /api/v1/events/{id}/musicians/{musician_id}      # remove one musician
@@ -934,7 +953,7 @@ DELETE /api/v1/events/{id}/dances/{dance_id}            # remove one dance
 
 A room is just a [location](#locations) with `parent_id` set — to assign an event to a specific room rather than the whole venue, set `Event.location_id` directly to the room's `id` instead of the building's. There is no separate `room_id` field.
 
-**Relationship sub-resources:** the eight endpoints above are additive, REST-idiomatic alternatives to embedding `location_id`/`organization_id`/`musicians[]`/`instructors[]`/`dances[]` in the event write body — they don't replace that behavior. In particular, `PUT`/`DELETE .../location` and `.../organization` are the way to *clear* those two nullable references via the API: `PATCH`'s merge-patch semantics can't distinguish "omitted" from "explicitly cleared" for a plain `*int` field (see the `PUT` vs `PATCH` note below), so clearing `location_id`/`organization_id` requires either a full `PUT` on the event or one of these `DELETE` sub-resource calls. All eight require the caller to be an admin or an org member of the event (same check as `PATCH`/`PUT` on the event itself); setting `.../organization` additionally requires membership in the *target* organization. `musicians`/`instructors`/`dances` sub-resource calls are single-item add/remove on top of the existing whole-list `PUT /api/v1/events/{id}/instructors` and the `musicians`/`dances` arrays in the event write body — adding an already-linked ID, or removing one that isn't linked, is a no-op (`204`), not an error.
+**Relationship sub-resources:** the eight endpoints above are additive, REST-idiomatic alternatives to embedding `location_id`/`organization_id`/`musicians[]`/`instructors[]`/`dances[]` in the event write body — they don't replace that behavior. In particular, `PUT`/`DELETE .../location` and `.../organization` are the way to *clear* those two nullable references via the API: `PATCH`'s merge-patch semantics can't distinguish "omitted" from "explicitly cleared" for a plain `*int` field (see the `PUT` vs `PATCH` note below), so clearing `location_id`/`organization_id` requires either a full `PUT` on the event or one of these `DELETE` sub-resource calls. All eight require the caller to be an admin or an org member of the event (same check as `PATCH`/`PUT` on the event itself); setting `.../organization` additionally requires membership in the *target* organization — except that an event with no organization yet can be claimed by any member of the target organization (publishers included; this replaced `POST .../assign-org`, #1380). `musicians`/`instructors`/`dances` sub-resource calls are single-item add/remove on top of the existing whole-list `PUT /api/v1/events/{id}/instructors` and the `musicians`/`dances` arrays in the event write body — adding an already-linked ID, or removing one that isn't linked, is a no-op (`204`), not an error.
 
 **`bulk-set-time` request:** adjusts the time-of-day component of `start_time` and/or `end_time` for multiple events while keeping their dates. Times are in `"HH:MM"` format (Berlin timezone). At least one of `start_time` or `end_time` is required; omit the other to leave it unchanged. Events where the caller is not an org member are silently skipped (admins may affect all events). Returns `204`.
 
@@ -1020,6 +1039,23 @@ Events support `Accept: text/calendar` for iCalendar and `Accept: application/at
 IDs are integers throughout the API, not strings.
 
 **`title`/`description` (and other free-text fields — `location`/address fields, musician/instructor names, organization names) must be plain text, not HTML.** dansal stores and displays these fields verbatim; it never HTML-decodes them on write. A client that runs a value through an HTML-rendering filter before sending it — e.g. WordPress's `get_the_title()`, which HTML-entity-encodes typographic characters (`'` → `&#8217;`, `–` → `&#8211;`) for safe display in a web page — will produce a literal, garbled `&#8217;`/`&#8211;` in the field once dansal stores and re-escapes it for its own HTML output. Send the raw, unfiltered text (e.g. WordPress's raw `post_title`, not the `the_title`-filtered value).
+
+**`bulk-assign-org` request (#1380):** sets the organization of several events at once; `"organization_id": null` clears it (admin only). Non-admins must belong to the target organization; events whose current organization they don't belong to are silently skipped (an event without an organization can be claimed). Returns `204`.
+
+```json
+{ "ids": [1, 2, 3], "organization_id": 7 }
+```
+
+### Syndication
+
+```
+GET    /api/v1/events/{id}/syndication      # per-platform push status of this event
+POST   /api/v1/events/{id}/syndication      # push the event to one platform: {"target": "eventbrite" | "social-dance-today"}
+GET    /api/v1/organizations/{id}/syndication   # the organization's platform settings (secrets redacted to has_token / has_key)
+PUT    /api/v1/organizations/{id}/syndication   # set them
+```
+
+`POST .../syndication` (#1379) is open to admins and to members of the event's organization. The target must be enabled in the organization's syndication settings (`422` otherwise); an unknown `target` is `400`. The push runs in the background: the response is `{"status": "pending"}` and the outcome appears in `GET .../syndication`. The platform is a body value rather than part of the path, so a new platform adds no route; the old per-platform routes remain as [deprecated aliases](#deprecated-routes).
 
 ## Event Series
 
@@ -1227,6 +1263,27 @@ POST /telegram/webhook
 ```
 
 Public (Telegram calls directly). Optional validation via `telegram_webhook_secret` in `web.yaml`.
+
+## Deprecated routes
+
+These routes still work but have a canonical replacement (phase-22: #1379, #1380, #1381). Every response from one of them carries a `Deprecation` header (RFC 9745, `@1790899200` = 2026-10-02) and a `Link: <…>; rel="successor-version"` header naming the replacement for that very request. They are scheduled for removal with the next major API version.
+
+| Deprecated | Use instead |
+|---|---|
+| `POST /api/v1/events/{id}/syndicate/eventbrite` | `POST /api/v1/events/{id}/syndication` `{"target": "eventbrite"}` |
+| `POST /api/v1/events/{id}/syndicate/social-dance-today` | `POST /api/v1/events/{id}/syndication` `{"target": "social-dance-today"}` |
+| `POST /api/v1/events/{id}/assign-org` `{"org_id": N}` | `PUT /api/v1/events/{id}/organization` `{"organization_id": N}` |
+| `POST /api/v1/locations/{id}/assign-org` `{"organization_id": N}` | `PUT /api/v1/locations/{id}/organizations/{N}` |
+| `POST /api/v1/locations/unassign-org` `{"location_id": L, "organization_id": N}` | `DELETE /api/v1/locations/{L}/organizations/{N}` |
+| `DELETE /api/v1/users/me` | `DELETE /api/v1/me` |
+| `POST /api/v1/users/me/magic-link` | `POST /api/v1/me/magic-link` |
+| `POST /api/v1/user/password` | `POST /api/v1/me/password` |
+| `GET`/`DELETE /api/v1/user/oidc-identities[/{id}]` | `/api/v1/me/oidc-identities[/{id}]` |
+| `GET`/`DELETE /api/v1/user/webauthn/credentials[/{id}]` | `/api/v1/me/webauthn/credentials[/{id}]` |
+| `POST /api/v1/user/webauthn/register/{begin,finish}` | `POST /api/v1/me/webauthn/register/{begin,finish}` |
+| `GET /api/v1/auth/totp/setup`, `POST /api/v1/auth/totp/confirm`, `DELETE /api/v1/auth/totp` | `/api/v1/me/totp/setup`, `/api/v1/me/totp/confirm`, `/api/v1/me/totp` |
+
+`/api/v1/users/{id}` (an admin acting on another account) and `/api/v1/auth/webauthn/login/*` (the login ceremony, before there is a caller) are not affected.
 
 ## Status Codes
 

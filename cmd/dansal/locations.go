@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -1297,11 +1298,10 @@ func bulkAssignLocationOrg(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// DELETE /api/v1/locations/{id} - Delete a location
-// POST /api/v1/locations/unassign-org — remove one org from one location.
-// admin: any org. user: must be member of the specified org.
-func unassignLocationOrg(w http.ResponseWriter, r *http.Request) {
-	callerID, requesterRole := callerFromRequest(r)
+// POST /api/v1/locations/unassign-org — deprecated alias (#1380) of
+// DELETE /api/v1/locations/{id}/organizations/{org_id}; the body's
+// location_id/organization_id become the path values.
+var unassignLocationOrg = deprecatedAlias("/api/v1/locations/{id}/organizations/{org_id}", func(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		LocationID     int `json:"location_id"`
 		OrganizationID int `json:"organization_id"`
@@ -1313,20 +1313,73 @@ func unassignLocationOrg(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "location_id and organization_id are required", http.StatusBadRequest)
 		return
 	}
-	if requesterRole != RoleAdmin {
-		if requesterRole != RoleUser {
+	r.SetPathValue("id", strconv.Itoa(req.LocationID))
+	r.SetPathValue("org_id", strconv.Itoa(req.OrganizationID))
+	removeLocationOrganization(w, r)
+})
+
+// locationOrgPathValues reads {id} and {org_id} and applies the shared
+// permission rule of the location–organization link: admin any org;
+// user/publisher only organizations they belong to.
+func locationOrgPathValues(w http.ResponseWriter, r *http.Request, roles ...string) (locID, orgID, callerID int, ok bool) {
+	callerID, role := callerFromRequest(r)
+	if locID, ok = requireIntPathValue(w, r, "id", "invalid id"); !ok {
+		return
+	}
+	if orgID, ok = requireIntPathValue(w, r, "org_id", "invalid organization id"); !ok {
+		return
+	}
+	if role != RoleAdmin {
+		if !slices.Contains(roles, role) {
 			writeError(w, "Forbidden", http.StatusForbidden)
-			return
+			return 0, 0, 0, false
 		}
-		if !isOrgMember(callerID, req.OrganizationID) {
+		if !isOrgMember(callerID, orgID) {
 			writeError(w, "Forbidden: not a member of the specified organization", http.StatusForbidden)
-			return
+			return 0, 0, 0, false
 		}
 	}
-	db.Exec("DELETE FROM location_organizations WHERE location_id=? AND organization_id=?", req.LocationID, req.OrganizationID)
+	return locID, orgID, callerID, true
+}
+
+// PUT /api/v1/locations/{id}/organizations/{org_id} — link a location to an
+// organization (#1380; locations can belong to several, hence the org id in
+// the path). Idempotent. admin: any org. user/publisher: own orgs only.
+func addLocationOrganization(w http.ResponseWriter, r *http.Request) {
+	locID, orgID, _, ok := locationOrgPathValues(w, r, RoleUser, RolePublisher)
+	if !ok {
+		return
+	}
+	if !locationExists(db, locID) {
+		writeError(w, "Location not found", http.StatusNotFound)
+		return
+	}
+	if !orgExists(db, orgID) {
+		writeError(w, "Organization not found", http.StatusNotFound)
+		return
+	}
+	if err := insertJunctionRow(db, "location_organizations", "location_id", "organization_id", locID, orgID); err != nil {
+		writeInternalError(w, err)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// DELETE /api/v1/locations/{id}/organizations/{org_id} — unlink a location
+// from an organization. Idempotent. admin: any org. user: own orgs only.
+func removeLocationOrganization(w http.ResponseWriter, r *http.Request) {
+	locID, orgID, _, ok := locationOrgPathValues(w, r, RoleUser)
+	if !ok {
+		return
+	}
+	if _, err := db.Exec("DELETE FROM location_organizations WHERE location_id=? AND organization_id=?", locID, orgID); err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/v1/locations/{id} - Delete a location
 func deleteLocation(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -1402,14 +1455,10 @@ func deleteLocation(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// POST /api/v1/locations/{id}/assign-org — add a location to an organization.
-// admin: any org. user: own orgs only.
-func assignLocationOrg(w http.ResponseWriter, r *http.Request) {
-	callerID, requesterRole := callerFromRequest(r)
-	locID, ok := requireIntPathValue(w, r, "id", "invalid id")
-	if !ok {
-		return
-	}
+// POST /api/v1/locations/{id}/assign-org — deprecated alias (#1380) of
+// PUT /api/v1/locations/{id}/organizations/{org_id}; the body's
+// organization_id becomes the path value.
+var assignLocationOrg = deprecatedAlias("/api/v1/locations/{id}/organizations/{org_id}", func(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		OrganizationID int `json:"organization_id"`
 	}
@@ -1420,33 +1469,9 @@ func assignLocationOrg(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "organization_id is required", http.StatusBadRequest)
 		return
 	}
-
-	if requesterRole != RoleAdmin {
-		if requesterRole != RoleUser && requesterRole != RolePublisher {
-			writeError(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-		if !isOrgMember(callerID, req.OrganizationID) {
-			writeError(w, "Forbidden: not a member of the specified organization", http.StatusForbidden)
-			return
-		}
-	}
-
-	if !locationExists(db, locID) {
-		writeError(w, "Location not found", http.StatusNotFound)
-		return
-	}
-	if !orgExists(db, req.OrganizationID) {
-		writeError(w, "Organization not found", http.StatusNotFound)
-		return
-	}
-
-	if err := insertJunctionRow(db, "location_organizations", "location_id", "organization_id", locID, req.OrganizationID); err != nil {
-		writeInternalError(w, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
+	r.SetPathValue("org_id", strconv.Itoa(req.OrganizationID))
+	addLocationOrganization(w, r)
+})
 
 // POST /api/v1/locations/merge — merge two similar locations into one.
 // keep_id survives; merge_id is deleted. Events and org links are migrated.

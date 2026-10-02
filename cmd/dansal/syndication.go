@@ -239,8 +239,45 @@ func getEventSyncStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s)
 }
 
-// POST /api/v1/events/{id}/syndicate/eventbrite
-func syndicateToEventbrite(w http.ResponseWriter, r *http.Request) {
+// Syndication targets accepted by POST /api/v1/events/{id}/syndication.
+const (
+	syndicationTargetEventbrite       = "eventbrite"
+	syndicationTargetSocialDanceToday = "social-dance-today"
+)
+
+// EventSyndicateRequest is the body of POST /api/v1/events/{id}/syndication
+// (#1379): the target platform is a body value, not part of the URL, so a
+// new platform needs no new route.
+type EventSyndicateRequest struct {
+	Target string `json:"target"`
+}
+
+// POST /api/v1/events/{id}/syndication — push one event to a platform
+// configured on its organization (PUT /organizations/{id}/syndication).
+// Starts the push in the background and answers {"status":"pending"}; the
+// outcome shows up in GET /api/v1/events/{id}/syndication.
+func syndicateEvent(w http.ResponseWriter, r *http.Request) {
+	var req EventSyndicateRequest
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	switch req.Target {
+	case syndicationTargetEventbrite, syndicationTargetSocialDanceToday:
+		syndicateEventTo(w, r, req.Target)
+	default:
+		writeError(w, fmt.Sprintf("target must be %q or %q", syndicationTargetEventbrite, syndicationTargetSocialDanceToday), http.StatusBadRequest)
+	}
+}
+
+// syndicateEventLegacy serves the deprecated per-platform routes
+// POST /api/v1/events/{id}/syndicate/{eventbrite,social-dance-today}.
+func syndicateEventLegacy(target string) http.HandlerFunc {
+	return deprecatedAlias("/api/v1/events/{id}/syndication", func(w http.ResponseWriter, r *http.Request) {
+		syndicateEventTo(w, r, target)
+	})
+}
+
+func syndicateEventTo(w http.ResponseWriter, r *http.Request, target string) {
 	callerID, role := callerFromRequest(r)
 	if role != RoleAdmin && role != RoleUser && role != RolePublisher {
 		writeError(w, "forbidden", http.StatusForbidden)
@@ -255,7 +292,6 @@ func syndicateToEventbrite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch event and its org.
 	event, err := scanEventRow(db.QueryRow(eventListSelect+" WHERE e.id=?", id))
 	if err != nil {
 		writeError(w, "event not found", http.StatusNotFound)
@@ -265,69 +301,33 @@ func syndicateToEventbrite(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "event has no organization", http.StatusUnprocessableEntity)
 		return
 	}
-
-	synCfg, err := loadSyndicationConfig(*event.OrganizationID)
-	if err != nil || synCfg.Eventbrite == nil || !synCfg.Eventbrite.Enabled {
-		writeError(w, "Eventbrite not configured for this organization", http.StatusUnprocessableEntity)
-		return
-	}
-	eb := synCfg.Eventbrite
+	synCfg, _ := loadSyndicationConfig(*event.OrganizationID)
 
 	// Mark as pending immediately so the UI shows progress.
 	sync, _ := loadEventSync(id)
 	if sync == nil {
 		sync = &ExternalSync{}
 	}
-	sync.Eventbrite = &PlatformSyncStatus{Status: "pending", SyncedAt: time.Now().UTC().Format(time.RFC3339)}
-	saveEventSync(id, sync)
+	pending := &PlatformSyncStatus{Status: "pending", SyncedAt: time.Now().UTC().Format(time.RFC3339)}
 
-	go publishToEventbrite(id, event, eb)
-
-	writeJSON(w, map[string]string{"status": "pending"})
-}
-
-// POST /api/v1/events/{id}/syndicate/social-dance-today
-func syndicateToSocialDanceToday(w http.ResponseWriter, r *http.Request) {
-	callerID, role := callerFromRequest(r)
-	if role != RoleAdmin && role != RoleUser && role != RolePublisher {
-		writeError(w, "forbidden", http.StatusForbidden)
-		return
+	switch target {
+	case syndicationTargetEventbrite:
+		if synCfg == nil || synCfg.Eventbrite == nil || !synCfg.Eventbrite.Enabled {
+			writeError(w, "Eventbrite not configured for this organization", http.StatusUnprocessableEntity)
+			return
+		}
+		sync.Eventbrite = pending
+		saveEventSync(id, sync)
+		go publishToEventbrite(id, event, synCfg.Eventbrite)
+	case syndicationTargetSocialDanceToday:
+		if synCfg == nil || synCfg.SocialDanceToday == nil || !synCfg.SocialDanceToday.Enabled {
+			writeError(w, "social-dance.today not configured for this organization", http.StatusUnprocessableEntity)
+			return
+		}
+		sync.SocialDanceToday = pending
+		saveEventSync(id, sync)
+		go pushToSocialDanceToday(id, event, synCfg.SocialDanceToday)
 	}
-	id, ok := requireIntPathValue(w, r, "id", "invalid id")
-	if !ok {
-		return
-	}
-	if role != RoleAdmin && !isOrgMemberOfEvent(callerID, id) {
-		writeError(w, "forbidden: not a member of this event's organization", http.StatusForbidden)
-		return
-	}
-
-	event, err := scanEventRow(db.QueryRow(eventListSelect+" WHERE e.id=?", id))
-	if err != nil {
-		writeError(w, "event not found", http.StatusNotFound)
-		return
-	}
-	if event.OrganizationID == nil {
-		writeError(w, "event has no organization", http.StatusUnprocessableEntity)
-		return
-	}
-
-	synCfg, err := loadSyndicationConfig(*event.OrganizationID)
-	if err != nil || synCfg.SocialDanceToday == nil || !synCfg.SocialDanceToday.Enabled {
-		writeError(w, "social-dance.today not configured for this organization", http.StatusUnprocessableEntity)
-		return
-	}
-	sdt := synCfg.SocialDanceToday
-
-	sync, _ := loadEventSync(id)
-	if sync == nil {
-		sync = &ExternalSync{}
-	}
-	sync.SocialDanceToday = &PlatformSyncStatus{Status: "pending", SyncedAt: time.Now().UTC().Format(time.RFC3339)}
-	saveEventSync(id, sync)
-
-	go pushToSocialDanceToday(id, event, sdt)
-
 	writeJSON(w, map[string]string{"status": "pending"})
 }
 

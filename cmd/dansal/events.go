@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"net/http"
@@ -2952,15 +2954,12 @@ func publishEvent(w http.ResponseWriter, r *http.Request) {
 	writeError(w, "Forbidden", http.StatusForbidden)
 }
 
-// POST /api/v1/events/{id}/assign-org — assign an organisation to an orphaned event
-// (organization_id IS NULL). Admin: any event. User/publisher: only orgs they belong to.
-func assignEventOrg(w http.ResponseWriter, r *http.Request) {
-	callerID, userRole := callerFromRequest(r)
-	if !requireRole(w, userRole, RoleAdmin, RolePublisher, RoleUser) {
-		return
-	}
-
-	id := r.PathValue("id")
+// POST /api/v1/events/{id}/assign-org — deprecated alias (#1380) of
+// PUT /api/v1/events/{id}/organization; its body {"org_id": N} is rewritten
+// to that route's {"organization_id": N}. Claiming an orphaned event works
+// the same way there: requireEventOrg only checks the existing org when the
+// event has one.
+var assignEventOrg = deprecatedAlias("/api/v1/events/{id}/organization", func(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		OrgID int `json:"org_id"`
 	}
@@ -2971,29 +2970,10 @@ func assignEventOrg(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "org_id required", http.StatusBadRequest)
 		return
 	}
-
-	if userRole != RoleAdmin && !isOrgMember(callerID, req.OrgID) {
-		writeError(w, "Forbidden", http.StatusForbidden)
-		return
-	}
-
-	query := "UPDATE events SET organization_id=? WHERE id=? AND organization_id IS NULL"
-	if userRole == RoleAdmin {
-		query = "UPDATE events SET organization_id=? WHERE id=?"
-	}
-	result, err := db.Exec(query, req.OrgID, id)
-	if err != nil {
-		writeInternalError(w, err)
-		return
-	}
-	if n, _ := result.RowsAffected(); n == 0 {
-		writeError(w, "Event not found or already assigned to an organisation", http.StatusNotFound)
-		return
-	}
-	eventID, _ := strconv.Atoi(id)
-	touchEvent(eventID, callerID)
-	w.WriteHeader(http.StatusNoContent)
-}
+	body, _ := json.Marshal(EventOrganizationRefRequest{OrganizationID: req.OrgID})
+	r.Body = io.NopCloser(bytes.NewReader(body))
+	setEventOrganizationRef(w, r)
+})
 
 // DELETE /api/v1/events/{id}
 // admin: unrestricted. user/publisher: own org, and only within a shrinking
@@ -3915,6 +3895,59 @@ func bulkSetEventLocation(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// BulkAssignOrgRequest is the body of POST /api/v1/events/bulk-assign-org
+// (#1380). organization_id null clears the organization (admin only).
+type BulkAssignOrgRequest struct {
+	IDs            []int `json:"ids"`
+	OrganizationID *int  `json:"organization_id"`
+}
+
+// POST /api/v1/events/bulk-assign-org — set (or, admin only, clear) the
+// organization of several events. Non-admins must belong to the target
+// organization; events whose current organization they don't belong to are
+// skipped (orphaned events can be claimed), like the other events bulk-*
+// endpoints skip events outside the caller's organizations.
+func bulkAssignEventOrg(w http.ResponseWriter, r *http.Request) {
+	callerID, role := callerFromRequest(r)
+	if !requireRole(w, role, RoleAdmin, RoleUser, RolePublisher) {
+		return
+	}
+	var req BulkAssignOrgRequest
+	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if len(req.IDs) == 0 {
+		writeError(w, "ids required", http.StatusBadRequest)
+		return
+	}
+	if role != RoleAdmin {
+		if req.OrganizationID == nil {
+			writeError(w, "Forbidden: admin only for clearing the organization", http.StatusForbidden)
+			return
+		}
+		if !isOrgMember(callerID, *req.OrganizationID) {
+			writeError(w, "Forbidden: not a member of the specified organization", http.StatusForbidden)
+			return
+		}
+	}
+	if req.OrganizationID != nil && !orgExists(db, *req.OrganizationID) {
+		writeError(w, "Organization not found", http.StatusNotFound)
+		return
+	}
+	for _, id := range req.IDs {
+		if role != RoleAdmin {
+			existing, err := eventOrgID(db, id)
+			if err != nil || (existing.Valid && !isOrgMember(callerID, int(existing.Int64))) {
+				continue
+			}
+		}
+		if _, err := db.Exec("UPDATE events SET organization_id=? WHERE id=?", req.OrganizationID, id); err == nil {
+			touchEvent(id, callerID)
+		}
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // POST /api/v1/events/bulk-set-time — set the time-of-day of start_time/end_time
 // on multiple events, keeping each event's own calendar date. Mirrors the
 // single-day time semantics used by addSeriesDate (series.go). Either field
@@ -4058,10 +4091,12 @@ func unsetEventLocationRef(w http.ResponseWriter, r *http.Request) {
 }
 
 // PUT /api/v1/events/{id}/organization — set the event's organization.
-// Requires the caller to be a member of the target organization (unless admin).
+// Non-admins must be a member of the target organization and, unless the
+// event is orphaned (no organization yet — claiming it), of its current one.
+// Publishers are allowed since this replaced POST .../assign-org (#1380).
 func setEventOrganizationRef(w http.ResponseWriter, r *http.Request) {
 	callerID, userRole := callerFromRequest(r)
-	if !requireRole(w, userRole, RoleAdmin, RoleUser) {
+	if !requireRole(w, userRole, RoleAdmin, RoleUser, RolePublisher) {
 		return
 	}
 	eventID, ok := requireIntPathValue(w, r, "id", "invalid event id")

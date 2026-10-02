@@ -31,7 +31,7 @@ var writeSchemaExemptions = map[string]string{
 	"/api/v1/apikeys/renew":                 "apikeys",
 	"/api/v1/apikeys/rotate-signing-secret": "apikeys",
 	// auth: 2FA / passkey ceremony endpoints; request bodies are symmetric with the challenge response, not client-built JSON
-	"/api/v1/auth/totp/confirm":            "auth",
+	"/api/v1/auth/totp/confirm":            "auth", // deprecated alias of /me/totp/confirm (#1381)
 	"/api/v1/auth/webauthn/login/begin":    "auth",
 	"/api/v1/auth/webauthn/login/finish":   "auth",
 	"/api/v1/auth/webauthn/totp-challenge": "auth",
@@ -114,7 +114,9 @@ var writeSchemaExemptions = map[string]string{
 	"/api/v1/locations/unassign-org":    "locations-admin",
 	"/api/v1/locations/{id}/assign-org": "locations-admin",
 	"/api/v1/locations/{id}/children":   "locations-admin",
-	"/api/v1/locations/{id}/site-plan":  "locations-admin",
+	// PUT links a location to an org (#1380); no request body, the org id is in the path
+	"/api/v1/locations/{id}/organizations/{org_id}": "locations-admin",
+	"/api/v1/locations/{id}/site-plan":              "locations-admin",
 	// login: session auth; form body documented in API.md, not a JSON object
 	"/api/v1/login":       "login",
 	"/api/v1/login/magic": "login",
@@ -160,11 +162,19 @@ var writeSchemaExemptions = map[string]string{
 	"/api/v1/series-by-token/{token}/events/{eventID}": "series-by-token",
 	// series-images: multipart image upload; not a JSON body
 	"/api/v1/series-images/{id}": "series-images",
-	// user: self-service account actions (moving to /me under #1381)
+	// me: the caller's own account (#1381); password change and passkey
+	// ceremony bodies are credential material, not integration JSON — the
+	// same reason the auth family above is exempt
+	"/api/v1/me/magic-link":               "me",
+	"/api/v1/me/password":                 "me",
+	"/api/v1/me/totp/confirm":             "me",
+	"/api/v1/me/webauthn/register/begin":  "me",
+	"/api/v1/me/webauthn/register/finish": "me",
+	// user: deprecated aliases of the /me routes above (#1381)
 	"/api/v1/user/password":                 "user",
 	"/api/v1/user/webauthn/register/begin":  "user",
 	"/api/v1/user/webauthn/register/finish": "user",
-	// users: admin account management; self-service forms move to /me under #1381
+	// users: admin account management; /users/me/magic-link is a deprecated alias of /me/magic-link (#1381)
 	"/api/v1/users/me/magic-link":         "users",
 	"/api/v1/users/{id}":                  "users",
 	"/api/v1/users/{id}/magic-link":       "users",

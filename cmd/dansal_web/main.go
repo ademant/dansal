@@ -419,6 +419,12 @@ func main() {
 		r.HandleFunc("POST /admin/events/{id}/pending-edit/reject", adminRateLimit(adminPendingEditHandler(cfg, client, false)))
 		r.HandleFunc("POST /admin/events/{id}/delete", adminRateLimit(adminEventDeleteHandler(cfg, db, client)))
 		r.HandleFunc("POST /admin/events/merge", adminRateLimit(adminEventMergeHandler(cfg, db, client)))
+		// #1427: compare & resolve a flagged possible-duplicate pair.
+		r.HandleFunc("GET /admin/duplicates/{id}", adminDuplicatePageHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("POST /admin/duplicates/{id}/save", adminRateLimit(adminDuplicateSaveHandler(client)))
+		r.HandleFunc("POST /admin/duplicates/{id}/accept", adminRateLimit(adminDuplicateAcceptHandler(client)))
+		r.HandleFunc("GET /admin/duplicates/{id}/status", adminDuplicateStatusHandler(client))
+		r.HandleFunc("POST /admin/duplicates/{id}/clear", adminRateLimit(adminDuplicateClearHandler(client)))
 		r.HandleFunc("POST /admin/events/bulk-publish", adminRateLimit(adminEventBulkPublishHandler(cfg, client)))
 		r.HandleFunc("POST /admin/events/bulk-cancel", adminRateLimit(adminEventBulkCancelHandler(cfg, client)))
 		r.HandleFunc("POST /admin/events/bulk-delete", adminRateLimit(adminEventBulkDeleteHandler(cfg, db, client)))

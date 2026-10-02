@@ -4,6 +4,26 @@
 {{if .Data.Event.ChangedAt}}<p class="entity-meta"><strong>{{.Strings.T "last_updated_label"}}</strong> {{fmtUnix (parseChangedAt .Data.Event.ChangedAt)}}{{if eq .Data.Event.ChangedBy "fetch"}} ({{.Strings.T "recent_changes_via_fetch"}}){{end}}</p>{{end}}
 
 {{with .Data}}
+{{if and .Event.NeedsDuplicateReview (eq $.User.Role "admin")}}
+{{/* #1427: flagged possible duplicate — open the comparison page, or check
+     whether a by-hand fix already removed the reason. */}}
+<div class="dup-note" id="dup-note" data-event="{{.Event.ID}}">
+  <span>⚠ {{$.Strings.T "admin_duplicate_of"}} #{{derefInt .Event.DuplicateOfID}}</span>
+  <a href="/admin/duplicates/{{.Event.ID}}" class="btn-secondary dup-note-btn">{{$.Strings.T "dup_solve"}}</a>
+  <button type="button" class="btn-secondary dup-note-btn" id="dup-check-btn">{{$.Strings.T "dup_check_btn"}}</button>
+</div>
+<dialog id="dup-check-dialog" class="unusual-date-dialog" aria-labelledby="dup-check-title"
+        data-save-first="{{$.Strings.T "dup_check_save_first"}}" data-conflict="{{$.Strings.T "dup_check_conflict"}}"
+        data-clear="{{$.Strings.T "dup_check_clear"}}" data-gone="{{$.Strings.T "dup_partner_gone"}}" data-others="{{$.Strings.T "dup_other_conflicts"}}"
+        data-r-time="{{$.Strings.T "dup_reason_time"}}" data-r-venue="{{$.Strings.T "dup_reason_venue"}}" data-r-title="{{$.Strings.T "dup_reason_title"}}" data-r-similar="{{$.Strings.T "dup_reason_similar_title"}}">
+  <h2 id="dup-check-title">{{$.Strings.T "dup_check_btn"}}</h2>
+  <div class="dup-check-body"></div>
+  <div class="ud-actions">
+    <button type="button" class="btn-secondary dup-check-close">{{$.Strings.T "admin_magic_link_close"}}</button>
+    <button type="button" class="btn-primary dup-check-clean" hidden>{{$.Strings.T "dup_cleaned"}}</button>
+  </div>
+</dialog>
+{{end}}
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}{{template "save-error-extra" (dict "D" .ErrorDetail "R" .ErrorRef "S" $.Strings)}}</p>{{end}}
 
 {{if .Event.PendingEditJSON}}
@@ -2240,6 +2260,64 @@ function safeGoBack(){
   _formDirty=false;
   if(window.history.length>1){history.back();}else{location.href='/admin/events';}
 }
+// ── #1427: "check duplicate status" dialog ──────────────────────────────
+// Checks the *saved* state against the flagged partner; when nothing collides
+// any more, "Cleaned" clears the flag on both (the server re-checks).
+(function(){
+  var btn=document.getElementById('dup-check-btn'), dlg=document.getElementById('dup-check-dialog');
+  if(!btn||!dlg) return;
+  var id=document.getElementById('dup-note').dataset.event;
+  var body=dlg.querySelector('.dup-check-body'), clean=dlg.querySelector('.dup-check-clean');
+  var RL={time:dlg.dataset.rTime,venue:dlg.dataset.rVenue,title:dlg.dataset.rTitle,similar_title:dlg.dataset.rSimilar};
+  // "time" (< 3h apart) is the precondition, shown up front; list the rest.
+  function reasons(list){
+    return (list||[]).filter(function(r){return r!=='time';}).map(function(r){return RL[r]||r;}).join(', ');
+  }
+  function show(res){
+    body.innerHTML='';
+    var p=document.createElement('p');
+    if(res.partner_id && res.collides){
+      p.textContent=dlg.dataset.conflict.replace('%d',res.partner_id)+' '+(res.partner_title||'')+' — '+dlg.dataset.rTime+', '+reasons(res.reasons);
+      clean.hidden=true;
+    } else {
+      p.textContent=res.partner_id?dlg.dataset.clear:dlg.dataset.gone;
+      clean.hidden=false;
+    }
+    body.appendChild(p);
+    if(res.other_conflicts&&res.other_conflicts.length){
+      var h=document.createElement('p'); h.textContent=dlg.dataset.others; body.appendChild(h);
+      var ul=document.createElement('ul');
+      res.other_conflicts.forEach(function(o){
+        var li=document.createElement('li'), a=document.createElement('a');
+        a.href='/admin/events/'+o.id+'/edit'; a.textContent='#'+o.id+' '+o.title+' ('+reasons(o.reasons)+')';
+        li.appendChild(a); ul.appendChild(li);
+      });
+      body.appendChild(ul);
+    }
+  }
+  btn.addEventListener('click',function(){
+    clean.hidden=true;
+    if(window._formDirty){
+      body.textContent=dlg.dataset.saveFirst;
+      dlg.showModal();
+      return;
+    }
+    fetch('/admin/duplicates/'+id+'/status').then(function(r){return r.json();}).then(function(res){
+      show(res); dlg.showModal();
+    }).catch(function(){});
+  });
+  dlg.querySelector('.dup-check-close').addEventListener('click',function(){dlg.close();});
+  clean.addEventListener('click',function(){
+    clean.disabled=true;
+    fetch('/admin/duplicates/'+id+'/clear',{method:'POST'}).then(function(r){
+      return r.json().then(function(res){return {ok:r.ok,res:res};});
+    }).then(function(x){
+      if(x.ok){ location.reload(); return; }
+      show(x.res);
+    }).catch(function(){}).then(function(){clean.disabled=false;});
+  });
+})();
+
 // ── #1413: unusual-date warning ─────────────────────────────────────────
 // While editing: amber #date + note when the date is in the past or more
 // than 2 years ahead. On save: the shared confirm dialog, but only when that

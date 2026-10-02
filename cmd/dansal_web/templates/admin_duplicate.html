@@ -1,0 +1,252 @@
+{{template "base" .}}
+{{define "content"}}
+{{/* #1427: compare & resolve a flagged possible-duplicate pair. One table for
+     both layouts: rows = fields, columns = event A / event B on desktop; below
+     640px CSS turns every row into a block with the A value above the B value
+     (A light yellow, B light blue). */}}
+{{with .Data}}
+<h1>{{$.Strings.T "dup_page_title"}}</h1>
+{{if .Still}}<p class="form-error" role="alert">{{$.Strings.T "dup_still"}}{{if .Time}} {{$.Strings.T "dup_reason_time"}}{{end}}{{if .Venue}} · {{$.Strings.T "dup_reason_venue"}}{{end}}{{if .TitleReason}} · {{$.Strings.T "dup_reason_title"}}{{end}}</p>{{end}}
+
+<div class="dup-actions">
+  <button type="submit" form="dup-merge-form" class="btn-secondary" title="{{$.Strings.T "dup_merge_hint"}}">{{$.Strings.T "dup_merge"}}</button>
+  <button type="submit" form="dup-accept-form" class="btn-secondary" title="{{$.Strings.T "dup_accept_hint"}}">{{$.Strings.T "dup_accept"}}</button>
+  <button type="submit" form="dup-form" id="dup-save" class="btn-primary" disabled>{{$.Strings.T "admin_save"}}</button>
+  <span id="dup-save-hint" class="dup-save-hint">{{$.Strings.T "dup_save_blocked"}}</span>
+</div>
+
+<form id="dup-merge-form" method="post" action="/admin/events/merge" data-on="submit" data-confirm="{{$.Strings.T "dup_merge_hint"}}">
+  <input type="hidden" name="event_ids" value="{{.A.Event.ID}}">
+  <input type="hidden" name="event_ids" value="{{.B.Event.ID}}">
+  <input type="hidden" name="flagged" value="1">
+</form>
+<form id="dup-accept-form" method="post" action="/admin/duplicates/{{.A.Event.ID}}/accept"></form>
+<form id="dup-del-a" method="post" action="/admin/events/{{.A.Event.ID}}/delete" data-on="submit" data-confirm="{{$.Strings.T "dup_delete_confirm"}}"></form>
+<form id="dup-del-b" method="post" action="/admin/events/{{.B.Event.ID}}/delete" data-on="submit" data-confirm="{{$.Strings.T "dup_delete_confirm"}}"></form>
+
+<form id="dup-form" method="post" action="/admin/duplicates/{{.A.Event.ID}}/save" data-title-reason="{{if .TitleReason}}1{{end}}">
+<table class="dup-table">
+  <thead>
+    <tr class="dup-head">
+      <th scope="col"></th>
+      {{range $s := (list .A .B)}}
+      <th scope="col" class="dup-{{$s.Key}}">
+        <span class="dup-letter">{{if eq $s.Key "a"}}A{{else}}B{{end}}</span>
+        <a href="/events/{{$s.Event.ID}}" class="dup-title">{{$s.Event.Title}}</a> <span class="dup-id">#{{$s.Event.ID}}</span>
+        <label class="dup-keep"><input type="radio" name="keep_id" value="{{$s.Event.ID}}" form="dup-merge-form"{{if eq $s.Key "b"}} checked{{end}}> {{$.Strings.T "dup_keep"}}</label>
+        <input type="hidden" name="{{$s.Key}}_id" value="{{$s.Event.ID}}">
+      </th>
+      {{end}}
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th scope="row">{{$.Strings.T "dup_row_when"}}{{if .Time}} <span class="dup-reason">⚠ {{$.Strings.T "dup_reason_time"}}</span>{{end}}</th>
+      {{range $s := (list .A .B)}}
+      <td class="dup-{{$s.Key}}" data-side="{{$s.Key}}">
+        <input type="date" name="{{$s.Key}}_date" value="{{$s.Date}}" class="dup-in">
+        <span class="dup-times"><input type="time" name="{{$s.Key}}_start" value="{{$s.Start}}" class="dup-in"> – <input type="time" name="{{$s.Key}}_end" value="{{$s.End}}" class="dup-in"></span>
+        <input type="hidden" name="{{$s.Key}}_odate" value="{{$s.Date}}"><input type="hidden" name="{{$s.Key}}_ostart" value="{{$s.Start}}"><input type="hidden" name="{{$s.Key}}_oend" value="{{$s.End}}"><input type="hidden" name="{{$s.Key}}_oenddate" value="{{$s.EndDate}}">
+      </td>
+      {{end}}
+    </tr>
+    <tr>
+      <th scope="row">{{$.Strings.T "dup_row_venue"}}{{if .Venue}} <span class="dup-reason">⚠ {{$.Strings.T "dup_reason_venue"}}</span>{{end}}</th>
+      {{range $s := (list .A .B)}}
+      <td class="dup-{{$s.Key}}" data-side="{{$s.Key}}">
+        <div class="dup-venue" data-building="{{$s.BuildingID}}">
+          <strong class="dup-venue-name">{{if $s.BuildingName}}{{$s.BuildingName}}{{else}}—{{end}}</strong>
+          <select name="{{$s.Key}}_loc" class="dup-in dup-room-sel" aria-label="{{$.Strings.T "dup_row_venue"}}">
+            {{if $s.BuildingID}}<option value="{{$s.BuildingID}}"{{if eq $s.LocationID $s.BuildingID}} selected{{end}}>{{$.Strings.T "dup_room_building"}}</option>{{else}}<option value="">—</option>{{end}}
+            {{range $s.Rooms}}<option value="{{.ID}}"{{if eq .ID $s.LocationID}} selected{{end}}>{{.Location}}</option>{{end}}
+          </select>
+          <input type="hidden" name="{{$s.Key}}_oloc" value="{{if $s.LocationID}}{{$s.LocationID}}{{end}}">
+          {{if $s.BuildingID}}<button type="button" class="btn-sm-secondary dup-add-room">{{$.Strings.T "dup_add_room"}}</button>{{end}}
+          <span class="dup-room-new" hidden><input type="text" class="dup-room-name" placeholder="{{$.Strings.T "dup_room_name"}}" maxlength="100"> <button type="button" class="btn-sm-secondary dup-room-create">{{$.Strings.T "dup_room_create"}}</button></span>
+          <input type="search" class="dup-venue-search" placeholder="{{$.Strings.T "dup_other_venue"}}" autocomplete="off">
+          <ul class="dup-venue-hits" hidden></ul>
+        </div>
+      </td>
+      {{end}}
+    </tr>
+    <tr>
+      <th scope="row">{{$.Strings.T "dup_row_title"}}{{if .TitleReason}} <span class="dup-reason">⚠ {{$.Strings.T "dup_reason_title"}}</span>{{end}}</th>
+      {{range $s := (list .A .B)}}<td class="dup-{{$s.Key}}{{if ne $.Data.A.Event.Title $.Data.B.Event.Title}} dup-diff{{end}}">{{$s.Event.Title}}</td>{{end}}
+    </tr>
+    <tr>
+      <th scope="row">{{$.Strings.T "dup_row_org"}}</th>
+      {{range $s := (list .A .B)}}<td class="dup-{{$s.Key}}{{if ne $.Data.A.OrgName $.Data.B.OrgName}} dup-diff{{end}}">{{if $s.OrgName}}{{$s.OrgName}}{{else}}—{{end}}</td>{{end}}
+    </tr>
+    <tr>
+      <th scope="row">{{$.Strings.T "dup_row_series"}}</th>
+      {{range $s := (list .A .B)}}<td class="dup-{{$s.Key}}{{if ne $.Data.A.SeriesName $.Data.B.SeriesName}} dup-diff{{end}}">{{if $s.SeriesName}}{{$s.SeriesName}}{{else}}—{{end}}</td>{{end}}
+    </tr>
+    <tr>
+      <th scope="row">{{$.Strings.T "dup_row_source"}}</th>
+      {{range $s := (list .A .B)}}<td class="dup-{{$s.Key}}{{if ne $.Data.A.SourceLabel $.Data.B.SourceLabel}} dup-diff{{end}}">{{if $s.SourceLink}}<a href="{{$s.SourceLink}}">{{$s.SourceLabel}}</a>{{else if $s.SourceLabel}}{{$s.SourceLabel}}{{else}}{{$.Strings.T "dup_source_manual"}}{{end}}</td>{{end}}
+    </tr>
+    <tr>
+      <th scope="row">{{$.Strings.T "dup_row_tags"}}</th>
+      {{range $s := (list .A .B)}}<td class="dup-{{$s.Key}}{{if ne (join $.Data.A.Event.Tags) (join $.Data.B.Event.Tags)}} dup-diff{{end}}">{{if $s.Event.Tags}}{{join $s.Event.Tags}}{{else}}—{{end}}</td>{{end}}
+    </tr>
+    <tr>
+      <th scope="row">{{$.Strings.T "dup_row_created"}}</th>
+      {{range $s := (list .A .B)}}<td class="dup-{{$s.Key}}">{{$s.Event.CreatedAt}}{{if $s.Event.ChangedBy}} / {{$s.Event.ChangedBy}}{{end}}</td>{{end}}
+    </tr>
+    <tr>
+      <th scope="row">{{$.Strings.T "dup_row_description"}}</th>
+      {{range $s := (list .A .B)}}<td class="dup-{{$s.Key}} dup-desc{{if ne $.Data.A.Excerpt $.Data.B.Excerpt}} dup-diff{{end}}">{{if $s.Excerpt}}{{$s.Excerpt}}{{else}}—{{end}}</td>{{end}}
+    </tr>
+    {{if .Others}}
+    <tr>
+      <th scope="row">{{$.Strings.T "dup_other_conflicts"}}</th>
+      <td colspan="2" class="dup-others">{{range .Others}}<a href="/admin/events/{{.ID}}/edit">#{{.ID}} {{.Title}}</a> {{end}}</td>
+    </tr>
+    {{end}}
+    <tr class="dup-delete-row">
+      <th scope="row"></th>
+      {{range $s := (list .A .B)}}<td class="dup-{{$s.Key}}"><button type="submit" form="dup-del-{{$s.Key}}" class="btn-danger dup-delete">🗑 {{$.Strings.T "dup_delete"}} ({{if eq $s.Key "a"}}A{{else}}B{{end}} #{{$s.Event.ID}})</button></td>{{end}}
+    </tr>
+  </tbody>
+</table>
+</form>
+{{end}}
+
+<style nonce="{{$.Nonce}}">
+:root{--dup-a:#fff6cc;--dup-b:#e2effb;--dup-diff:#d97706}
+@media(prefers-color-scheme:dark){:root:not(.light){--dup-a:#3a3216;--dup-b:#16283d}}
+.dark{--dup-a:#3a3216;--dup-b:#16283d}
+.dup-actions{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:.5rem 0 1rem}
+.dup-actions .btn-primary{margin-top:0}
+.dup-save-hint{font-size:.85rem;color:var(--fg-muted)}
+.dup-save-hint[hidden]{display:none}
+.dup-table{width:100%;border-collapse:collapse}
+.dup-table th,.dup-table td{padding:.45rem .6rem;border-bottom:1px solid var(--border);vertical-align:top;text-align:left}
+.dup-table tbody th{width:11rem;font-size:.85rem;color:var(--fg-2)}
+.dup-table .dup-a{background:var(--dup-a);color:var(--fg)}
+.dup-table .dup-b{background:var(--dup-b);color:var(--fg)}
+.dup-letter{display:inline-block;font-weight:700;margin-right:.3rem}
+.dup-title{font-weight:700;color:var(--fg)}
+.dup-id{color:var(--fg-muted);font-size:.85rem}
+.dup-keep{display:block;font-weight:400;font-size:.85rem;margin-top:.25rem}
+.dup-reason{display:block;font-weight:600;font-size:.78rem;color:var(--badge-warn-fg)}
+.dup-diff{box-shadow:inset 3px 0 0 var(--dup-diff)}
+.dup-in{padding:.25rem .35rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.9rem;background:var(--bg-card);color:var(--fg)}
+.dup-venue{display:flex;flex-direction:column;gap:.35rem;align-items:flex-start}
+.dup-venue-search{padding:.25rem .45rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.85rem;width:100%;max-width:18rem}
+.dup-venue-hits{list-style:none;margin:0;padding:0;border:1px solid var(--border-mid);border-radius:4px;background:var(--bg-card);max-width:18rem;width:100%}
+.dup-venue-hits li{padding:.3rem .5rem;cursor:pointer;font-size:.85rem}
+.dup-venue-hits li:hover,.dup-venue-hits li:focus{background:var(--bg-hover);outline:none}
+.dup-desc{font-size:.85rem}
+.dup-delete-row td{padding-top:1.25rem}
+.btn-primary{padding:.45rem 1.2rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.95rem;cursor:pointer}
+.btn-primary:hover{background:#0d4a80}
+.btn-primary:disabled{opacity:.55;cursor:not-allowed}
+.btn-secondary{padding:.45rem 1.2rem;background:var(--btn-bg,#f5f5f5);color:var(--fg,#333);border:1px solid var(--border-mid,#ccc);border-radius:4px;font-size:.95rem;cursor:pointer}
+.btn-secondary:hover{background:var(--btn-bg-h,#e8e8e8)}
+.btn-sm-secondary{padding:.25rem .6rem;background:var(--btn-bg,#f5f5f5);color:var(--fg,#333);border:1px solid var(--border-mid,#ccc);border-radius:4px;font-size:.82rem;cursor:pointer}
+.btn-danger{background:#b91c1c;color:#fff;border:none;border-radius:4px;padding:.45rem .8rem;cursor:pointer;font-size:.88rem}
+.btn-danger:hover{background:#991b1b}
+@media(max-width:640px){
+  .dup-table,.dup-table thead,.dup-table tbody,.dup-table tr,.dup-table th,.dup-table td{display:block;width:auto}
+  .dup-table thead th:first-child,.dup-table .dup-delete-row th{display:none}
+  .dup-table tbody th{width:auto;border-bottom:none;padding-bottom:.15rem}
+  .dup-table tr{border-bottom:1px solid var(--border-mid);padding-bottom:.4rem;margin-bottom:.4rem}
+  .dup-table tbody td.dup-a::before{content:"A  ";font-weight:700}
+  .dup-table tbody td.dup-b::before{content:"B  ";font-weight:700}
+  .dup-actions{position:sticky;top:0;z-index:5;background:var(--bg);padding:.4rem 0}
+  .dup-venue-search,.dup-venue-hits{max-width:none}
+}
+</style>
+
+<script nonce="{{$.Nonce}}">
+// #1427: Save stays disabled until an edit removes the duplicate reason —
+// the two start ≥ 3h apart, or (unless the title itself is the reason) they
+// are at different venues/rooms. The server re-checks on save.
+(function(){
+  var form = document.getElementById('dup-form');
+  if (!form) return;
+  var save = document.getElementById('dup-save'), hint = document.getElementById('dup-save-hint');
+  var titleReason = form.dataset.titleReason === '1';
+  function v(n){ var el = form.elements[n]; return el ? el.value : ''; }
+  function startOf(s){ var d = new Date(v(s+'_date') + 'T' + (v(s+'_start') || '00:00')); return isNaN(d) ? null : d.getTime(); }
+  function changed(){
+    return ['a','b'].some(function(s){
+      return v(s+'_date') !== v(s+'_odate') || v(s+'_start') !== v(s+'_ostart') || v(s+'_end') !== v(s+'_oend') || v(s+'_loc') !== v(s+'_oloc');
+    });
+  }
+  function collides(){
+    var a = startOf('a'), b = startOf('b');
+    if (a === null || b === null || Math.abs(a - b) >= 3 * 3600 * 1000) return false;
+    if (titleReason) return true;
+    return v('a_loc') !== '' && v('a_loc') === v('b_loc');
+  }
+  function update(){
+    var ch = changed(), co = collides();
+    save.disabled = !ch || co;
+    hint.hidden = ch && !co;
+  }
+  form.addEventListener('input', update);
+  form.addEventListener('change', update);
+  update();
+
+  // Venue cell: "+ room" (create a room in the building), and a search for
+  // another venue (known venues, GET /search/locations).
+  form.querySelectorAll('.dup-venue').forEach(function(box){
+    var sel = box.querySelector('.dup-room-sel');
+    var addBtn = box.querySelector('.dup-add-room'), newBox = box.querySelector('.dup-room-new');
+    var nameInp = box.querySelector('.dup-room-name'), createBtn = box.querySelector('.dup-room-create');
+    var search = box.querySelector('.dup-venue-search'), hits = box.querySelector('.dup-venue-hits');
+    if (addBtn) addBtn.addEventListener('click', function(){ newBox.hidden = false; nameInp.focus(); });
+    if (createBtn) createBtn.addEventListener('click', function(){
+      var name = nameInp.value.trim(), bid = box.dataset.building;
+      if (!name || !bid) return;
+      createBtn.disabled = true;
+      fetch('/admin/api/location/' + bid + '/room/quick-create', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: name})})
+        .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
+        .then(function(room){
+          var o = document.createElement('option');
+          o.value = room.id; o.textContent = room.name; o.selected = true;
+          sel.appendChild(o);
+          newBox.hidden = true; nameInp.value = '';
+          update();
+        })
+        .catch(function(){})
+        .then(function(){ createBtn.disabled = false; });
+    });
+    var timer;
+    search.addEventListener('input', function(){
+      clearTimeout(timer);
+      var q = search.value.trim();
+      if (q.length < 2) { hits.hidden = true; return; }
+      timer = setTimeout(function(){
+        fetch('/search/locations?q=' + encodeURIComponent(q))
+          .then(function(r){ return r.ok ? r.json() : []; })
+          .then(function(list){
+            hits.innerHTML = '';
+            (list || []).forEach(function(h){
+              var li = document.createElement('li');
+              li.tabIndex = 0; li.textContent = h.label;
+              function pick(){
+                sel.innerHTML = '';
+                var o = document.createElement('option');
+                o.value = h.id; o.textContent = h.label; o.selected = true;
+                sel.appendChild(o);
+                box.dataset.building = h.id;
+                box.querySelector('.dup-venue-name').textContent = h.label;
+                hits.hidden = true; search.value = '';
+                update();
+              }
+              li.addEventListener('click', pick);
+              li.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); pick(); } });
+              hits.appendChild(li);
+            });
+            hits.hidden = !hits.children.length;
+          })
+          .catch(function(){});
+      }, 250);
+    });
+  });
+})();
+</script>
+{{end}}

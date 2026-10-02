@@ -70,6 +70,9 @@ var tmplFuncsMisc = template.FuncMap{
 		}
 		return m, nil
 	},
+	// list builds a slice from its arguments, e.g. {{range (list .A .B)}}
+	// over the two sides of the duplicate comparison (#1427).
+	"list": func(v ...any) []any { return v },
 	"join": func(ss []string) string {
 		return strings.Join(ss, ", ")
 	},

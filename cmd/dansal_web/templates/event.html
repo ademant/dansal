@@ -205,6 +205,7 @@
       <span class="tpl-msg" id="evt-tpl-msg-{{.ID}}"></span>
     </div>
   </details>{{end}}
+  {{if and $.User .NeedsDuplicateReview}}{{if eq $.User.Role "admin"}}<p class="evt-dup-banner">⚠ {{$.Strings.T "admin_duplicate_of"}} #{{derefInt .DuplicateOfID}} — <a href="/admin/duplicates/{{.ID}}">{{$.Strings.T "dup_solve"}}</a></p>{{end}}{{end}}
   {{if and $.User .PendingEditJSON}}<p class="suggest-hint hint-review" style="margin:.5rem 0">{{$.Strings.T "event_pending_edit_notice"}}</p>{{end}}
   {{if not .IsPublished}}
   <div class="evt-draft-banner">

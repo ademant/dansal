@@ -804,6 +804,12 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 			}
 		}
 		baseID := baseMeta.id
+		// #1427: the duplicate comparison page lets the admin choose which
+		// event survives instead of the automatic pick above.
+		var keepID int
+		if _, err := fmt.Sscan(r.FormValue("keep_id"), &keepID); err == nil && idMap[keepID] {
+			baseID = keepID
+		}
 
 		base, err := client.GetEventAuthed(ctx, baseID, token)
 		if err != nil {
@@ -819,6 +825,10 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 		for _, m := range base.Musicians {
 			musicianSet[m.ID] = true
 		}
+		// #1427: series are assigned by hand in dansal, the duplicate usually
+		// comes from outside — the merged event keeps whichever series one of
+		// the merged events had.
+		var keepSeriesID *int
 
 		for _, id := range ids {
 			if id == baseID {
@@ -851,6 +861,9 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 			}
 			if base.WorkshopDifficulty == "" {
 				base.WorkshopDifficulty = ev.WorkshopDifficulty
+			}
+			if base.SeriesID == nil && keepSeriesID == nil && ev.SeriesID != nil {
+				keepSeriesID = ev.SeriesID
 			}
 			base.HasBall = base.HasBall || ev.HasBall
 			base.HasWorkshop = base.HasWorkshop || ev.HasWorkshop
@@ -926,6 +939,11 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 		}
 		if _, err := client.UpdateEvent(ctx, baseID, req, token); err != nil {
 			log.Printf("merge events: update base %d: %v", baseID, err)
+		}
+		if keepSeriesID != nil {
+			if err := client.AssignEventsToSeries(ctx, *keepSeriesID, []int{baseID}, token); err != nil {
+				log.Printf("merge events: keep series %d on %d: %v", *keepSeriesID, baseID, err)
+			}
 		}
 
 		for _, id := range ids {

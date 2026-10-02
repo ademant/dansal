@@ -2527,6 +2527,7 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	syncEventLocationGeohash(id)
+	recheckDuplicatePair(db, id) // #1427: a by-hand fix of date/room/venue resolves the flag
 
 	event, err := fetchEventByID(db, id)
 	if err != nil {
@@ -2868,6 +2869,7 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	syncEventLocationGeohash(id)
+	recheckDuplicatePair(db, id) // #1427: a by-hand fix of date/room/venue resolves the flag
 
 	event, err := fetchEventByID(db, id)
 	if err != nil {

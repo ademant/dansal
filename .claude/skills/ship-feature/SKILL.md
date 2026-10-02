@@ -70,6 +70,12 @@ Note: the issue only actually auto-closes once this commit is **pushed**. Don't 
 
 Small follow-up tweaks to a feature you just shipped (e.g. a one-line display fix) don't need a fresh discuss → issue cycle — implement, test, and commit referencing `Refines #NNN` (not a new `Closes`) instead of restarting the workflow.
 
+### Follow-up fixes and dependencies
+
+- A fix for an issue whose `Closes #N` commit is already made but not yet pushed uses **`Refs #N`** (the issue closes on push with the first commit anyway).
+- When one issue must land before another, say so in the dependent issue's title/body ("depends on #M") and implement in that order.
+- When a discussion spawns separate work, open it as its own issue (after the user's ok) and reference it from the original instead of growing the original's scope.
+
 ## 6. Build and deploy — only when asked
 
 `CLAUDE.md`: `make build` and `sudo make deploy` are **not** run automatically after a change. Implement, run `go build`/`go vet`/`gofmt -l`/`go test`, commit, and stop; several commits commonly stack up before the user asks for a build. Build/deploy only when that message asks for it:
@@ -82,6 +88,10 @@ sudo make deploy INSTANCE=dev
 - Always rebuild **all** binaries together (`make build`), never a selective `go build` of just the changed package — see issue #147.
 - When asked to deploy without an instance name, use **dev**. Only deploy to other instances (`test`, `prod`, etc.) when the user explicitly asks for it.
 - `sudo make deploy` requires an interactive terminal for `sudo` auth. If running non-interactively and `sudo` fails ("a terminal is required to authenticate"), tell the user to run `sudo make deploy INSTANCE=dev` themselves — don't treat this as a blocker on the rest of the workflow.
+
+### After the user deploys
+
+The user often deploys themselves and reports "deployed to localhost:dev". Then verify against the running instance: the journal (`journalctl -u dansal@dev -u dansal-web@dev --since …`) for migration/startup errors, the changed endpoints (curl, read-only DB checks on a copy), and the affected e2e specs (see the `e2e-testing` skill) — and, for UI changes, the browser.
 
 ## Summary checklist
 

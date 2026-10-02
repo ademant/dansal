@@ -79,6 +79,14 @@ python3 -c "import yaml; yaml.safe_load(open('cmd/dansal_web/i18n.yaml', encodin
 
 4. **Reference the key** in the template/Go code as shown above. Add/extend a test only when the change touches template logic (`hreflang_smoke_test.go` covers language-parameterized pages — keep it green).
 
+## Deliberately English-only strings
+
+When the user decides a string doesn't need translating (e.g. #1422's "you've just sent a request" message, mostly seen by bots), still add the key to **all 12 sections** with the same English text and a YAML comment above the first one saying why — a missing key would render as the bare key name in the other languages.
+
+## Placeholders filled in JavaScript
+
+`TF` runs `fmt.Sprintf`; for a message whose `%s`/`%d` is filled client-side, render it with `T` (placeholder kept literally, e.g. into a `data-msg-…` attribute) and `.replace('%s', …)` in JS. Put dates/counts into translated messages this way rather than concatenating fragments.
+
 ## Non-translation changes to i18n.yaml
 
 - **Language metadata** (`flag`, `name`): same file, edit once per language.

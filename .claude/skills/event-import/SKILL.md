@@ -32,6 +32,12 @@ Constants: `threeHours = 3 * 60 * 60` (seconds), `titlesFuzzyOverlap` in the sam
 - Preview also checks `previewLocationUpdated()` — feed coordinates differing by more than `0.0001°` (~11 m) from the stored location mean the preview reports "updated", even when the event itself didn't change.
 - Both decide update-vs-insert and which fields to preserve via the `ExistingEvent` struct (`dedup.go:24`).
 
+## Anonymous suggest preview (`suggest-preview`) and the wizard's date check
+
+- `POST /api/v1/events/suggest-preview` (anonymous; `safeClient`, own rate limit) treats an **untyped HTML body as JSON-LD** (`looksLikeHTML`, #1417) — an event page (pretix & co.) pasted into the suggest import tab parses instead of failing as broken iCal. Explicit `type` still wins.
+- `GET /events/suggest/url-dates?url=` (dansal-web) reuses that pipeline for the wizard's website field and returns only the distinct start dates; the wizard warns when the typed date matches none (advisory, never blocks).
+- Testing JSON-LD offline: upload an HTML file with an `application/ld+json` Event through the import tab — same parse path as a URL, no network (`suggest-source-date.spec.ts`).
+
 ## Location resolution & aliases
 
 `ensureLocation` resolves a feed location name to a `location_id` in this order (`fetchurl.go:220-242`):

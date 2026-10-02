@@ -117,6 +117,29 @@ Copy this shape for any new JSON-array event field rather than inventing new nul
 - Form fields mirror the API input types (see `API.md`); keep field names consistent between the Go `EventInput`/location structs and the template `name=` attributes.
 - Maps in admin forms are created the same way as public pages: initialize the Leaflet `map` var, then `attachTileLayer(map)`.
 
+## Save errors — `adminSaveError(err)`, never a bare "Save failed." (#1421)
+
+Every admin save path that re-renders the form after an API error classifies it with `adminSaveError(err)` (`save_error.go`) → `SaveError{Key, Detail, Ref}` and puts `ErrorKey`/`ErrorDetail`/`ErrorRef` into the page data; the template appends `{{template "save-error-extra" (dict "D" .ErrorDetail "R" .ErrorRef "S" $.Strings)}}` after `{{$.Strings.T .ErrorKey}}`. 429 and 403 get translated keys (the admin can act: wait / ask for access), 400/409/422 show the API's English validation message, everything else the reference (error_id). A new admin page data struct that shows save errors needs the two extra fields.
+
+## Dialogs and confirmations
+
+- **Destructive one-off actions** (delete, merge): a form with `data-on="submit" data-confirm="…"` — the base.js dispatcher shows the native `confirm()`. A button elsewhere on the page can submit it via `form="form-id"` (forms can't nest; this is how `admin_duplicate.html` puts Merge/Accept/Delete buttons inside the table).
+- **Richer confirmations**: a `<dialog>` + `showModal()`, like `confirmUnusualDate()` in base.js (#1413, rendered once in base.html for logged-in users) or the duplicate check dialog. Two rules learned the hard way:
+  - **Resolve from the button handlers (`onclick`) and `oncancel` (Esc), never from the `close` event.** Chrome dispatches `close` in its rendering steps, which don't run at all in a hidden/background tab — the dialog closed but the callback never ran.
+  - **Give the dialog `margin:auto`.** base.html's global `*{margin:0}` reset removes the UA margin that centres a modal `<dialog>`; without it the dialog sticks to the top-left corner.
+- Unusual dates: `dateUnusual(iso)` (base.js) and `unusualDate` (template func) are the shared "past / > 2 years ahead" check; a publish form opts into the confirm dialog with `data-date-check="YYYY-MM-DD"` (bulk: a submit button with `data-date-check-bulk="<checkbox selector>"`).
+- A flash that must survive a redirect to *whatever page the action came from* (publish → referer) uses its own token param read in `tmplData` (`?pubmsg=`, rendered by base.html) instead of plumbing a field through every page handler.
+
+## Two-item comparison layout (A/B), desktop table → mobile blocks
+
+`admin_duplicate.html` (#1427) is the reference: one `<table>`, rows = fields, columns = A/B (first row = both titles), both columns tinted (`--dup-a` light yellow / `--dup-b` light blue, dark variants under `prefers-color-scheme` / `.dark`); below 640px CSS turns every row into a block with the A value above the B value (`td.dup-a::before{content:"A  "}`), sticky action bar on top, destructive buttons at the very bottom. `{{range (list .A .B)}}` iterates the two sides (`list` template func). Same HTML for both layouts — no UA detection.
+
+## Other shared bits
+
+- **Button classes** (`.btn-primary`, `.btn-secondary`, `.btn-sm-secondary`, `.btn-danger`) are defined in each template's own `<style>`, not in base.html — copy them into a new page.
+- **Theme tokens** for status colours: `--badge-warn-bg/fg`, `--badge-danger-bg/fg`, `--badge-ok-*` exist in light and dark; `--badge-info-*` only in dark — always give it a fallback (`var(--badge-info-bg,#e0f0ff)`). Keep text ≥ 4.5:1 and never fade content with `opacity` (#1426 failed WCAG that way).
+- **Venue pickers outside the admin form** can use the public `GET /search/locations?q=` (known venues, name/short name/aliases/town) and `POST /admin/api/location/{id}/room/quick-create` for "+ room".
+
 ## Final checks
 
 ```bash

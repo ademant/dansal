@@ -73,6 +73,12 @@ Only when the user explicitly asks. Prod-specific considerations:
 - Config lives at `/etc/dansal/prod/*.yaml` — the `deploy` target only installs binaries and units; config is managed separately.
 - Consider the timing (downtime during service restart) and check the DB migration smoke test in the `db-migration` skill before deploying a schema change.
 
+## Verifying a deploy
+
+- `journalctl -u dansal@<instance> -u dansal-web@<instance> --since "10 min ago"` — look for `migrate…:` errors, especially `_chk already exists` (a failed table rebuild, see the `db-migration` skill) and `no such column`.
+- Read-only DB checks: open the instance DB with `file:…/calendar.db?mode=ro` (Python `sqlite3`, there's no `sqlite3` CLI on the host), or test migrations on a **copy** in the scratchpad — never write to the live file.
+- `localhost:8080` (dev web) and the public dev domain are **not necessarily the same instance/database** — check which one you're testing against before concluding something is missing.
+
 ## Final checks
 
 ```bash

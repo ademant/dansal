@@ -203,6 +203,18 @@ The "no cleanup expected" default below holds for events, orgs and locations. It
 
 CI sets `rate_limit: 1000` in the e2e instance's `config.yaml` (`.github/workflows/e2e.yml`): every spec's seed calls share one per-IP bucket, and the packaging default of 100/min runs out mid-suite.
 
+## Helpers and target requirements added in #1423–#1427
+
+- `e2e/README.md` lists what a target instance must provide: `rate_limit: 1000` **and `account_mutation_rate_limit: 600`** (per-account creates/updates; default 30/min, which seeding alone exceeds — dev already runs with it, CI sets it), the fake-sendmail mbox, admin CLI access.
+- `apiPost`/`apiGet` (`helpers/seed.ts`) **throw** on non-2xx with method, path, status and body — a 429 no longer surfaces as "Cannot read properties of undefined".
+- Mail-dependent tests call `skipWithoutMailbox()` (`helpers/mailguard.ts`) first: skipped with a clear message when the mbox directory is missing instead of a 15 s timeout.
+- dansal-web's **events index cache window is 2 s** (`eventsTTL`, revalidated by ETag): events seeded through the raw API show on `/` within ~2 s. The org/location/musician caches (30–60 s) still apply to pickers.
+- An **admin's API create is published immediately** — PATCH `{"is_published": false}` (merge-patch) to get an unpublished event (e.g. for publish-flow tests).
+- `data-confirm` forms use the native `confirm()` — accept it with `page.once("dialog", d => d.accept())` before the click.
+- **Flagged duplicate pairs** (for #1427-style tests): two manually created events at the same venue ±3h are flagged since #1424; two events from the same feed source (`fetch_source_id` of an existing source), < 3h apart, with fuzzy-overlapping titles and *no* venue are flagged by tier 5. Check with `GET /api/v1/events/{id}/duplicate-check`; always delete the pair afterwards — it lands in the admin's review list (`duplicate-review.spec.ts`, `event-dedup.spec.ts`).
+- Calendar date pickers re-open on the **previously selected month**: step back *or* forward until the target day is in the grid (`showMonthOf` in `search.spec.ts`), don't assume "next" only.
+- Anonymous public-form specs: `browser.newContext({ storageState: { cookies: [], origins: [] }, userAgent: unique })`; a spec that only checks client behaviour (chips, pickers, warnings) shouldn't submit, so it leaves nothing in review queues (`suggest-people-venue.spec.ts`).
+
 ## Everything else
 
 - `unique(name)` (`` `${name} ${Date.now()}` ``) on every fixture title/org/location name — keeps repeated runs against the shared, persistent dev DB from colliding, and doubles as a readable marker for manual cleanup.

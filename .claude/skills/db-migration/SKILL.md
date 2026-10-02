@@ -92,12 +92,24 @@ func migrateFetchSourcesJcalType() {
     if strings.Contains(schema, "'jcal'") {
         return // already widened — including on a fresh install, since createTables() already has it
     }
-    // ... CREATE TABLE fetch_sources_chk (... CHECK(type IN (..., 'jcal')) ...);
-    // ... INSERT INTO fetch_sources_chk SELECT ... FROM fetch_sources;
-    // ... DROP TABLE fetch_sources; ALTER TABLE fetch_sources_chk RENAME TO fetch_sources;
-    // ... re-create any index the table carried (DROP TABLE loses it).
+    if err := rebuildTable("fetch_sources_chk", []string{
+        `CREATE TABLE fetch_sources_chk (... CHECK(type IN (..., 'jcal')) ...)`,
+        `INSERT INTO fetch_sources_chk (...) SELECT ... FROM fetch_sources`,
+        `DROP TABLE fetch_sources`,
+        `ALTER TABLE fetch_sources_chk RENAME TO fetch_sources`,
+    }); err != nil {
+        log.Printf("migrateFetchSourcesJcalType: %v", err)
+        return
+    }
+    // re-create any index the table carried (DROP TABLE loses it).
 }
 ```
+
+**Always go through `rebuildTable(shadow, stmts)` (#1419)** — never run the four statements as loose `conn.ExecContext` calls. A rebuild that failed mid-sequence used to leave `x_chk` behind, and from then on *every* startup failed that rebuild with "table x_chk already exists" (visible only in the journal; on dev it silently kept `imported_once` from ever being added → `/api/v1/fetchurl` 500s). `rebuildTable` drops a leftover shadow first and runs the sequence in one transaction on a dedicated connection (`PRAGMA foreign_keys` toggled *outside* the transaction — it's a no-op inside one), so a failure rolls back cleanly and the next startup retries.
+
+If a rebuild is what *adds* a column (like `imported_once` in the jsonld widening), also add a `pragma_table_info` safety net for that column right after the call — and have the rebuild carry an already-existing value over (`COALESCE(col, 0)` when present, `0` otherwise) instead of resetting it, since the safety net may have added it while the rebuild was still failing.
+
+Check an instance's journal for `_chk already exists` / `migrate…:` errors after a deploy; `TestSmokeMigrationOrphanedChkTable` and `TestRebuildTableRollsBack` (`smoke_migration_orphan_chk_test.go`) are the references. To verify against real data, run `migrateDB()` from a throwaway test on a **copy** of the instance DB (`cp /var/lib/dansal/dev/calendar.db` into the scratchpad), never on the live file.
 
 Consequences of no version number:
 - The function is called **unconditionally** every `migrateDB()` run (no `if !applied(N)` guard around the call) — the schema-string check is what makes repeated calls a no-op.

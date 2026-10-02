@@ -5,7 +5,7 @@
 <div class="edit-wrap">
 {{with .Data}}
 {{if .Saved}}<p class="form-saved" role="status">{{$.Strings.T "admin_saved"}}</p>{{end}}
-{{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
+{{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}{{template "save-error-extra" (dict "D" .ErrorDetail "R" .ErrorRef "S" $.Strings)}}</p>{{end}}
 {{if .ConflictID}}<div class="form-error" role="alert">
   <p>{{$.Strings.T "loc_conflict_exists"}}{{if .ConflictLocation.ID}} — <strong>{{if .ConflictLocation.ShortName}}{{.ConflictLocation.ShortName}}{{else}}{{.ConflictLocation.Location}}{{end}}</strong>{{end}} <a href="/admin/locations/{{.ConflictID}}/edit">{{$.Strings.T "loc_conflict_view"}}</a></p>
   {{if .Location.ID}}

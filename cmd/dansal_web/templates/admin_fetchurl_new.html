@@ -6,7 +6,7 @@
 {{if .FromImport}}
 <p class="import-notice">{{$.Strings.T "fetch_from_import_notice"}}</p>
 {{end}}
-{{if .ErrorKey}}<p class="form-error">{{$.Strings.T .ErrorKey}}</p>{{end}}
+{{if .ErrorKey}}<p class="form-error">{{$.Strings.T .ErrorKey}}{{template "save-error-extra" (dict "D" .ErrorDetail "R" .ErrorRef "S" $.Strings)}}</p>{{end}}
 
 <form method="post" action="/admin/fetchurls/new" class="edit-form">
   {{if .CreatedAfter}}<input type="hidden" name="created_after" value="{{.CreatedAfter}}">{{end}}

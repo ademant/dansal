@@ -4,7 +4,7 @@
 {{if .Data.Event.ChangedAt}}<p class="entity-meta"><strong>{{.Strings.T "last_updated_label"}}</strong> {{fmtUnix (parseChangedAt .Data.Event.ChangedAt)}}{{if eq .Data.Event.ChangedBy "fetch"}} ({{.Strings.T "recent_changes_via_fetch"}}){{end}}</p>{{end}}
 
 {{with .Data}}
-{{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
+{{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}{{template "save-error-extra" (dict "D" .ErrorDetail "R" .ErrorRef "S" $.Strings)}}</p>{{end}}
 
 {{if .Event.PendingEditJSON}}
 <div class="pending-edit-banner">

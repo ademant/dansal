@@ -28,7 +28,7 @@ type adminEntity[E any] struct {
 
 	// Data builders → the concrete per-entity page structs.
 	listData func(items []E) any
-	editData func(e E, isNew bool, errKey, from string, imgFlash editFlash) any
+	editData func(e E, isNew bool, saveErr SaveError, from string, imgFlash editFlash) any
 
 	// Client operations.
 	listFn   func(ctx context.Context, client *DansalClient) ([]E, error)
@@ -84,7 +84,7 @@ func (e *adminEntity[E]) NewPage(cfg *Config, tmpls *Templates, i18n *I18n) http
 		}
 		var zero E
 		title := i18n.T(r, "admin_new")
-		renderTemplate(w, e.editTmpl(tmpls), tmplData(r, cfg, i18n, title, e.editData(zero, true, "", "", editFlash{})))
+		renderTemplate(w, e.editTmpl(tmpls), tmplData(r, cfg, i18n, title, e.editData(zero, true, SaveError{}, "", editFlash{})))
 	}
 }
 
@@ -103,7 +103,7 @@ func (e *adminEntity[E]) Create(cfg *Config, tmpls *Templates, client *DansalCli
 		created, err := e.createFn(r.Context(), client, item, getSessionToken(r))
 		if err != nil {
 			title := i18n.T(r, "admin_new")
-			renderTemplate(w, e.editTmpl(tmpls), tmplData(r, cfg, i18n, title, e.editData(item, true, "admin_save_error", "", editFlash{})))
+			renderTemplate(w, e.editTmpl(tmpls), tmplData(r, cfg, i18n, title, e.editData(item, true, adminSaveError(err), "", editFlash{})))
 			return
 		}
 		var flash FlashMsg
@@ -139,7 +139,7 @@ func (e *adminEntity[E]) EditPage(cfg *Config, tmpls *Templates, client *DansalC
 		}
 		title := i18n.T(r, "admin_edit")
 		flash := flashTake(r.URL.Query().Get("msg"))
-		renderTemplate(w, e.editTmpl(tmpls), tmplData(r, cfg, i18n, title, e.editData(item, false, "", safeReturnPath(r.URL.Query().Get("from")), editFlash{Key: flash.ImageUploadError, Widget: flash.ImageUploadWidget})))
+		renderTemplate(w, e.editTmpl(tmpls), tmplData(r, cfg, i18n, title, e.editData(item, false, SaveError{}, safeReturnPath(r.URL.Query().Get("from")), editFlash{Key: flash.ImageUploadError, Widget: flash.ImageUploadWidget})))
 	}
 }
 
@@ -166,7 +166,7 @@ func (e *adminEntity[E]) Save(cfg *Config, tmpls *Templates, client *DansalClien
 		item := e.fromForm(r)
 		if err := e.updateFn(r.Context(), client, id, item, getSessionToken(r)); err != nil {
 			title := i18n.T(r, "admin_edit")
-			renderTemplate(w, e.editTmpl(tmpls), tmplData(r, cfg, i18n, title, e.editData(item, false, "admin_save_error", from, editFlash{})))
+			renderTemplate(w, e.editTmpl(tmpls), tmplData(r, cfg, i18n, title, e.editData(item, false, adminSaveError(err), from, editFlash{})))
 			return
 		}
 		var flash FlashMsg

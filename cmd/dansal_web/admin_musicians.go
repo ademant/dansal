@@ -19,10 +19,12 @@ type AdminMusiciansData struct {
 }
 
 type AdminMusicianEditData struct {
-	Musician Musician
-	IsNew    bool
-	ErrorKey string
-	From     string
+	Musician    Musician
+	IsNew       bool
+	ErrorKey    string
+	ErrorDetail string // #1421
+	ErrorRef    string
+	From        string
 
 	// ImageUploadError/ImageUploadWidget (#1285): a scoped notice for a
 	// failed image/avatar upload — the musician itself saved fine either way.
@@ -84,9 +86,9 @@ var musicianEntity = adminEntity[Musician]{
 	listData: func(items []Musician) any {
 		return AdminMusiciansData{Musicians: items}
 	},
-	editData: func(m Musician, isNew bool, errKey, from string, imgFlash editFlash) any {
+	editData: func(m Musician, isNew bool, saveErr SaveError, from string, imgFlash editFlash) any {
 		return AdminMusicianEditData{
-			Musician: m, IsNew: isNew, ErrorKey: errKey, From: from,
+			Musician: m, IsNew: isNew, ErrorKey: saveErr.Key, ErrorDetail: saveErr.Detail, ErrorRef: saveErr.Ref, From: from,
 			ImageUploadError: imgFlash.Key, ImageUploadWidget: imgFlash.Widget,
 		}
 	},

@@ -16,10 +16,12 @@ type AdminInstructorsData struct {
 }
 
 type AdminInstructorEditData struct {
-	Instructor Instructor
-	IsNew      bool
-	ErrorKey   string
-	From       string
+	Instructor  Instructor
+	IsNew       bool
+	ErrorKey    string
+	ErrorDetail string // #1421
+	ErrorRef    string
+	From        string
 
 	// ImageUploadError/ImageUploadWidget (#1285): a scoped notice for a
 	// failed avatar upload — the instructor itself saved fine either way.
@@ -49,9 +51,9 @@ var instructorEntity = adminEntity[Instructor]{
 	listData: func(items []Instructor) any {
 		return AdminInstructorsData{Instructors: items}
 	},
-	editData: func(i Instructor, isNew bool, errKey, from string, imgFlash editFlash) any {
+	editData: func(i Instructor, isNew bool, saveErr SaveError, from string, imgFlash editFlash) any {
 		return AdminInstructorEditData{
-			Instructor: i, IsNew: isNew, ErrorKey: errKey, From: from,
+			Instructor: i, IsNew: isNew, ErrorKey: saveErr.Key, ErrorDetail: saveErr.Detail, ErrorRef: saveErr.Ref, From: from,
 			ImageUploadError: imgFlash.Key, ImageUploadWidget: imgFlash.Widget,
 		}
 	},

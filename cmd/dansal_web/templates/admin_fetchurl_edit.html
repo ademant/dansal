@@ -4,7 +4,7 @@
 
 <div class="edit-wrap">
 {{with .Data}}
-{{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
+{{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}{{template "save-error-extra" (dict "D" .ErrorDetail "R" .ErrorRef "S" $.Strings)}}</p>{{end}}
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 

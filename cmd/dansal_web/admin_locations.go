@@ -34,6 +34,8 @@ type AdminLocationEditData struct {
 	AvailableOrgs    []Organization
 	ReadOnly         bool
 	ErrorKey         string
+	ErrorDetail      string // #1421: API validation message / reference
+	ErrorRef         string
 	ConflictID       int      // set when API returns 409: location with same OSM ID or geohash already exists
 	ConflictLocation Location // best-effort lookup of ConflictID, for showing its name (#1302)
 	ReturnURL        string
@@ -349,10 +351,13 @@ func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 		created, err := client.CreateLocation(r.Context(), loc, token)
 		if err != nil {
 			title := i18n.T(r, "admin_new")
+			se := adminSaveError(err)
 			data := AdminLocationEditData{
-				Location: loc,
-				UserOrgs: newLocationUserOrgs(r, user, client),
-				ErrorKey: "admin_save_error",
+				Location:    loc,
+				UserOrgs:    newLocationUserOrgs(r, user, client),
+				ErrorKey:    se.Key,
+				ErrorDetail: se.Detail,
+				ErrorRef:    se.Ref,
 			}
 			var conflictErr *LocationConflictError
 			if errors.As(err, &conflictErr) {
@@ -496,11 +501,14 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		token := getSessionToken(r)
 		if err := client.UpdateLocation(r.Context(), id, loc, token); err != nil {
 			title := i18n.T(r, "admin_edit")
+			se := adminSaveError(err)
 			data := AdminLocationEditData{
-				Location:  loc,
-				ErrorKey:  "admin_save_error",
-				ReturnURL: returnURL,
-				From:      from,
+				Location:    loc,
+				ErrorKey:    se.Key,
+				ErrorDetail: se.Detail,
+				ErrorRef:    se.Ref,
+				ReturnURL:   returnURL,
+				From:        from,
 			}
 			var conflictErr *LocationConflictError
 			if errors.As(err, &conflictErr) {

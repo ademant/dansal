@@ -32,6 +32,8 @@ type AdminFetchurlEditData struct {
 	SelectedDanceNames map[string]bool
 	Templates          []EventTemplate
 	ErrorKey           string
+	ErrorDetail        string // #1421: API validation message / reference
+	ErrorRef           string
 	KuferKeywords      string
 	KuferSearchURL     string
 	KuferSearchMethod  string
@@ -89,6 +91,8 @@ type AdminFetchurlNewData struct {
 	Orgs              []Organization
 	Templates         []EventTemplate
 	ErrorKey          string
+	ErrorDetail       string // #1421: API validation message / reference
+	ErrorRef          string
 	URL               string
 	Type              string
 	OrgID             int
@@ -371,6 +375,7 @@ func adminFetchurlSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 			selected := buildSelectedDanceNamesFromIDs(danceIDs, dances)
 			templates, _ := listTemplates(db, su.ID, orgIDsForTemplates(r, client, su))
 			title := i18n.T(r, "admin_edit")
+			se := adminSaveError(err)
 			renderTemplate(w, tmpls.adminFetchurlEdit, tmplData(r, cfg, i18n, title, AdminFetchurlEditData{
 				Source:             src,
 				Orgs:               orgs,
@@ -378,7 +383,9 @@ func adminFetchurlSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 				Dances:             dances,
 				SelectedDanceNames: selected,
 				Templates:          templates,
-				ErrorKey:           "admin_save_error",
+				ErrorKey:           se.Key,
+				ErrorDetail:        se.Detail,
+				ErrorRef:           se.Ref,
 				KuferKeywords:      r.FormValue("kufer_keywords"),
 				KuferSearchURL:     r.FormValue("kufer_search_url"),
 				KuferSearchMethod:  r.FormValue("kufer_search_method"),

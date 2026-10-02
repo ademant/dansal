@@ -270,6 +270,7 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
 .dpr-btn.dpr-btn-warn,.date-warn{border-color:#d97706!important;box-shadow:0 0 0 1px #d97706;background:var(--badge-warn-bg)!important;color:var(--badge-warn-fg)!important}
 .badge-unusual-date{display:inline-block;padding:.1rem .45rem;border-radius:3px;font-size:.78rem;font-weight:600;background:var(--badge-warn-bg);color:var(--badge-warn-fg);border:1px solid #d97706;white-space:nowrap}
 .form-inline{display:inline}
+.form-error-ref{font-weight:400;opacity:.8;white-space:nowrap}
 .badge-new-venue{display:inline-block;padding:.1rem .45rem;border-radius:3px;font-size:.78rem;font-weight:600;background:var(--badge-info-bg,#e0f0ff);color:var(--badge-info-fg,#0b5394);text-decoration:none;white-space:nowrap}
 .publish-unusual-flash{margin:.75rem 0;padding:.6rem 1rem;border:1px solid #d97706;border-radius:4px;background:var(--badge-warn-bg);color:var(--badge-warn-fg);font-size:.9rem}
 .publish-unusual-flash ul{margin:.25rem 0 .25rem 1.2rem}
@@ -534,6 +535,10 @@ var DANSAL_TILE_TOKEN="{{$.TileToken}}";
 {{/* Shared event attribute icons (food/drink, accessibility, floor, fee) —
      used by event tiles across index.html, org.html, location.html and
      musician.html. Call with {{template "event-attr-icons" (dict "Event" $ev "Strings" $.Strings)}}. */}}
+{{/* #1421: what follows an admin form's save-error text — the API's own
+     validation message (English, as sent) and the error reference to quote.
+     Called with (dict "D" .ErrorDetail "R" .ErrorRef "S" $.Strings). */}}
+{{define "save-error-extra"}}{{with .D}} {{.}}{{end}}{{with .R}} <small class="form-error-ref">({{$.S.T "admin_save_error_ref"}}: {{.}})</small>{{end}}{{end}}
 {{define "event-attr-icons"}}
 {{- $ev := .Event}}{{$s := .Strings -}}
 {{- $ea := mergeAttrs (locAttrs $ev.Location) $ev.Attributes -}}

@@ -153,6 +153,8 @@ type AdminEventFormData struct {
 	Dances             []Dance
 	SelectedDanceNames map[string]bool
 	ErrorKey           string
+	ErrorDetail        string // #1421: API validation message / reference
+	ErrorRef           string
 	UserOrgs           []Organization
 	Templates          []EventTemplate
 	Series             []EventSeries
@@ -1870,7 +1872,7 @@ type templateFormResult struct {
 	Name     string
 	OrgID    *int
 	DataJSON string
-	ErrorKey string // "" on success
+	Err      SaveError // zero Key on success (#1421)
 }
 
 // parseTemplateForm reads tpl_name/tpl_org_id plus every regular event-form
@@ -1881,7 +1883,7 @@ type templateFormResult struct {
 func parseTemplateForm(r *http.Request, client *DansalClient, bundle RefBundle) templateFormResult {
 	name := strings.TrimSpace(r.FormValue("tpl_name"))
 	if name == "" {
-		return templateFormResult{ErrorKey: "admin_template_name_required"}
+		return templateFormResult{Err: SaveError{Key: "admin_template_name_required"}}
 	}
 
 	var tplOrgID *int
@@ -1893,7 +1895,7 @@ func parseTemplateForm(r *http.Request, client *DansalClient, bundle RefBundle) 
 
 	var orgID int
 	if orgPtr, err := parseOrgChoice(r, client); err != nil {
-		return templateFormResult{ErrorKey: "admin_save_error"}
+		return templateFormResult{Err: adminSaveError(err)}
 	} else if orgPtr != nil {
 		orgID = *orgPtr
 	}
@@ -1946,7 +1948,7 @@ func parseTemplateForm(r *http.Request, client *DansalClient, bundle RefBundle) 
 
 	data, err := json.Marshal(td)
 	if err != nil {
-		return templateFormResult{ErrorKey: "admin_save_error"}
+		return templateFormResult{Err: adminSaveError(err)}
 	}
 	return templateFormResult{Name: name, OrgID: tplOrgID, DataJSON: string(data)}
 }
@@ -2034,7 +2036,7 @@ func adminTemplateCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, clien
 		bundle := client.FetchRefBundle(r.Context())
 		userOrgs := userOrgsFor(r, client, su, bundle)
 
-		renderErr := func(errKey string) {
+		renderErr := func(se SaveError) {
 			title := i18n.T(r, "admin_template_new_title")
 			renderTemplate(w, tmpls.adminEventForm, tmplData(r, cfg, i18n, title, AdminEventFormData{
 				IsNew:          true,
@@ -2043,18 +2045,20 @@ func adminTemplateCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, clien
 				Locations:      topLevelLocations(bundle.Locations),
 				Dances:         bundle.Dances,
 				UserOrgs:       userOrgs,
-				ErrorKey:       errKey,
+				ErrorKey:       se.Key,
+				ErrorDetail:    se.Detail,
+				ErrorRef:       se.Ref,
 			}))
 		}
 
 		res := parseTemplateForm(r, client, bundle)
-		if res.ErrorKey != "" {
-			renderErr(res.ErrorKey)
+		if res.Err.Key != "" {
+			renderErr(res.Err)
 			return
 		}
 		if _, err := saveTemplate(db, su.ID, res.OrgID, nil, nil, res.Name, res.DataJSON); err != nil {
 			log.Printf("save template error: %v", err)
-			renderErr("admin_save_error")
+			renderErr(adminSaveError(err))
 			return
 		}
 		http.Redirect(w, r, "/admin/templates", http.StatusSeeOther)
@@ -2149,7 +2153,7 @@ func adminTemplateEditSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, cli
 		bundle := client.FetchRefBundle(r.Context())
 		userOrgs := userOrgsFor(r, client, su, bundle)
 
-		renderErr := func(errKey string) {
+		renderErr := func(se SaveError) {
 			title := i18n.T(r, "admin_template_edit_title")
 			renderTemplate(w, tmpls.adminEventForm, tmplData(r, cfg, i18n, title, AdminEventFormData{
 				IsNew:          true,
@@ -2158,20 +2162,22 @@ func adminTemplateEditSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, cli
 				Locations:      topLevelLocations(bundle.Locations),
 				Dances:         bundle.Dances,
 				UserOrgs:       userOrgs,
-				ErrorKey:       errKey,
+				ErrorKey:       se.Key,
+				ErrorDetail:    se.Detail,
+				ErrorRef:       se.Ref,
 				TplID:          id,
 				TplName:        r.FormValue("tpl_name"),
 			}))
 		}
 
 		res := parseTemplateForm(r, client, bundle)
-		if res.ErrorKey != "" {
-			renderErr(res.ErrorKey)
+		if res.Err.Key != "" {
+			renderErr(res.Err)
 			return
 		}
 		if err := updateTemplate(db, id, su.ID, su.Role == "admin", res.OrgID, res.Name, res.DataJSON); err != nil {
 			log.Printf("update template error: %v", err)
-			renderErr("admin_save_error")
+			renderErr(adminSaveError(err))
 			return
 		}
 		http.Redirect(w, r, "/admin/templates", http.StatusSeeOther)
@@ -2434,7 +2440,7 @@ func normalizeTimetableEntryType(v string) string {
 // renderEventFormError re-renders the event form with errKey after a failed
 // create/save, preserving the submitted state carried in ev. danceNames must be
 // pre-computed via buildSelectedDanceNames or buildSelectedDanceNamesFromIDs.
-func renderEventFormError(w http.ResponseWriter, r *http.Request, cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n, bundle RefBundle, su *SessionUser, ev Event, danceNames map[string]bool, isNew bool, errKey string) {
+func renderEventFormError(w http.ResponseWriter, r *http.Request, cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n, bundle RefBundle, su *SessionUser, ev Event, danceNames map[string]bool, isNew bool, se SaveError) {
 	locOrgFirst, locOthers := splitEventLocations(bundle.Locations, ev)
 	var evtOrg *Organization
 	if ev.OrganizationID != nil {
@@ -2473,7 +2479,9 @@ func renderEventFormError(w http.ResponseWriter, r *http.Request, cfg *Config, t
 		Dances:             bundle.Dances,
 		SelectedDanceNames: danceNames,
 		UserOrgs:           userOrgs,
-		ErrorKey:           errKey,
+		ErrorKey:           se.Key,
+		ErrorDetail:        se.Detail,
+		ErrorRef:           se.Ref,
 	}))
 }
 
@@ -2490,8 +2498,8 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 
 		bundle := client.FetchRefBundle(r.Context())
 		token := getSessionToken(r)
-		renderErr := func(errKey string) {
-			renderEventFormError(w, r, cfg, tmpls, client, i18n, bundle, su, Event{}, nil, true, errKey)
+		renderErr := func(se SaveError) {
+			renderEventFormError(w, r, cfg, tmpls, client, i18n, bundle, su, Event{}, nil, true, se)
 		}
 
 		intent := r.FormValue("intent")
@@ -2499,7 +2507,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 
 		orgID, err := parseOrgChoice(r, client)
 		if err != nil {
-			renderErr("admin_save_error")
+			renderErr(adminSaveError(err))
 			return
 		}
 
@@ -2565,7 +2573,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 		}
 
 		formTimetable := parseTimetableFormEntries(r, bundle.Musicians, bundle.Instructors, bundle.Locations)
-		renderErrFull := func(errKey string) {
+		renderErrFull := func(se SaveError) {
 			ev := Event{
 				Title:            req.Title,
 				Description:      req.Description,
@@ -2594,22 +2602,22 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 				ev.LocationID = &selectedLocID
 			}
 			renderEventFormError(w, r, cfg, tmpls, client, i18n, bundle, su, ev,
-				buildSelectedDanceNamesFromIDs(danceIDs, bundle.Dances), true, errKey)
+				buildSelectedDanceNamesFromIDs(danceIDs, bundle.Dances), true, se)
 		}
 
 		if req.Title == "" {
-			renderErrFull("evt_title_required")
+			renderErrFull(SaveError{Key: "evt_title_required"})
 			return
 		}
 		if err := validateURLDomain(r.Context(), req.URL); err != nil {
-			renderErrFull("url_domain_not_found")
+			renderErrFull(SaveError{Key: "url_domain_not_found"})
 			return
 		}
 
 		event, err := client.CreateEvent(r.Context(), req, token)
 		if err != nil {
 			log.Printf("create event error: %v", err)
-			renderErrFull("admin_save_error")
+			renderErrFull(adminSaveError(err))
 			return
 		}
 
@@ -2980,7 +2988,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		bundle := client.FetchRefBundle(r.Context())
 		saveTok := getSessionToken(r)
 		intent := r.FormValue("intent")
-		renderErr := func(errKey string) {
+		renderErr := func(se SaveError) {
 			event, gerr := client.GetEventAuthed(r.Context(), id, saveTok)
 			if gerr != nil {
 				log.Printf("reload event %d after save error: %v", id, gerr)
@@ -2988,14 +2996,14 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 				return
 			}
 			renderEventFormError(w, r, cfg, tmpls, client, i18n, bundle, su, event,
-				buildSelectedDanceNames(event), false, errKey)
+				buildSelectedDanceNames(event), false, se)
 		}
 
 		startTime, endTime := parseEventDateTimes(r)
 
 		orgID, err := parseOrgChoice(r, client)
 		if err != nil {
-			renderErr("admin_save_error")
+			renderErr(adminSaveError(err))
 			return
 		}
 
@@ -3066,7 +3074,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		}
 
 		formTimetable := parseTimetableFormEntries(r, bundle.Musicians, bundle.Instructors, bundle.Locations)
-		renderErrFull := func(errKey string) {
+		renderErrFull := func(se SaveError) {
 			event, gerr := client.GetEventAuthed(r.Context(), id, saveTok)
 			if gerr != nil {
 				log.Printf("reload event %d after save error: %v", id, gerr)
@@ -3105,21 +3113,21 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 				event.LocationID = &selectedLocID
 			}
 			renderEventFormError(w, r, cfg, tmpls, client, i18n, bundle, su, event,
-				buildSelectedDanceNamesFromIDs(danceIDs, bundle.Dances), false, errKey)
+				buildSelectedDanceNamesFromIDs(danceIDs, bundle.Dances), false, se)
 		}
 
 		if req.Title == "" {
-			renderErrFull("evt_title_required")
+			renderErrFull(SaveError{Key: "evt_title_required"})
 			return
 		}
 		if err := validateURLDomain(r.Context(), req.URL); err != nil {
-			renderErrFull("url_domain_not_found")
+			renderErrFull(SaveError{Key: "url_domain_not_found"})
 			return
 		}
 
 		if _, err := client.UpdateEvent(r.Context(), id, req, saveTok); err != nil {
 			log.Printf("update event error: %v", err)
-			renderErrFull("admin_save_error")
+			renderErrFull(adminSaveError(err))
 			return
 		}
 

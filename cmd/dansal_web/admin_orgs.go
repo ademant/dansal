@@ -68,6 +68,8 @@ type AdminOrgsData struct {
 type AdminOrgEditData struct {
 	Org                   Organization
 	ErrorKey              string
+	ErrorDetail           string // #1421: API validation message / reference
+	ErrorRef              string
 	Follows               []FollowRecord
 	FollowErr             string
 	Members               []OrgMember
@@ -217,10 +219,13 @@ func adminOrgCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		created, err := client.CreateOrganization(r.Context(), org, token)
 		if err != nil {
 			title := i18n.T(r, "admin_new")
+			se := adminSaveError(err)
 			renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{
-				Org:      org,
-				ErrorKey: "admin_save_error",
-				IsAdmin:  user.Role == "admin",
+				Org:         org,
+				ErrorKey:    se.Key,
+				ErrorDetail: se.Detail,
+				ErrorRef:    se.Ref,
+				IsAdmin:     user.Role == "admin",
 			}))
 			return
 		}
@@ -580,11 +585,14 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 		}
 		if err := client.UpdateOrganization(r.Context(), id, org, token); err != nil {
 			title := i18n.T(r, "admin_edit")
+			se := adminSaveError(err)
 			renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{
-				Org:      org,
-				ErrorKey: "admin_save_error",
-				IsAdmin:  user.Role == "admin",
-				From:     from,
+				Org:         org,
+				ErrorKey:    se.Key,
+				ErrorDetail: se.Detail,
+				ErrorRef:    se.Ref,
+				IsAdmin:     user.Role == "admin",
+				From:        from,
 			}))
 			return
 		}

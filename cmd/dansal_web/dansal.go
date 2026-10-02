@@ -715,6 +715,11 @@ type Musician struct {
 	// Media is the external link list (#1360). Read from the single-musician
 	// GET; on writes see musicianWrite, which decides whether it is sent.
 	Media []MediaLink `json:"media,omitempty"`
+	// Gallery is the uploaded picture gallery (#1362) and GalleryMax the
+	// API's per-musician limit; both only on the single-musician GET. The
+	// form-built Musician never carries them, so writes don't send them.
+	Gallery    []GalleryImage `json:"gallery,omitempty"`
+	GalleryMax int            `json:"gallery_max,omitempty"`
 
 	FutureEventCount int    `json:"future_event_count,omitempty"`
 	PastEventCount   int    `json:"past_event_count,omitempty"`
@@ -2132,6 +2137,66 @@ func (c *DansalClient) EnrichEvent(ctx context.Context, eventID int, req EnrichE
 
 func (c *DansalClient) DeleteEventImage(ctx context.Context, eventID int, token string) error {
 	return c.deleteAvatar(ctx, fmt.Sprintf("/api/v1/images/%d", eventID), token)
+}
+
+// GalleryImage is one uploaded gallery picture (#1362).
+type GalleryImage struct {
+	ID          int    `json:"id"`
+	Caption     string `json:"caption"`
+	AIGenerated bool   `json:"ai_generated"`
+	URL         string `json:"url"`
+	ThumbURL    string `json:"thumb_url"`
+}
+
+// GalleryItemUpdate is one entry of UpdateMusicianGallery's ordered list.
+type GalleryItemUpdate struct {
+	ID          int    `json:"id"`
+	Caption     string `json:"caption"`
+	AIGenerated bool   `json:"ai_generated"`
+}
+
+// UploadMusicianGalleryImage adds one picture to a musician's gallery.
+func (c *DansalClient) UploadMusicianGalleryImage(ctx context.Context, id int, data []byte, filename, caption string, ai bool, token string) error {
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	fw, err := mw.CreateFormFile("image", filename)
+	if err != nil {
+		return err
+	}
+	if _, err := fw.Write(data); err != nil {
+		return err
+	}
+	mw.WriteField("caption", caption)
+	if ai {
+		mw.WriteField("ai_generated", "1")
+	}
+	mw.Close()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+fmt.Sprintf("/api/v1/musicians/%d/gallery-images", id), &buf)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	c.setInternalHeader(req)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+// UpdateMusicianGallery sets the gallery's order, captions and AI flags;
+// pictures left out of items are deleted.
+func (c *DansalClient) UpdateMusicianGallery(ctx context.Context, id int, items []GalleryItemUpdate, token string) error {
+	if items == nil {
+		items = []GalleryItemUpdate{}
+	}
+	body, _ := json.Marshal(map[string]any{"items": items})
+	return c.do(ctx, http.MethodPut, fmt.Sprintf("/api/v1/musicians/%d/gallery", id), token, body, nil)
 }
 
 func (c *DansalClient) DeleteMusicianImage(ctx context.Context, id int, token string) error {

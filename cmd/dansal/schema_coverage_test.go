@@ -95,12 +95,13 @@ var writeSchemaExemptions = map[string]string{
 	// fetchurl-fetch: admin manual feed refetch
 	"/api/v1/fetchurl/{id}/fetch": "fetchurl-fetch",
 	// images: multipart image upload; not a JSON body, so JSON-only reflection has nothing to describe
-	"/api/v1/images/{event_id}":       "images",
-	"/api/v1/instructor-avatars/{id}": "images",
-	"/api/v1/musician-avatars/{id}":   "images",
-	"/api/v1/musician-images/{id}":    "images",
-	"/api/v1/org-avatars/{id}":        "images",
-	"/api/v1/org-images/{id}":         "images",
+	"/api/v1/images/{event_id}":             "images",
+	"/api/v1/instructor-avatars/{id}":       "images",
+	"/api/v1/musician-avatars/{id}":         "images",
+	"/api/v1/musician-images/{id}":          "images",
+	"/api/v1/musicians/{id}/gallery-images": "images",
+	"/api/v1/org-avatars/{id}":              "images",
+	"/api/v1/org-images/{id}":               "images",
 	// invites: invitation / challenge flows; token-in-path
 	"/api/v1/invites":                         "invites",
 	"/api/v1/invites/{token}":                 "invites",

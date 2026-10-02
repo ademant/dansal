@@ -28,6 +28,7 @@
     <button type="button" class="evt-nav-item" data-target="sec-social"><span class="evt-nav-dot"></span>{{$.Strings.T "musician_social"}}</button>
     <button type="button" class="evt-nav-item" data-target="sec-media"><span class="evt-nav-dot"></span>{{$.Strings.T "media_admin_title"}}</button>
     <button type="button" class="evt-nav-item" data-target="sec-image"><span class="evt-nav-dot"></span>{{$.Strings.T "musician_image"}}</button>
+    <button type="button" class="evt-nav-item" data-target="sec-gallery"><span class="evt-nav-dot"></span>{{$.Strings.T "gallery_title"}}</button>
     <button type="button" class="evt-nav-item" data-target="sec-avatar"><span class="evt-nav-dot"></span>{{$.Strings.T "avatar_section"}}</button>
   </div>
 </aside>
@@ -186,6 +187,36 @@
     </div>
   </section>
 
+  {{/* #1362: uploaded picture gallery. Existing pictures are edited in
+       place (order = order of the gallery_id fields as submitted); new files
+       are uploaded one by one after the musician is saved. */}}
+  <section class="form-section optional-section" id="sec-gallery" data-gallery-max="{{.Musician.GalleryMax}}" data-gallery-count="{{len .Musician.Gallery}}">
+    <h2>{{$.Strings.T "gallery_title"}}</h2>
+    {{if and .ImageUploadError (eq .ImageUploadWidget "gallery")}}<p class="form-error" role="alert">{{$.Strings.T .ImageUploadError}}</p>{{end}}
+    <p class="gallery-hint">{{$.Strings.T "gallery_rights_hint"}}</p>
+    {{with .Musician.Gallery}}<input type="hidden" name="gallery_present" value="1">
+    <ol class="gallery-edit" id="gallery-edit">
+      {{range .}}<li class="gallery-edit-row">
+        <input type="hidden" name="gallery_id" value="{{.ID}}">
+        <a href="{{.URL}}" target="_blank" rel="noopener"><img src="{{.ThumbURL}}" alt="" class="gallery-edit-thumb" loading="lazy" width="72" height="72"></a>
+        <div class="gallery-edit-fields">
+          <input type="text" name="gallery_caption_{{.ID}}" value="{{.Caption}}" maxlength="200" placeholder="{{$.Strings.T "gallery_caption"}}" aria-label="{{$.Strings.T "gallery_caption"}}">
+          <label class="gallery-check"><input type="checkbox" name="gallery_ai_{{.ID}}" value="1"{{if .AIGenerated}} checked{{end}}> {{$.Strings.T "evt_image_ai_label"}}</label>
+          <label class="gallery-check gallery-remove"><input type="checkbox" name="gallery_remove_{{.ID}}" value="1" class="gallery-remove-cb"> {{$.Strings.T "gallery_remove"}}</label>
+        </div>
+        <div class="gallery-edit-move">
+          <button type="button" class="btn-sm-secondary gallery-up" title="{{$.Strings.T "gallery_move_up"}}" aria-label="{{$.Strings.T "gallery_move_up"}}">↑</button>
+          <button type="button" class="btn-sm-secondary gallery-down" title="{{$.Strings.T "gallery_move_down"}}" aria-label="{{$.Strings.T "gallery_move_down"}}">↓</button>
+        </div>
+      </li>{{end}}
+    </ol>{{end}}
+    {{if .Musician.GalleryMax}}<p class="gallery-count">{{$.Strings.TF "gallery_count" (len .Musician.Gallery) .Musician.GalleryMax}}</p>{{end}}
+    <label for="gallery-new" class="gallery-add-label">{{$.Strings.T "gallery_add"}}</label>
+    <input type="file" id="gallery-new" name="gallery_new" accept="image/*" multiple>
+    <p class="gallery-too-many" id="gallery-too-many" role="alert" hidden data-msg="{{$.Strings.T "gallery_too_many"}}"></p>
+    <label class="gallery-check"><input type="checkbox" name="gallery_new_ai" value="1"> {{$.Strings.T "gallery_new_ai"}}</label>
+  </section>
+
   <section class="form-section optional-section" id="sec-avatar">
     <h2>{{$.Strings.T "avatar_section"}}</h2>
     {{if and .ImageUploadError (eq .ImageUploadWidget "avatar")}}<p class="form-error" role="alert">{{$.Strings.T .ImageUploadError}}</p>{{end}}
@@ -300,6 +331,17 @@
 .md-preview-empty{color:var(--fg-muted,#666);font-style:italic}
 .md-br{margin:.2rem 0!important;height:0!important}
 @media(max-width:700px){.md-ta-wrap{flex-direction:column}.md-preview{flex:none;min-width:0}}
+.gallery-hint,.gallery-count{font-size:.85rem;color:#555;margin:.25rem 0 .6rem}
+.gallery-edit{list-style:none;padding:0;margin:0 0 .75rem;display:flex;flex-direction:column;gap:.5rem}
+.gallery-edit-row{display:flex;gap:.6rem;align-items:center;border:1px solid #ddd;border-radius:6px;padding:.4rem}
+.gallery-edit-row.is-removed{opacity:.5}
+.gallery-edit-thumb{width:72px;height:72px;object-fit:cover;border-radius:4px;display:block}
+.gallery-edit-fields{flex:1;min-width:0;display:flex;flex-direction:column;gap:.25rem}
+.gallery-edit-fields input[type=text]{width:100%;box-sizing:border-box}
+.gallery-edit-move{display:flex;flex-direction:column;gap:.25rem}
+.gallery-check{display:flex;align-items:center;gap:.4rem;font-weight:normal;font-size:.85rem}
+.gallery-add-label{display:block;font-weight:600;margin:.5rem 0 .25rem}
+.gallery-too-many{color:#8a5300;font-size:.85rem;margin:.3rem 0}
 </style>
 
 <script nonce="{{$.Nonce}}">
@@ -580,6 +622,46 @@
   }
 })();
 
+// #1362 gallery: reorder rows, dim rows marked for removal, warn when more
+// files are picked than still fit (the server enforces the limit anyway).
+(function(){
+  var sec=document.getElementById('sec-gallery');
+  if(!sec) return;
+  var list=document.getElementById('gallery-edit');
+  if(list){
+    list.addEventListener('click',function(e){
+      var btn=e.target.closest('.gallery-up,.gallery-down');
+      if(!btn) return;
+      var row=btn.closest('li');
+      if(btn.classList.contains('gallery-up')){
+        if(row.previousElementSibling) list.insertBefore(row,row.previousElementSibling);
+      } else if(row.nextElementSibling){
+        list.insertBefore(row.nextElementSibling,row);
+      }
+      btn.focus();
+      if(typeof _markDirty==='function') _markDirty();
+    });
+    list.addEventListener('change',function(e){
+      if(e.target.classList.contains('gallery-remove-cb')){
+        e.target.closest('li').classList.toggle('is-removed',e.target.checked);
+      }
+      checkCount();
+    });
+  }
+  var inp=document.getElementById('gallery-new');
+  var warn=document.getElementById('gallery-too-many');
+  var max=parseInt(sec.dataset.galleryMax,10)||0;
+  function checkCount(){
+    if(!max||!inp||!warn) return;
+    var kept=document.querySelectorAll('#gallery-edit li').length-document.querySelectorAll('#gallery-edit .gallery-remove-cb:checked').length;
+    var free=Math.max(0,max-kept);
+    var over=inp.files.length>free;
+    warn.hidden=!over;
+    if(over) warn.textContent=warn.dataset.msg.replace('%d',free);
+  }
+  if(inp) inp.addEventListener('change',checkCount);
+})();
+
 // Sidebar section nav
 (function(){
   var nav=document.getElementById('mus-nav');
@@ -613,6 +695,10 @@
       var preview=document.getElementById('image-preview');
       var inp=document.getElementById('image');
       return !!(existing)||(preview&&preview.style.display==='block')||(inp&&inp.files&&inp.files.length>0);
+    },
+    'sec-gallery':function(){
+      var inp=document.getElementById('gallery-new');
+      return document.querySelectorAll('#gallery-edit li').length>0||!!(inp&&inp.files&&inp.files.length>0);
     },
     'sec-avatar':function(){
       var existing=document.getElementById('existing-avatar');

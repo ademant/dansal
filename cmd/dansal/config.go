@@ -46,6 +46,7 @@ type ServerConfig struct {
 	ImagesDir                     string `yaml:"images_dir"`
 	ImageXMax                     int    `yaml:"image_x_max"`
 	ImageYMax                     int    `yaml:"image_y_max"`
+	GalleryMaxImages              int    `yaml:"gallery_max_images"` // uploaded gallery pictures per musician (#1362); 0 = default 8
 	AdminSocket                   string `yaml:"admin_socket"`
 	DBPath                        string `yaml:"db_path"`
 	DBMaxConns                    int    `yaml:"db_max_conns"`
@@ -276,6 +277,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.ImageYMax == 0 {
 		cfg.Server.ImageYMax = 1024
+	}
+	if cfg.Server.GalleryMaxImages <= 0 {
+		cfg.Server.GalleryMaxImages = 8
 	}
 	if cfg.Server.ImageFormat == "" {
 		cfg.Server.ImageFormat = "avif"

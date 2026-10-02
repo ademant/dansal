@@ -36,10 +36,14 @@ type Musician struct {
 	AvatarURL        string `json:"avatar_url,omitempty"`
 	// Media is the musician's external link list (#1360). Filled only on the
 	// single-musician GET and on create/update responses, not in list results.
-	Media     []MediaLink `json:"media,omitempty"`
-	CreatedAt string      `json:"created_at"`
-	UpdatedAt int64       `json:"updated_at,omitempty"`
-	UpdatedBy string      `json:"updated_by,omitempty"`
+	Media []MediaLink `json:"media,omitempty"`
+	// Gallery is the uploaded picture gallery (#1362) and GalleryMax the
+	// configured per-musician limit; single-musician GET only.
+	Gallery    []GalleryImage `json:"gallery,omitempty"`
+	GalleryMax int            `json:"gallery_max,omitempty"`
+	CreatedAt  string         `json:"created_at"`
+	UpdatedAt  int64          `json:"updated_at,omitempty"`
+	UpdatedBy  string         `json:"updated_by,omitempty"`
 
 	FutureEventCount int    `json:"future_event_count,omitempty"`
 	PastEventCount   int    `json:"past_event_count,omitempty"`
@@ -279,6 +283,8 @@ func getMusician(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	musician.Media = loadOwnerMedia(db, ownerTypeMusician, musician.ID)
+	musician.Gallery = loadOwnerGallery(db, ownerTypeMusician, musician.ID)
+	musician.GalleryMax = galleryMaxImages()
 	writeJSON(w, musician)
 }
 
@@ -585,6 +591,7 @@ func deleteMusician(w http.ResponseWriter, r *http.Request) {
 	}
 	if mid, err := strconv.Atoi(id); err == nil {
 		deleteOwnerMedia(db, ownerTypeMusician, mid)
+		deleteOwnerGallery(db, ownerTypeMusician, mid)
 	}
 
 	w.WriteHeader(http.StatusNoContent)

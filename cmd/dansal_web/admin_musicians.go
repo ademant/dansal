@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -150,8 +151,68 @@ func uploadMusicianFiles(cfg *Config, client *DansalClient, r *http.Request, id 
 			}
 		}
 	}
+	if gflash := saveMusicianGallery(client, r, id, token); flash.ImageUploadError == "" {
+		flash = gflash
+	}
 	go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{fmt.Sprintf("/musicians/%d", id)})
 	return flash
+}
+
+// saveMusicianGallery applies the form's gallery section (#1362): order,
+// captions, AI flags and removals of the existing pictures in one PUT, then
+// each newly picked file as its own upload. The PUT only runs when the form
+// rendered the section with existing pictures (gallery_present), so a form
+// without it can never wipe the gallery. Stops at the first failed upload —
+// a full gallery or an oversized file would fail the rest the same way.
+func saveMusicianGallery(client *DansalClient, r *http.Request, id int, token string) FlashMsg {
+	if r.FormValue("gallery_present") == "1" {
+		var items []GalleryItemUpdate
+		for _, raw := range r.Form["gallery_id"] {
+			gid, err := strconv.Atoi(raw)
+			if err != nil || r.FormValue("gallery_remove_"+raw) == "1" {
+				continue
+			}
+			items = append(items, GalleryItemUpdate{
+				ID:          gid,
+				Caption:     strings.TrimSpace(r.FormValue("gallery_caption_" + raw)),
+				AIGenerated: r.FormValue("gallery_ai_"+raw) == "1",
+			})
+		}
+		if err := client.UpdateMusicianGallery(r.Context(), id, items, token); err != nil {
+			log.Printf("update musician gallery %d: %v", id, err)
+			return imageUploadErrorFlash("gallery", err)
+		}
+	}
+	if r.MultipartForm == nil {
+		return FlashMsg{}
+	}
+	ai := r.FormValue("gallery_new_ai") == "1"
+	for _, fh := range r.MultipartForm.File["gallery_new"] {
+		f, err := fh.Open()
+		if err != nil {
+			continue
+		}
+		data, _ := io.ReadAll(f)
+		f.Close()
+		if len(data) == 0 {
+			continue
+		}
+		if err := client.UploadMusicianGalleryImage(r.Context(), id, data, fh.Filename, "", ai, token); err != nil {
+			log.Printf("upload musician gallery picture %d: %v", id, err)
+			return galleryUploadErrorFlash(err)
+		}
+	}
+	return FlashMsg{}
+}
+
+// galleryUploadErrorFlash is imageUploadErrorFlash plus the gallery's own
+// 409 (the configured picture limit is reached).
+func galleryUploadErrorFlash(err error) FlashMsg {
+	var ae *apiHTTPError
+	if errors.As(err, &ae) && ae.StatusCode == http.StatusConflict {
+		return FlashMsg{ImageUploadError: "gallery_full", ImageUploadWidget: "gallery"}
+	}
+	return imageUploadErrorFlash("gallery", err)
 }
 
 func adminMusicianImageDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {

@@ -302,7 +302,7 @@ var corpPublicImagePrefixes = []string{
 	"/api/v1/images/", "/api/v1/event-banner/", "/api/v1/org-images/",
 	"/api/v1/org-avatars/", "/api/v1/musician-images/", "/api/v1/musician-avatars/",
 	"/api/v1/instructor-avatars/", "/api/v1/location-images/", "/api/v1/series-images/",
-	"/api/v1/contact-post-images/",
+	"/api/v1/contact-post-images/", "/api/v1/gallery-images/",
 }
 
 // corpForAPIPath returns the Cross-Origin-Resource-Policy value for path, or
@@ -2855,6 +2855,23 @@ func migrateDB() {
 		}
 		db.Exec("CREATE INDEX IF NOT EXISTS idx_publisher_webhooks_publisher ON publisher_webhooks(publisher_id)")
 	}
+
+	// v46: owner_gallery — uploaded pictures for musicians (#1362). Polymorphic
+	// like owner_media so orgs/venues can follow without a schema change; the
+	// files live in <images_dir>/gallery/{id}.<ext>.
+	if !applied(46) {
+		db.Exec(ownerGallerySchema)
+		mark(46)
+	}
+	// Safety net: ensure owner_gallery exists even if v46 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='owner_gallery'").Scan(&n)
+		if n == 0 {
+			db.Exec(ownerGallerySchema)
+		}
+		db.Exec("CREATE INDEX IF NOT EXISTS idx_owner_gallery_owner ON owner_gallery(owner_type, owner_id, sort_order)")
+	}
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -4239,6 +4256,16 @@ func createTables() error {
 		FOREIGN KEY (publisher_id) REFERENCES users(id) ON DELETE CASCADE
 	);
 	CREATE INDEX IF NOT EXISTS idx_publisher_webhooks_publisher ON publisher_webhooks(publisher_id);
+	CREATE TABLE IF NOT EXISTS owner_gallery (
+		id           INTEGER PRIMARY KEY AUTOINCREMENT,
+		owner_type   TEXT NOT NULL CHECK(owner_type IN ('musician','organization','location')),
+		owner_id     INTEGER NOT NULL,
+		sort_order   INTEGER NOT NULL DEFAULT 0,
+		caption      TEXT NOT NULL DEFAULT '',
+		ai_generated INTEGER NOT NULL DEFAULT 0,
+		created_at   INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+	);
+	CREATE INDEX IF NOT EXISTS idx_owner_gallery_owner ON owner_gallery(owner_type, owner_id, sort_order);
 	-- #1333 (phase 1): an anonymous visitor's suggestion of a new .ics/.json
 	-- feed to import, pending admin/org-member review. org_id is set when the
 	-- submitter picked an existing org; org_name (+ the other org_* fields)
@@ -4408,6 +4435,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(43)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(44)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(45)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(46)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)
@@ -4528,6 +4556,7 @@ func main() {
 	logUnmappedCountries()
 	initImageCache(config.Server.ImagesDir)
 	initMusicianImageCache(config.Server.ImagesDir + "/musicians")
+	initGalleryImages(config.Server.ImagesDir + "/gallery")
 	initOrgImageCache(config.Server.ImagesDir + "/orgs")
 	initLocationImageCache(config.Server.ImagesDir + "/locations")
 	initSeriesImageCache(config.Server.ImagesDir + "/series")
@@ -4678,6 +4707,7 @@ func main() {
 	smux.Handle("GET /api/v1/dances", optAuth(http.HandlerFunc(getDances)))
 	smux.Handle("GET /api/v1/images/{event_id}", optAuth(http.HandlerFunc(getEventImage)))
 	smux.HandleFunc("GET /api/v1/musician-images/{id}", getMusicianImage)
+	smux.HandleFunc("GET /api/v1/gallery-images/{id}", getGalleryImage)
 	smux.HandleFunc("GET /api/v1/org-images/{id}", getOrgImage)
 	smux.HandleFunc("GET /api/v1/event-banner/{event_id}", getEventBannerImage)
 
@@ -4789,6 +4819,9 @@ func main() {
 	smux.Handle("DELETE /api/v1/images/{event_id}", auth(deleteEventImage))
 	smux.Handle("POST /api/v1/musician-images/{id}", auth(uploadMusicianImage))
 	smux.Handle("DELETE /api/v1/musician-images/{id}", auth(deleteMusicianImage))
+	smux.Handle("POST /api/v1/musicians/{id}/gallery-images", auth(accountMutationLimit(musicianGallery.upload)))
+	smux.Handle("PUT /api/v1/musicians/{id}/gallery", auth(accountMutationLimit(musicianGallery.update)))
+	smux.Handle("DELETE /api/v1/musicians/{id}/gallery/{gid}", auth(musicianGallery.remove))
 	smux.Handle("POST /api/v1/org-images/{id}", auth(uploadOrgImage))
 	smux.Handle("DELETE /api/v1/org-images/{id}", auth(deleteOrgImage))
 

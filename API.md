@@ -872,6 +872,8 @@ Musicians are performers linked to events; instructors are teachers linked to wo
 
 **Media links (#1360).** A musician can carry a list of external links, returned as `media: [{"kind","title","url"}]` on `GET /api/v1/musicians/{id}` (not in list results) and on create/update responses. `POST` and `PUT` accept the same `media` array: when present it replaces the whole list (array order = display order, `[]` clears it); when omitted the stored list is left untouched, so clients that don't know the field never wipe it. `kind` is `video`, `audio`, `image` or `other` (default `other`); each `url` must be an absolute `https://` URL without credentials (max 2048 chars), `title` is optional (max 120), and at most 20 links are allowed — anything else is rejected with `400` and nothing is changed. The links are stored and shown as plain links only; dansal never embeds or fetches them.
 
+**Picture gallery (#1362).** A musician can have a gallery of uploaded pictures, returned as `gallery: [{"id","caption","ai_generated","url","thumb_url"}]` plus `gallery_max` (the configured limit) on `GET /api/v1/musicians/{id}` only. The endpoints (role admin or user, like the musician image) are listed under [Images](#images). Uploads go through the regular image pipeline (resized to the configured maximum, re-encoded as AVIF/JPEG — which drops EXIF/GPS metadata — plus a square thumbnail served with `?thumb=sq`). At most `server.gallery_max_images` pictures (default 8) per musician; an upload beyond that is rejected with `409`. Deleting a musician deletes its gallery.
+
 **Query parameters for GET /api/v1/musicians:**
 - `name=` — substring match on bandname
 - `organization_id=N` — musicians linked to events of this org
@@ -1077,6 +1079,11 @@ DELETE /api/v1/images/{event_id}          # auth required
 GET    /api/v1/musician-images/{id}
 POST   /api/v1/musician-images/{id}       # auth required
 DELETE /api/v1/musician-images/{id}       # auth required
+
+GET    /api/v1/gallery-images/{id}               # a gallery picture; ?thumb=sq for the square thumbnail
+POST   /api/v1/musicians/{id}/gallery-images     # add a picture (multipart: image, caption, ai_generated); 201 with the picture, 409 when full
+PUT    /api/v1/musicians/{id}/gallery            # {"items":[{"id","caption","ai_generated"}]}: order, captions, AI flags; pictures left out are deleted
+DELETE /api/v1/musicians/{id}/gallery/{gid}      # delete one picture
 
 GET    /api/v1/org-images/{id}
 POST   /api/v1/org-images/{id}            # auth required

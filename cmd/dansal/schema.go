@@ -121,6 +121,7 @@ var writeSchemaRoutes = []SchemaRoute{
 	{"/api/v1/locations/{id}", []string{http.MethodPut, http.MethodPatch}, reflect.TypeFor[LocationCreateRequest]()},
 	{"/api/v1/musicians", []string{http.MethodPost}, reflect.TypeFor[MusicianCreateRequest]()},
 	{"/api/v1/musicians/{id}", []string{http.MethodPut, http.MethodPatch}, reflect.TypeFor[MusicianCreateRequest]()},
+	{"/api/v1/musicians/{id}/gallery", []string{http.MethodPut}, reflect.TypeFor[GalleryUpdateRequest]()},
 	{"/api/v1/instructors", []string{http.MethodPost}, reflect.TypeFor[InstructorRequest]()},
 	{"/api/v1/instructors/{id}", []string{http.MethodPut, http.MethodPatch}, reflect.TypeFor[InstructorRequest]()},
 	{"/api/v1/fetchurl", []string{http.MethodPost}, reflect.TypeFor[FetchURLRequest]()},

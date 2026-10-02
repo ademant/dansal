@@ -27,6 +27,7 @@ var apiImagePrefixes = []struct {
 	{"/api/v1/location-images/", "id"},
 	{"/api/v1/series-images/", "id"},
 	{"/api/v1/contact-post-images/", "img_id"},
+	{"/api/v1/gallery-images/", "id"},
 }
 
 // registerImageProxy mounts imageProxyHandler for every image route the API

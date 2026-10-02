@@ -22,6 +22,10 @@ server:
   image_x_max: 1024
   image_y_max: 1024
 
+  # Uploaded gallery pictures per musician (#1362). Each picture is stored
+  # resized like the images above, plus a square thumbnail.
+  gallery_max_images: 8
+
   # Unix socket path used by dansal_admin and dansal-webmin.
   # Placed in StateDirectory so it survives mount namespace quirks.
   admin_socket: /var/lib/dansal/dansal.sock

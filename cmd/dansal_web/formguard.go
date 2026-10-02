@@ -113,16 +113,32 @@ const (
 // differently.
 func guardFormSubmit(w http.ResponseWriter, r *http.Request, cfg *Config, ip string) formGuardResult {
 	if err := r.ParseForm(); err != nil {
-		log.Printf("dansal-web: form parse ip_hash=%s path=%s err=%v", hashIP(ip), r.URL.Path, err)
+		logFormReject(r, "PARSE_ERROR", ip, err)
 		return formGuardParseError
 	}
 	if r.FormValue(honeypotField) != "" {
+		logFormReject(r, "HONEYPOT", ip, nil)
 		return formGuardHoneypot
 	}
 	if !consumeFormToken(r.FormValue("_form_token"), ip, time.Second, stdFormMaxAge(cfg), cfg.FormTokenBindIP) {
+		logFormReject(r, "BAD_TOKEN", ip, nil)
 		return formGuardBadToken
 	}
 	return formGuardOK
+}
+
+// logFormReject (#1422) is the one log line for every public-form rejection
+// — PARSE_ERROR, HONEYPOT, BAD_TOKEN (from guardFormSubmit) and
+// PENDING_SUBMISSION (from the callers) — so a rejected booking/suggestion
+// can be diagnosed from the log; the path names the form. It uses ip_hash
+// and its own tag, deliberately not matched by the fail2ban filter, which
+// keeps acting on the separate PUBLIC_BLOCK / HONEYPOT ip= lines.
+func logFormReject(r *http.Request, reason, ip string, err error) {
+	if err != nil {
+		log.Printf("dansal-web: FORM_REJECT reason=%s ip_hash=%s path=%s err=%v", reason, hashIP(ip), r.URL.Path, err)
+		return
+	}
+	log.Printf("dansal-web: FORM_REJECT reason=%s ip_hash=%s path=%s", reason, hashIP(ip), r.URL.Path)
 }
 
 // ── One-time form tokens ──────────────────────────────────────────────────────
@@ -209,38 +225,48 @@ func startFormTokenCleanup(maxAge time.Duration, cleanupMins int) {
 
 // ── Per-IP+UA pending-submission guard (item 7) ───────────────────────────────
 //
-// pendingSubmissions tracks one active unverified submission per IP+UA hash.
-// A second submission from the same visitor is rejected until the first
-// verification token expires (same TTL as the form token, ~5 min).
+// pendingSubmissions tracks one active unverified submission per IP+UA hash
+// and scope. A second submission of the same thing from the same visitor is
+// rejected until the first one's form-token window expires. #1422: the scope
+// ("booking|<eventID>", "board|<eventID>", "suggest", "register") used to be
+// missing — one key per browser shared by every public form, so a booking
+// blocked booking a second event, posting on the board, suggesting or
+// registering for the whole window.
 
-var pendingSubmissions sync.Map // key: sha256(ip+"|"+ua) hex, value: time.Time (expiry)
+var pendingSubmissions sync.Map // key: sha256(ip+"|"+ua) hex + "|" + scope, value: time.Time (expiry)
 
 func ipUAKey(ip, ua string) string {
 	sum := sha256.Sum256([]byte(ip + "|" + ua))
 	return hex.EncodeToString(sum[:])
 }
 
-// setPendingSubmission marks this visitor as having an outstanding submission.
-func setPendingSubmission(ip, ua string, ttl time.Duration) {
-	pendingSubmissions.Store(ipUAKey(ip, ua), time.Now().Add(ttl))
+func pendingKey(ip, ua, scope string) string { return ipUAKey(ip, ua) + "|" + scope }
+
+// setPendingSubmission marks this visitor as having an outstanding submission
+// for scope.
+func setPendingSubmission(ip, ua, scope string, ttl time.Duration) {
+	pendingSubmissions.Store(pendingKey(ip, ua, scope), time.Now().Add(ttl))
 }
 
-// hasPendingSubmission returns true when an unexpired submission exists.
-func hasPendingSubmission(ip, ua string) bool {
-	v, ok := pendingSubmissions.Load(ipUAKey(ip, ua))
+// hasPendingSubmission returns true when an unexpired submission for scope
+// exists.
+func hasPendingSubmission(ip, ua, scope string) bool {
+	k := pendingKey(ip, ua, scope)
+	v, ok := pendingSubmissions.Load(k)
 	if !ok {
 		return false
 	}
 	if time.Now().After(v.(time.Time)) {
-		pendingSubmissions.Delete(ipUAKey(ip, ua))
+		pendingSubmissions.Delete(k)
 		return false
 	}
 	return true
 }
 
-// clearPendingSubmission removes the pending mark (e.g. after verification).
-func clearPendingSubmission(ip, ua string) {
-	pendingSubmissions.Delete(ipUAKey(ip, ua))
+// clearPendingSubmission removes the pending mark for scope (e.g. when the
+// API rejected the submission, so the visitor can correct and resend).
+func clearPendingSubmission(ip, ua, scope string) {
+	pendingSubmissions.Delete(pendingKey(ip, ua, scope))
 }
 
 // startPendingSubmissionCleanup sweeps expired entries periodically.

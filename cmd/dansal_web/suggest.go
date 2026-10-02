@@ -256,8 +256,9 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			return
 		}
 
-		if hasPendingSubmission(ip, r.UserAgent()) {
-			suggestError(w, r, cfg, tmpls, i18n, i18n.T(r, "suggest_error_rate_limit"), ip)
+		if hasPendingSubmission(ip, r.UserAgent(), "suggest") {
+			logFormReject(r, "PENDING_SUBMISSION", ip, nil)
+			suggestError(w, r, cfg, tmpls, i18n, i18n.T(r, "form_error_pending"), ip)
 			return
 		}
 
@@ -391,12 +392,12 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 		}
 
 		publicThrottle.record(key)
-		setPendingSubmission(ip, r.UserAgent(), stdFormMaxAge(cfg))
+		setPendingSubmission(ip, r.UserAgent(), "suggest", stdFormMaxAge(cfg))
 		globalEmailSendRate.record()
 
 		token, err := client.SuggestEvent(r.Context(), req, cfg.publicBaseURL(), getBoardSessionToken(r))
 		if err != nil {
-			clearPendingSubmission(ip, r.UserAgent())
+			clearPendingSubmission(ip, r.UserAgent(), "suggest")
 			log.Printf("dansal-web: suggest submit failed ip_hash=%s err=%v", hashIP(ip), err)
 			suggestError(w, r, cfg, tmpls, i18n, i18n.T(r, "suggest_error_submit"), ip)
 			return

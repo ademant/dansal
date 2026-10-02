@@ -21,7 +21,11 @@ import (
 // clean page instead of the error banner forever.
 func redirectBoardError(w http.ResponseWriter, r *http.Request, eventID int, key string, err error) {
 	tok := flashToken(err)
-	log.Printf("dansal-web: board error error_id=%s key=%s path=%s err=%v", tok, key, r.URL.Path, err)
+	// #1422: web-side rejections already logged their reason (PUBLIC_BLOCK /
+	// FORM_REJECT); only an API error adds information here.
+	if err != nil {
+		log.Printf("dansal-web: board error error_id=%s key=%s path=%s err=%v", tok, key, r.URL.Path, err)
+	}
 	flashRedirect(w, r, fmt.Sprintf("/events/%d", eventID), tok, FlashMsg{
 		BoardError:    key,
 		BoardErrorMsg: apiErrUserMessage(err),
@@ -66,12 +70,13 @@ func contactBoardPostHandler(cfg *Config, db *sql.DB, client *DansalClient, i18n
 			boardSuccessRedirect(w, r, eventID, FlashMsg{BoardPosted: true})
 			return
 		case formGuardBadToken:
-			log.Printf("dansal-web: FORM_TOKEN_REJECT ip_hash=%s path=%s", hashIP(ip), r.URL.Path)
 			boardErrorRedirect(w, r, eventID, "board_form_error")
 			return
 		}
-		if hasPendingSubmission(ip, r.UserAgent()) {
-			boardErrorRedirect(w, r, eventID, "board_throttled")
+		pendingScope := fmt.Sprintf("board|%d", eventID)
+		if hasPendingSubmission(ip, r.UserAgent(), pendingScope) {
+			logFormReject(r, "PENDING_SUBMISSION", ip, nil)
+			boardErrorRedirect(w, r, eventID, "form_error_pending")
 			return
 		}
 
@@ -103,13 +108,13 @@ func contactBoardPostHandler(cfg *Config, db *sql.DB, client *DansalClient, i18n
 		}
 
 		publicThrottle.record(ip + "|" + r.UserAgent())
-		setPendingSubmission(ip, r.UserAgent(), stdFormMaxAge(cfg))
+		setPendingSubmission(ip, r.UserAgent(), pendingScope, stdFormMaxAge(cfg))
 		globalEmailSendRate.record()
 		tgURL, firstPost, err := client.CreateContactPost(r.Context(), eventID, post, cfg.publicBaseURL(), getSessionToken(r), getBoardSessionToken(r))
 		if err != nil {
 			log.Printf("dansal-web: board post failed ip_hash=%s path=%s type=%q city=%q message_len=%d err=%v",
 				hashIP(ip), r.URL.Path, r.FormValue("type"), r.FormValue("city"), len(r.FormValue("message")), err)
-			clearPendingSubmission(ip, r.UserAgent())
+			clearPendingSubmission(ip, r.UserAgent(), pendingScope)
 			redirectBoardError(w, r, eventID, "board_post_error", err)
 			return
 		}
@@ -199,7 +204,6 @@ func contactBoardContactHandler(cfg *Config, client *DansalClient) http.HandlerF
 			boardSuccessRedirect(w, r, eventID, FlashMsg{BoardContacted: true})
 			return
 		case formGuardBadToken:
-			log.Printf("dansal-web: FORM_TOKEN_REJECT ip_hash=%s path=%s", hashIP(ip), r.URL.Path)
 			boardErrorRedirect(w, r, eventID, "board_form_error")
 			return
 		}
@@ -442,7 +446,6 @@ func boardResendManageHandler(cfg *Config, client *DansalClient, i18n *I18n) htt
 			http.Redirect(w, r, "/board?resend=1", http.StatusSeeOther)
 			return
 		case formGuardBadToken:
-			log.Printf("dansal-web: FORM_TOKEN_REJECT ip_hash=%s path=%s", hashIP(ip), r.URL.Path)
 			http.Redirect(w, r, "/board", http.StatusSeeOther)
 			return
 		}
@@ -530,7 +533,6 @@ func boardRenewRequestHandler(cfg *Config, client *DansalClient) http.HandlerFun
 			http.Redirect(w, r, "/board?renew=1", http.StatusSeeOther)
 			return
 		case formGuardBadToken:
-			log.Printf("dansal-web: FORM_TOKEN_REJECT ip_hash=%s path=%s", hashIP(ip), r.URL.Path)
 			http.Redirect(w, r, "/board", http.StatusSeeOther)
 			return
 		}

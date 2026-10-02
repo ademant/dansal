@@ -12,10 +12,20 @@ import (
 // message and error_id when available, using the same mechanism as
 // redirectBoardError.
 func redirectBookingError(w http.ResponseWriter, r *http.Request, eventID int, err error) {
+	redirectBookingErrorKey(w, r, eventID, "book_error", err)
+}
+
+// redirectBookingErrorKey is redirectBookingError with an explicit message
+// key. #1422: it only logs when there is an API error — every web-side
+// rejection already logged its own reason (PUBLIC_BLOCK / FORM_REJECT), so
+// this no longer adds an uninformative "err=<nil>" line.
+func redirectBookingErrorKey(w http.ResponseWriter, r *http.Request, eventID int, key string, err error) {
 	tok := flashToken(err)
-	log.Printf("dansal-web: booking error error_id=%s path=%s err=%v", tok, r.URL.Path, err)
+	if err != nil {
+		log.Printf("dansal-web: booking error error_id=%s path=%s err=%v", tok, r.URL.Path, err)
+	}
 	flashRedirect(w, r, fmt.Sprintf("/events/%d", eventID), tok, FlashMsg{
-		BookingError:    "book_error",
+		BookingError:    key,
 		BookingErrorMsg: apiErrUserMessage(err),
 		BookingErrorID:  tok,
 	})
@@ -43,12 +53,13 @@ func bookingPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http.Hand
 			flashRedirect(w, r, fmt.Sprintf("/events/%d", eventID), flashToken(nil), FlashMsg{BookingOK: true})
 			return
 		case formGuardBadToken:
-			log.Printf("dansal-web: FORM_TOKEN_REJECT ip_hash=%s path=%s", hashIP(ip), r.URL.Path)
 			redirectBookingError(w, r, eventID, nil)
 			return
 		}
-		if hasPendingSubmission(ip, r.UserAgent()) {
-			redirectBookingError(w, r, eventID, nil)
+		pendingScope := fmt.Sprintf("booking|%d", eventID)
+		if hasPendingSubmission(ip, r.UserAgent(), pendingScope) {
+			logFormReject(r, "PENDING_SUBMISSION", ip, nil)
+			redirectBookingErrorKey(w, r, eventID, "form_error_pending", nil)
 			return
 		}
 
@@ -65,10 +76,10 @@ func bookingPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http.Hand
 		}
 
 		publicThrottle.record(ip + "|" + r.UserAgent())
-		setPendingSubmission(ip, r.UserAgent(), stdFormMaxAge(cfg))
+		setPendingSubmission(ip, r.UserAgent(), pendingScope, stdFormMaxAge(cfg))
 		globalEmailSendRate.record()
 		if err := client.CreateBooking(r.Context(), eventID, fields, cfg.publicBaseURL()); err != nil {
-			clearPendingSubmission(ip, r.UserAgent())
+			clearPendingSubmission(ip, r.UserAgent(), pendingScope)
 			redirectBookingError(w, r, eventID, err)
 			return
 		}

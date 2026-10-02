@@ -195,7 +195,8 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		orgWebsite := strings.TrimSpace(r.FormValue("org_website"))
 		orgContactEmail := strings.TrimSpace(r.FormValue("org_contact_email"))
 		phone2 := r.FormValue(honeypotField)
-		if hasPendingSubmission(ip, r.UserAgent()) {
+		if hasPendingSubmission(ip, r.UserAgent(), "register") {
+			logFormReject(r, "PENDING_SUBMISSION", ip, nil)
 			orgs, info := loadRegisterFormData(r.Context(), client)
 			title := i18n.T(r, "register_title")
 			renderTemplate(w, tmpls.register, tmplData(r, cfg, i18n, title, RegisterPageData{
@@ -232,11 +233,11 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		}
 
 		authThrottle.record(ip)
-		setPendingSubmission(ip, r.UserAgent(), stdFormMaxAge(cfg))
+		setPendingSubmission(ip, r.UserAgent(), "register", stdFormMaxAge(cfg))
 		globalEmailSendRate.record()
 		result, err := client.Register(r.Context(), req, cfg.publicBaseURL(), getBoardSessionToken(r))
 		if err != nil {
-			clearPendingSubmission(ip, r.UserAgent())
+			clearPendingSubmission(ip, r.UserAgent(), "register")
 			log.Printf("dansal-web: register submit failed ip_hash=%s err=%v", hashIP(ip), err)
 			errKey := "register_error_other"
 			switch classifyAPIError(err) {

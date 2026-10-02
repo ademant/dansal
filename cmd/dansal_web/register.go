@@ -53,6 +53,55 @@ type RegisterPageData struct {
 	PrefillOrgWebsite      string
 	PrefillOrgContactEmail string
 	PrefillEmail           string
+	// #1415: the rest of the form, refilled from the POST on an error re-render.
+	PrefillDescription string
+	PrefillChannel     string
+	PrefillTelegram    string
+}
+
+// registerFormPrefill (#1415) returns the page data an error re-render needs
+// so the visitor's input survives: every typed value except the honeypot.
+func registerFormPrefill(r *http.Request) RegisterPageData {
+	orgID, _ := strconv.Atoi(r.FormValue("org_id"))
+	return RegisterPageData{
+		PrefillRegType:         r.FormValue("reg_type"),
+		PrefillOrgID:           orgID,
+		PrefillOrgName:         strings.TrimSpace(r.FormValue("org_name")),
+		PrefillOrgActorName:    strings.TrimSpace(r.FormValue("org_actor_name")),
+		PrefillOrgDescription:  strings.TrimSpace(r.FormValue("org_description")),
+		PrefillOrgWebsite:      strings.TrimSpace(r.FormValue("org_website")),
+		PrefillOrgContactEmail: strings.TrimSpace(r.FormValue("org_contact_email")),
+		PrefillEmail:           strings.TrimSpace(r.FormValue("email")),
+		PrefillDescription:     strings.TrimSpace(r.FormValue("description")),
+		PrefillChannel:         r.FormValue("channel"),
+		PrefillTelegram:        strings.TrimSpace(r.FormValue("telegram")),
+	}
+}
+
+// registerInputError (#1415) is the cheap structural check the client-side
+// JS already does, repeated server-side so a direct POST (bots skip the JS)
+// is rejected before it costs throttle, pending-lock or email budget — and
+// before the API call. Returns the i18n key, or "" when fine. Everything
+// deeper (email domain, Telegram format, does the org exist) stays with the
+// API; the org isn't looked up in the cached org list, which could wrongly
+// reject a just-created org.
+func registerInputError(r *http.Request) string {
+	switch r.FormValue("reg_type") {
+	case "join_org":
+		if id, err := strconv.Atoi(r.FormValue("org_id")); err != nil || id <= 0 {
+			return "register_error_no_org"
+		}
+	case "new_org":
+		if strings.TrimSpace(r.FormValue("org_name")) == "" {
+			return "register_error_no_org_name"
+		}
+	default:
+		return "register_error_other"
+	}
+	if len([]rune(strings.TrimSpace(r.FormValue("description")))) > 500 {
+		return "register_error_other"
+	}
+	return ""
 }
 
 // readRegisterPrefill reads the optional query-param prefill (#1336) shared
@@ -195,16 +244,24 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		orgWebsite := strings.TrimSpace(r.FormValue("org_website"))
 		orgContactEmail := strings.TrimSpace(r.FormValue("org_contact_email"))
 		phone2 := r.FormValue(honeypotField)
+		// renderError re-renders the form with the visitor's input kept (#1415).
+		renderError := func(errKey string) {
+			orgs, info := loadRegisterFormData(r.Context(), client)
+			data := registerFormPrefill(r)
+			data.Orgs = orgs
+			data.Error = errKey
+			data.TelegramAvailable = info.TelegramChannelAvailable
+			data.FormToken = issueFormToken(ip)
+			renderTemplate(w, tmpls.register, tmplData(r, cfg, i18n, i18n.T(r, "register_title"), data))
+		}
 		if hasPendingSubmission(ip, r.UserAgent(), "register") {
 			logFormReject(r, "PENDING_SUBMISSION", ip, nil)
-			orgs, info := loadRegisterFormData(r.Context(), client)
-			title := i18n.T(r, "register_title")
-			renderTemplate(w, tmpls.register, tmplData(r, cfg, i18n, title, RegisterPageData{
-				Orgs:              orgs,
-				Error:             "register_error_pending",
-				TelegramAvailable: info.TelegramChannelAvailable,
-				FormToken:         issueFormToken(ip),
-			}))
+			renderError("register_error_pending")
+			return
+		}
+		if errKey := registerInputError(r); errKey != "" {
+			logFormReject(r, "INVALID_INPUT", ip, nil)
+			renderError(errKey)
 			return
 		}
 
@@ -250,14 +307,7 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 					errKey = "register_error_no_org"
 				}
 			}
-			orgs, info := loadRegisterFormData(r.Context(), client)
-			title := i18n.T(r, "register_title")
-			renderTemplate(w, tmpls.register, tmplData(r, cfg, i18n, title, RegisterPageData{
-				Orgs:              orgs,
-				Error:             errKey,
-				TelegramAvailable: info.TelegramChannelAvailable,
-				FormToken:         issueFormToken(ip),
-			}))
+			renderError(errKey)
 			return
 		}
 

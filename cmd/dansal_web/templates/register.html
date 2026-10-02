@@ -88,9 +88,9 @@
     <div class="form-group">
       <label>{{$.Strings.T "register_channel"}}</label>
       <div class="radio-group">
-        <label><input type="radio" name="channel" value="none" data-on="change" data-fn="updateChannelFields" data-args="[]"> {{$.Strings.T "register_channel_none"}}</label>
-        <label><input type="radio" name="channel" value="email" checked data-on="change" data-fn="updateChannelFields" data-args="[]"> {{$.Strings.T "register_email"}}</label>
-        {{if .TelegramAvailable}}<label><input type="radio" name="channel" value="telegram" data-on="change" data-fn="updateChannelFields" data-args="[]"> Telegram</label>{{end}}
+        <label><input type="radio" name="channel" value="none"{{if eq .PrefillChannel "none"}} checked{{end}} data-on="change" data-fn="updateChannelFields" data-args="[]"> {{$.Strings.T "register_channel_none"}}</label>
+        <label><input type="radio" name="channel" value="email"{{if or (eq .PrefillChannel "") (eq .PrefillChannel "email")}} checked{{end}} data-on="change" data-fn="updateChannelFields" data-args="[]"> {{$.Strings.T "register_email"}}</label>
+        {{if .TelegramAvailable}}<label><input type="radio" name="channel" value="telegram"{{if eq .PrefillChannel "telegram"}} checked{{end}} data-on="change" data-fn="updateChannelFields" data-args="[]"> Telegram</label>{{end}}
       </div>
     </div>
     <div id="email-field" class="form-group">
@@ -100,7 +100,7 @@
     </div>
     <div id="channel-address-field" hidden class="form-group">
       <label for="field-telegram">{{$.Strings.T "register_channel_address"}}</label>
-      <input type="text" id="field-telegram" name="telegram" autocomplete="off" class="form-input">
+      <input type="text" id="field-telegram" name="telegram" autocomplete="off" class="form-input" value="{{.PrefillTelegram}}">
     </div>
     <div id="anon-hint" hidden class="form-hint anon-notice">{{$.Strings.T "register_anon_cookie_hint"}}</div>
 
@@ -108,7 +108,7 @@
 
     <div class="form-group">
       <label for="field-description">{{$.Strings.T "register_description_label"}}</label>
-      <textarea id="field-description" name="description" rows="3" class="form-input" maxlength="500" placeholder="{{$.Strings.T "register_description_placeholder"}}"></textarea>
+      <textarea id="field-description" name="description" rows="3" class="form-input" maxlength="500" placeholder="{{$.Strings.T "register_description_placeholder"}}">{{.PrefillDescription}}</textarea>
       <p class="form-hint">{{$.Strings.T "register_description_hint"}}</p>
     </div>
 

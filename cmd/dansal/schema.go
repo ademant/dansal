@@ -92,3 +92,48 @@ func optionsSchema[T any](w http.ResponseWriter, r *http.Request) {
 	var zero T
 	writeSchema(w, zero)
 }
+
+// SchemaRoute is one entry of the schema registry (#1383): a write route
+// path, the write methods it accepts, and the Go type of its JSON request
+// body. registerSchemaRoutes serves an OPTIONS responder for every entry.
+// The registry — not per-route registration lines — is the single source of
+// "which write routes are schema-discoverable": the coverage test reads it
+// (Go's ServeMux can't enumerate its patterns), and an OpenAPI emitter could
+// read it later without rework, though none exists (#1383 scope decision).
+type SchemaRoute struct {
+	Path    string
+	Methods []string
+	Request reflect.Type
+}
+
+// writeSchemaRoutes is the schema registry. A new write route either gets an
+// entry here or a documented exemption (writeSchemaExemptions in
+// schema_coverage_test.go) — the coverage test fails otherwise.
+var writeSchemaRoutes = []SchemaRoute{
+	{"/api/v1/events", []string{http.MethodPost}, reflect.TypeFor[EventWriteRequest]()},
+	{"/api/v1/events/{id}", []string{http.MethodPut, http.MethodPatch}, reflect.TypeFor[EventWriteRequest]()},
+	{"/api/v1/events/{id}/contact-posts", []string{http.MethodPost}, reflect.TypeFor[ContactPostCreateRequest]()},
+	{"/api/v1/events/{id}/duplicate-resolve", []string{http.MethodPost}, reflect.TypeFor[DuplicateResolveRequest]()},
+	{"/api/v1/events/{id}/location", []string{http.MethodPut}, reflect.TypeFor[EventLocationRefRequest]()},
+	{"/api/v1/events/{id}/organization", []string{http.MethodPut}, reflect.TypeFor[EventOrganizationRefRequest]()},
+	{"/api/v1/contact-posts/{id}", []string{http.MethodPut, http.MethodPatch}, reflect.TypeFor[ContactPostWriteRequest]()},
+	{"/api/v1/locations", []string{http.MethodPost}, reflect.TypeFor[LocationCreateRequest]()},
+	{"/api/v1/locations/{id}", []string{http.MethodPut, http.MethodPatch}, reflect.TypeFor[LocationCreateRequest]()},
+	{"/api/v1/musicians", []string{http.MethodPost}, reflect.TypeFor[MusicianCreateRequest]()},
+	{"/api/v1/musicians/{id}", []string{http.MethodPut, http.MethodPatch}, reflect.TypeFor[MusicianCreateRequest]()},
+	{"/api/v1/instructors", []string{http.MethodPost}, reflect.TypeFor[InstructorRequest]()},
+	{"/api/v1/instructors/{id}", []string{http.MethodPut, http.MethodPatch}, reflect.TypeFor[InstructorRequest]()},
+	{"/api/v1/fetchurl", []string{http.MethodPost}, reflect.TypeFor[FetchURLRequest]()},
+	{"/api/v1/fetchurl/{id}", []string{http.MethodPatch}, reflect.TypeFor[FetchSourcePatchRequest]()},
+}
+
+// registerSchemaRoutes serves the OPTIONS schema responder for every
+// registry entry.
+func registerSchemaRoutes(mux *http.ServeMux) {
+	for _, sr := range writeSchemaRoutes {
+		zero := reflect.Zero(sr.Request).Interface()
+		mux.HandleFunc("OPTIONS "+sr.Path, func(w http.ResponseWriter, r *http.Request) {
+			writeSchema(w, zero)
+		})
+	}
+}

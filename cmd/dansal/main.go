@@ -4549,6 +4549,9 @@ func main() {
 	initWebAuthn()
 
 	smux := http.NewServeMux()
+	// OPTIONS schema responders for every schema-discoverable write route
+	// come from the registry in schema.go (#1383).
+	registerSchemaRoutes(smux)
 
 	// auth wraps a handler with TokenMiddleware (requires valid session token).
 	auth := func(h http.HandlerFunc) http.Handler { return TokenMiddleware(http.HandlerFunc(h)) }
@@ -4624,7 +4627,6 @@ func main() {
 	smux.HandleFunc("GET /api/v1/contact-posts", listAllContactPosts)
 	smux.HandleFunc("GET /api/v1/events/{id}/contact-posts", listContactPosts)
 	smux.Handle("POST /api/v1/events/{id}/contact-posts", optAuth(http.HandlerFunc(createContactPost)))
-	smux.HandleFunc("OPTIONS /api/v1/events/{id}/contact-posts", optionsSchema[ContactPostCreateRequest])
 	smux.HandleFunc("GET /api/v1/contact-posts/manage/{token}", getContactPostByToken)
 	smux.HandleFunc("POST /api/v1/contact-posts/resend-manage", resendContactManage)
 	smux.HandleFunc("POST /api/v1/board-sessions", createBoardSessionHandler)
@@ -4642,7 +4644,6 @@ func main() {
 	smux.HandleFunc("DELETE /api/v1/contact-posts/{id}/images/{img_id}", deleteContactPostImage)
 	smux.HandleFunc("PUT /api/v1/contact-posts/{id}", putContactPost)
 	smux.HandleFunc("PATCH /api/v1/contact-posts/{id}", updateContactPost)
-	smux.HandleFunc("OPTIONS /api/v1/contact-posts/{id}", optionsSchema[ContactPostWriteRequest])
 	smux.HandleFunc("DELETE /api/v1/contact-posts/token/{token}", deleteContactPostByManageToken)
 	smux.Handle("POST /api/v1/contact-posts/{id}/contact", optAuth(http.HandlerFunc(contactPoster)))
 	smux.HandleFunc("GET /api/v1/contact-requests/verify/{token}", verifyContactRequest)
@@ -4711,8 +4712,6 @@ func main() {
 	smux.Handle("POST /api/v1/events", auth(accountMutationLimit(createEvent)))
 	smux.Handle("PUT /api/v1/events/{id}", auth(accountMutationLimit(updateEvent)))
 	smux.Handle("PATCH /api/v1/events/{id}", auth(accountMutationLimit(patchEvent)))
-	smux.HandleFunc("OPTIONS /api/v1/events", optionsSchema[EventWriteRequest])
-	smux.HandleFunc("OPTIONS /api/v1/events/{id}", optionsSchema[EventWriteRequest])
 	smux.Handle("POST /api/v1/events/{id}/publish", auth(publishEvent))
 	smux.Handle("POST /api/v1/events/{id}/cancel", auth(cancelEvent))
 	smux.Handle("POST /api/v1/events/{id}/clone", auth(cloneEvent))
@@ -4724,7 +4723,6 @@ func main() {
 	smux.Handle("DELETE /api/v1/events/{id}", auth(deleteEvent))
 	smux.Handle("GET /api/v1/events/{id}/duplicate-check", auth(http.HandlerFunc(duplicateCheckHandler)))
 	smux.Handle("POST /api/v1/events/{id}/duplicate-resolve", auth(http.HandlerFunc(duplicateResolveHandler)))
-	smux.HandleFunc("OPTIONS /api/v1/events/{id}/duplicate-resolve", optionsSchema[DuplicateResolveRequest])
 	smux.Handle("POST /api/v1/events/{id}/timetable", auth(addTimetableEntries))
 	smux.Handle("POST /api/v1/events/{id}/enrich", auth(http.HandlerFunc(enrichEvent)))
 	smux.Handle("PUT /api/v1/events/{id}/timetable", auth(replaceTimetable))
@@ -4744,10 +4742,8 @@ func main() {
 	smux.Handle("PUT /api/v1/events/{id}/locations/{location_id}", auth(addEventExtraLocation))
 	smux.Handle("DELETE /api/v1/events/{id}/locations/{location_id}", auth(removeEventExtraLocation))
 	smux.Handle("PUT /api/v1/events/{id}/locations/{location_id}/primary", auth(setEventExtraLocationPrimary))
-	smux.HandleFunc("OPTIONS /api/v1/events/{id}/location", optionsSchema[EventLocationRefRequest])
 	smux.Handle("PUT /api/v1/events/{id}/organization", auth(http.HandlerFunc(setEventOrganizationRef)))
 	smux.Handle("DELETE /api/v1/events/{id}/organization", auth(http.HandlerFunc(unsetEventOrganizationRef)))
-	smux.HandleFunc("OPTIONS /api/v1/events/{id}/organization", optionsSchema[EventOrganizationRefRequest])
 	smux.Handle("PUT /api/v1/events/{id}/musicians/{musician_id}", auth(http.HandlerFunc(addEventJoinRow("musician_id", "musicians", "Musician", "event_musicians"))))
 	smux.Handle("DELETE /api/v1/events/{id}/musicians/{musician_id}", auth(http.HandlerFunc(removeEventJoinRow("musician_id", "event_musicians"))))
 	smux.Handle("PUT /api/v1/events/{id}/instructors/{instructor_id}", auth(http.HandlerFunc(addEventJoinRow("instructor_id", "instructors", "Instructor", "event_instructors"))))
@@ -4769,8 +4765,6 @@ func main() {
 	smux.Handle("DELETE /api/v1/locations/{id}/site-plan", auth(deleteLocationSitePlan))
 	smux.HandleFunc("GET /api/v1/location-images/{id}", getLocationImage)
 	smux.Handle("DELETE /api/v1/locations/{id}", auth(deleteLocation))
-	smux.HandleFunc("OPTIONS /api/v1/locations", optionsSchema[LocationCreateRequest])
-	smux.HandleFunc("OPTIONS /api/v1/locations/{id}", optionsSchema[LocationCreateRequest])
 
 	// Dance endpoints (protected writes)
 	smux.Handle("POST /api/v1/dances", auth(createDance))
@@ -4782,16 +4776,12 @@ func main() {
 	smux.Handle("PUT /api/v1/musicians/{id}", auth(accountMutationLimit(updateMusician)))
 	smux.Handle("PATCH /api/v1/musicians/{id}", auth(accountMutationLimit(patchMusician)))
 	smux.Handle("DELETE /api/v1/musicians/{id}", auth(deleteMusician))
-	smux.HandleFunc("OPTIONS /api/v1/musicians", optionsSchema[MusicianCreateRequest])
-	smux.HandleFunc("OPTIONS /api/v1/musicians/{id}", optionsSchema[MusicianCreateRequest])
 
 	// Instructor endpoints
 	smux.Handle("POST /api/v1/instructors", auth(accountMutationLimit(createInstructor)))
 	smux.Handle("PUT /api/v1/instructors/{id}", auth(accountMutationLimit(updateInstructor)))
 	smux.Handle("PATCH /api/v1/instructors/{id}", auth(accountMutationLimit(patchInstructor)))
 	smux.Handle("DELETE /api/v1/instructors/{id}", auth(deleteInstructor))
-	smux.HandleFunc("OPTIONS /api/v1/instructors", optionsSchema[InstructorRequest])
-	smux.HandleFunc("OPTIONS /api/v1/instructors/{id}", optionsSchema[InstructorRequest])
 	smux.Handle("PUT /api/v1/events/{id}/instructors", auth(setEventInstructors))
 
 	// Protected image writes
@@ -4880,8 +4870,6 @@ func main() {
 	// the anonymous event-suggestion endpoints above.
 	smux.HandleFunc("POST /api/v1/fetchurl/suggest-preview", fetchSuggestPreviewHandler)
 	smux.HandleFunc("POST /api/v1/fetchurl/suggest", fetchSuggestHandler)
-	smux.HandleFunc("OPTIONS /api/v1/fetchurl", optionsSchema[FetchURLRequest])
-	smux.HandleFunc("OPTIONS /api/v1/fetchurl/{id}", optionsSchema[FetchSourcePatchRequest])
 	smux.Handle("POST /api/v1/fetchurl/bulk-delete", auth(bulkDeleteFetchSources))
 	smux.Handle("POST /api/v1/fetchurl/bulk-fetch", auth(bulkFetchURLsByIDs))
 	smux.Handle("POST /api/v1/fetchurl/bulk-assign-org", auth(bulkAssignFetchSourceOrg))

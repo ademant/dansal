@@ -3449,7 +3449,9 @@ func getEventsByTownICS(w http.ResponseWriter, r *http.Request) {
 // paths manually before they reach the mux.
 func icsRouter(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet || !strings.HasSuffix(r.URL.Path, ".ics") {
+		// HEAD too (#1383): the mux has no pattern for these paths, so a HEAD
+		// falling through 404'd while the GET worked.
+		if (r.Method != http.MethodGet && r.Method != http.MethodHead) || !strings.HasSuffix(r.URL.Path, ".ics") {
 			next.ServeHTTP(w, r)
 			return
 		}

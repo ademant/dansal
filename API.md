@@ -177,6 +177,7 @@ OPTIONS /api/v1/events/{id}/contact-posts
 OPTIONS /api/v1/contact-posts/{id}
 OPTIONS /api/v1/events/{id}/location
 OPTIONS /api/v1/events/{id}/organization
+OPTIONS /api/v1/events/{id}/duplicate-resolve
 ```
 
 Public — no auth required, since this describes shape, not data. Response shape:
@@ -194,7 +195,11 @@ Public — no auth required, since this describes shape, not data. Response shap
 
 `required` is true when the field has no JSON `omitempty` tag. `enum` is present only on fields with a closed vocabulary. Not available for users, organizations, API keys, or publishers — those are account/credential-provisioning endpoints that stay admin-driven rather than a self-service integration target.
 
-**Enforcement.** The `OPTIONS`/schema-discovery reach of every write route is enforced by `TestWriteRoutesHaveSchemaDiscovery` in `cmd/dansal/phase21_schema_coverage_test.go`: each registered `POST`/`PUT`/`PATCH` path must either have an `OPTIONS` responder on the same path or a documented entry in `writeSchemaExemptions` in that file (see the map's comments for the per-family reasons). The test also fails on stale or redundant exemption entries, so removing a responder or retiring a route surfaces immediately rather than silently. HEAD is served on every GET route by the Go `http.ServeMux` (a `GET /path` pattern also matches HEAD, with the body suppressed); `TestHeadMatchesEveryGetRoute` pins that behaviour.
+**Registry.** The schema-discoverable routes are one declarative table, `writeSchemaRoutes` in `cmd/dansal/schema.go` (path, accepted write methods, Go request type); `registerSchemaRoutes` serves the `OPTIONS` responder for every entry. It is the single list of what's discoverable — and could feed an OpenAPI emitter later, although none is planned (see #1383's scope decision: `API.md` stays the reference of record).
+
+**Enforcement.** `TestWriteRoutesHaveSchemaDiscovery` in `cmd/dansal/schema_coverage_test.go`: each registered `POST`/`PUT`/`PATCH` path must either have a registry entry (whose methods must match the registered ones) or a documented entry in `writeSchemaExemptions` in that file (see the map's comments for the per-family reasons). It also fails on stale or redundant exemptions and on `OPTIONS` routes registered by hand outside the registry, so a new write route without schema discovery fails the build unless it is deliberately exempted.
+
+**HEAD** is served on every GET route: the Go `http.ServeMux` matches a `GET /path` pattern for HEAD too and suppresses the body (`TestHeadMatchesEveryGetRoute`); the `.ics` feed paths, which are dispatched by hand because the mux can't express `{id}.ics`, accept HEAD as well (`TestICSRouterServesHead`).
 
 ## Authentication Endpoints
 

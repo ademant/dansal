@@ -1,173 +1,5 @@
 {{template "base" .}}
-{{define "content"}}
-<h1>{{.Strings.T "events_title"}}</h1>
-
-{{with .Data}}
-{{$orgMap := .OrgMap}}
-
-{{/* #1298/#1299: webmin-editable introductory paragraph. Collapsed by
-     default via native <details> — a real disclosure widget, not
-     display:none, so the text stays in the raw HTML for any crawler that
-     doesn't even run JS, while the homepage itself stays visually minimal.
-     No JS/ARIA wiring needed: <details> already has correct built-in
-     semantics every screen reader understands. Absent entirely if
-     home_intro somehow resolves empty (shouldn't happen — HomeIntro always
-     falls back to the shipped default in Go — but the page must still
-     render fine if it ever does). */}}
-{{with .HomeIntro}}
-<details class="home-intro">
-  <summary>{{$.Strings.T "index_about_summary"}}</summary>
-  <p>{{.}}</p>
-</details>
-{{end}}
-
-<!-- Leaflet CSS loads non-blocking via dansalLeafletCss() at map init (#1215) -->
-<!-- Filters -->
-<p class="travel-notice">{{$.Strings.T "index_travel_notice"}}</p>
-<div class="type-selector">
-  {{range homeGroups $.Strings $.Data.TagMap}}
-  <button type="button" class="type-btn type-active" data-type="{{.Key}}">{{.Emoji}} {{.Label}}</button>
-  {{end}}
-</div>
-
-<!-- Map -->
-{{/* #1299: the same events already render as accessible text further down
-     this page (the weekly table / future list), so the map is a
-     supplementary visual view, not the only way to reach that information.
-     aria-hidden removes the non-operable widget from the accessibility tree
-     entirely; zoomControl:false (in the JS below) keeps its only focusable
-     control from staying reachable via Tab once hidden from that tree —
-     aria-hidden alone doesn't affect tab order. Sighted/mouse users see and
-     use the map exactly as before. */}}
-<div id="map-container" aria-hidden="true"></div>
-<div class="map-toolbar">
-  <button type="button" id="map-locate-btn">{{$.Strings.T "map_locate"}}</button>
-  <span id="map-geo-hint" class="geo-hint" hidden aria-live="polite">{{$.Strings.T "js_geo_denied"}}</span>
-  <span id="map-no-coords" hidden>{{$.Strings.T "map_no_coords"}}</span>
-  <span id="f-info" class="filter-info" aria-live="polite" style="margin-left:auto"></span>
-</div>
-
-<!-- Week view + mini-cal in a shared card so the selection link is obvious -->
-<div id="week-outer">
-  <div id="week-main"></div>
-  <div id="week-mini-cal"></div>
-</div>
-
-<div id="mobile-mode-bar" class="mobile-mode-bar">
-  <button type="button" id="mobile-show-all" class="mobile-mode-btn">{{$.Strings.T "table_mode_all"}} →</button>
-  <button type="button" id="mobile-show-week" class="mobile-mode-btn" hidden>← {{$.Strings.T "table_mode_week"}}</button>
-</div>
-
-<!-- Mobile week-selector popup -->
-<dialog id="wp-dialog" class="wp-dialog">
-  <div class="wp-title" id="wp-title"></div>
-  <div class="wp-weekdays" id="wp-weekdays"></div>
-  <div class="wp-viewport" id="wp-viewport">
-    <div class="wp-list" id="wp-list"></div>
-    <div class="wp-center-frame"></div>
-  </div>
-  <div class="wp-actions">
-    <button type="button" id="wp-cancel"></button>
-    <button type="button" id="wp-select" class="wp-select"></button>
-  </div>
-</dialog>
-
-<hr class="week-divider">
-
-<!-- Table header: search link + week/all toggle + add past events -->
-<div class="search-trigger-bar">
-  <a href="/search" class="search-events-btn">🔍 {{$.Strings.T "search_events_btn"}}</a>
-  <div class="tmt" id="tmt">
-    <button type="button" class="tmt-btn tmt-active" id="tmt-week">{{$.Strings.T "table_mode_week"}}</button>
-    <button type="button" class="tmt-btn" id="tmt-all">{{$.Strings.T "table_mode_all"}}</button>
-  </div>
-  {{/* #1339: only meaningful while viewing the current week (a past week
-       already shows everything unconditionally) -- but stays visible rather
-       than disabled outside that context, since its checked state must
-       survive week navigation either way. */}}
-  <label class="add-past-events-lbl">
-    <input type="checkbox" id="add-past-events-cb">
-    {{$.Strings.T "index_add_past_events"}}
-  </label>
-</div>
-
-<!-- Event table -->
-<div class="table-wrap">
-<table class="event-table" id="event-table" aria-label="{{$.Strings.T "events_title"}}">
-  <thead>
-    <tr>
-      <th class="col-time">{{$.Strings.T "col_time"}}</th>
-      <th>{{$.Strings.T "col_title"}}</th>
-      <th>{{$.Strings.T "col_location"}}</th>
-      <th class="col-type">{{$.Strings.T "col_type"}}</th>
-      <th class="col-attr">{{$.Strings.T "col_attr"}}</th>
-    </tr>
-  </thead>
-  <tbody id="event-tbody">
-  {{range .Events}}
-  {{template "event-row" (dict "Event" . "OrgMap" $orgMap "TagMap" $.Data.TagMap "Strings" $.Strings)}}
-  {{end}}
-  {{$homeGroups := homeGroups $.Strings $.Data.TagMap}}
-  {{range $.Data.FederatedEvents}}
-  <tr class="event-row federated-event"
-      data-date="{{isoDate .StartTime}}"
-      data-end-date="{{isoEndDate .StartTime .EndTime}}"
-      data-title="{{.Name}}"
-      data-location="{{.LocationName}}"
-      data-country=""
-      {{range $homeGroups}}data-{{.Key}}="0" {{end -}}
-      data-organizer=""
-      data-tags=""
-      data-id="{{.ID}}"
-      data-href="/federated-events/{{.ID}}"
-      data-start="{{.StartTime}}"
-      data-town=""
-      data-availability="">
-    <td class="col-time">{{isoTime .StartTime}}</td>
-    <td>
-      <a href="/federated-events/{{.ID}}">{{.Name}}</a>
-      <span class="fed-source">↗ {{sourceDomain .ActorID}}</span>
-    </td>
-    <td class="col-venue">{{.LocationName}}</td>
-    <td class="col-type"></td>
-    <td class="col-attr"></td>
-  </tr>
-  {{end}}
-  </tbody>
-</table>
-</div>
-
-<div id="event-tiles"></div>
-
-<div class="pagination-bar" id="pagination-bar">
-  <span id="page-info"></span>
-  <button type="button" id="load-more">{{$.Strings.T "load_more"}}</button>
-</div>
-
-<p id="empty-state" class="empty-state" hidden>
-  {{$.Strings.T "no_events_found"}}
-  <button type="button" id="clear-filters-empty">{{$.Strings.T "clear_filters"}}</button>
-</p>
-
-<script type="application/json" id="events-geo">{{eventsGeoJSON .Events}}</script>
-<!-- #1220: external map overlay (e.g. folkbalbende.be) — pins dansal
-     doesn't own, cached server-side, never imported. "[]" when unconfigured. -->
-<script type="application/json" id="events-geo-external">{{.ExternalOverlayJSON}}</script>
-
-<div class="feed-section">
-  <strong>{{$.Strings.T "feed_subscribe"}}:</strong>
-  <a href="/feed/events.ical" class="feed-link">iCal</a>
-  <a href="/feed/events.rss"  class="feed-link">RSS</a>
-  <a href="/feed/events.json" class="feed-link">JSON</a>
-  <span class="feed-hint"> &mdash; {{$.Strings.T "feed_hint_types"}}:
-    <a href="/feed/ball/events.ical"     class="feed-link">{{$.Strings.T "filter_type_ball"}} iCal</a>
-    <a href="/feed/workshop/events.ical" class="feed-link">{{$.Strings.T "filter_type_workshop"}} iCal</a>
-    <a href="/feed/festival/events.ical" class="feed-link">Festival iCal</a>
-  </span>
-</div>
-
-{{end}}
-
+{{define "head_styles"}}
 <style>
 .feed-section{margin-top:1.5rem;font-size:.85rem;color:var(--fg-muted)}
 .feed-link{display:inline-block;margin-left:.3rem;padding:.15rem .5rem;border:1px solid var(--border-mid);border-radius:3px;font-size:.8rem;color:var(--fg-dim);text-decoration:none}
@@ -342,6 +174,15 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 .wp-actions .wp-select{background:var(--link);border-color:var(--link);color:#fff;font-weight:600}
 @media(max-width:640px){
   #map-container{height:280px}
+  .home-mapweek{display:flex;flex-direction:column}
+  .home-mapweek #week-outer{order:1}
+  .home-mapweek .mobile-mode-bar{order:2}
+  .home-mapweek #map-container{order:3;margin-top:.75rem}
+  .home-mapweek .map-toolbar{order:4}
+  /* The week list is rendered (and later re-rendered, longer) by JS; let it
+     reserve the rest of the screen so the bar and map below start out of
+     view and its growth can't push visible content (CLS 0.11 otherwise). */
+  .home-mapweek #week-outer{min-height:60svh}
   #week-mini-cal{display:none}
   .week-nav{display:none}
   .leaflet-popup-close-button{width:28px!important;height:28px!important;font-size:20px!important;line-height:28px!important;top:4px!important;right:4px!important}
@@ -354,6 +195,181 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   .mobile-mode-bar{display:flex;justify-content:center;padding:.4rem 0}
 }
 </style>
+{{end}}
+{{define "content"}}
+<h1>{{.Strings.T "events_title"}}</h1>
+
+{{with .Data}}
+{{$orgMap := .OrgMap}}
+
+{{/* #1298/#1299: webmin-editable introductory paragraph. Collapsed by
+     default via native <details> — a real disclosure widget, not
+     display:none, so the text stays in the raw HTML for any crawler that
+     doesn't even run JS, while the homepage itself stays visually minimal.
+     No JS/ARIA wiring needed: <details> already has correct built-in
+     semantics every screen reader understands. Absent entirely if
+     home_intro somehow resolves empty (shouldn't happen — HomeIntro always
+     falls back to the shipped default in Go — but the page must still
+     render fine if it ever does). */}}
+{{with .HomeIntro}}
+<details class="home-intro">
+  <summary>{{$.Strings.T "index_about_summary"}}</summary>
+  <p>{{.}}</p>
+</details>
+{{end}}
+
+<!-- Leaflet CSS loads non-blocking via dansalLeafletCss() at map init (#1215) -->
+<!-- Filters -->
+<p class="travel-notice">{{$.Strings.T "index_travel_notice"}}</p>
+<div class="type-selector">
+  {{range homeGroups $.Strings $.Data.TagMap}}
+  <button type="button" class="type-btn type-active" data-type="{{.Key}}">{{.Emoji}} {{.Label}}</button>
+  {{end}}
+</div>
+
+<!-- Map -->
+{{/* #1299: the same events already render as accessible text further down
+     this page (the weekly table / future list), so the map is a
+     supplementary visual view, not the only way to reach that information.
+     aria-hidden removes the non-operable widget from the accessibility tree
+     entirely; zoomControl:false (in the JS below) keeps its only focusable
+     control from staying reachable via Tab once hidden from that tree —
+     aria-hidden alone doesn't affect tab order. Sighted/mouse users see and
+     use the map exactly as before. */}}
+{{/* #1358: map + week view share a wrapper so phones can show the week
+     list first and the map below it (CSS order, mobile only) — otherwise the
+     map's tiles were the largest element on screen and the LCP (~3 s). */}}
+<div class="home-mapweek">
+<div id="map-container" aria-hidden="true"></div>
+<div class="map-toolbar">
+  <button type="button" id="map-locate-btn">{{$.Strings.T "map_locate"}}</button>
+  <span id="map-geo-hint" class="geo-hint" hidden aria-live="polite">{{$.Strings.T "js_geo_denied"}}</span>
+  <span id="map-no-coords" hidden>{{$.Strings.T "map_no_coords"}}</span>
+  <span id="f-info" class="filter-info" aria-live="polite" style="margin-left:auto"></span>
+</div>
+
+<!-- Week view + mini-cal in a shared card so the selection link is obvious -->
+<div id="week-outer">
+  <div id="week-main"></div>
+  <div id="week-mini-cal"></div>
+</div>
+
+<div id="mobile-mode-bar" class="mobile-mode-bar">
+  <button type="button" id="mobile-show-all" class="mobile-mode-btn">{{$.Strings.T "table_mode_all"}} →</button>
+  <button type="button" id="mobile-show-week" class="mobile-mode-btn" hidden>← {{$.Strings.T "table_mode_week"}}</button>
+</div>
+</div>
+
+<!-- Mobile week-selector popup -->
+<dialog id="wp-dialog" class="wp-dialog">
+  <div class="wp-title" id="wp-title"></div>
+  <div class="wp-weekdays" id="wp-weekdays"></div>
+  <div class="wp-viewport" id="wp-viewport">
+    <div class="wp-list" id="wp-list"></div>
+    <div class="wp-center-frame"></div>
+  </div>
+  <div class="wp-actions">
+    <button type="button" id="wp-cancel"></button>
+    <button type="button" id="wp-select" class="wp-select"></button>
+  </div>
+</dialog>
+
+<hr class="week-divider">
+
+<!-- Table header: search link + week/all toggle + add past events -->
+<div class="search-trigger-bar">
+  <a href="/search" class="search-events-btn">🔍 {{$.Strings.T "search_events_btn"}}</a>
+  <div class="tmt" id="tmt">
+    <button type="button" class="tmt-btn tmt-active" id="tmt-week">{{$.Strings.T "table_mode_week"}}</button>
+    <button type="button" class="tmt-btn" id="tmt-all">{{$.Strings.T "table_mode_all"}}</button>
+  </div>
+  {{/* #1339: only meaningful while viewing the current week (a past week
+       already shows everything unconditionally) -- but stays visible rather
+       than disabled outside that context, since its checked state must
+       survive week navigation either way. */}}
+  <label class="add-past-events-lbl">
+    <input type="checkbox" id="add-past-events-cb">
+    {{$.Strings.T "index_add_past_events"}}
+  </label>
+</div>
+
+<!-- Event table -->
+<div class="table-wrap">
+<table class="event-table" id="event-table" aria-label="{{$.Strings.T "events_title"}}">
+  <thead>
+    <tr>
+      <th class="col-time">{{$.Strings.T "col_time"}}</th>
+      <th>{{$.Strings.T "col_title"}}</th>
+      <th>{{$.Strings.T "col_location"}}</th>
+      <th class="col-type">{{$.Strings.T "col_type"}}</th>
+      <th class="col-attr">{{$.Strings.T "col_attr"}}</th>
+    </tr>
+  </thead>
+  <tbody id="event-tbody">
+  {{range .Events}}
+  {{template "event-row" (dict "Event" . "OrgMap" $orgMap "TagMap" $.Data.TagMap "Strings" $.Strings)}}
+  {{end}}
+  {{$homeGroups := homeGroups $.Strings $.Data.TagMap}}
+  {{range $.Data.FederatedEvents}}
+  <tr class="event-row federated-event"
+      data-date="{{isoDate .StartTime}}"
+      data-end-date="{{isoEndDate .StartTime .EndTime}}"
+      data-title="{{.Name}}"
+      data-location="{{.LocationName}}"
+      data-country=""
+      {{range $homeGroups}}data-{{.Key}}="0" {{end -}}
+      data-organizer=""
+      data-tags=""
+      data-id="{{.ID}}"
+      data-href="/federated-events/{{.ID}}"
+      data-start="{{.StartTime}}"
+      data-town=""
+      data-availability="">
+    <td class="col-time">{{isoTime .StartTime}}</td>
+    <td>
+      <a href="/federated-events/{{.ID}}">{{.Name}}</a>
+      <span class="fed-source">↗ {{sourceDomain .ActorID}}</span>
+    </td>
+    <td class="col-venue">{{.LocationName}}</td>
+    <td class="col-type"></td>
+    <td class="col-attr"></td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+
+<div id="event-tiles"></div>
+
+<div class="pagination-bar" id="pagination-bar">
+  <span id="page-info"></span>
+  <button type="button" id="load-more">{{$.Strings.T "load_more"}}</button>
+</div>
+
+<p id="empty-state" class="empty-state" hidden>
+  {{$.Strings.T "no_events_found"}}
+  <button type="button" id="clear-filters-empty">{{$.Strings.T "clear_filters"}}</button>
+</p>
+
+<script type="application/json" id="events-geo">{{eventsGeoJSON .Events}}</script>
+<!-- #1220: external map overlay (e.g. folkbalbende.be) — pins dansal
+     doesn't own, cached server-side, never imported. "[]" when unconfigured. -->
+<script type="application/json" id="events-geo-external">{{.ExternalOverlayJSON}}</script>
+
+<div class="feed-section">
+  <strong>{{$.Strings.T "feed_subscribe"}}:</strong>
+  <a href="/feed/events.ical" class="feed-link">iCal</a>
+  <a href="/feed/events.rss"  class="feed-link">RSS</a>
+  <a href="/feed/events.json" class="feed-link">JSON</a>
+  <span class="feed-hint"> &mdash; {{$.Strings.T "feed_hint_types"}}:
+    <a href="/feed/ball/events.ical"     class="feed-link">{{$.Strings.T "filter_type_ball"}} iCal</a>
+    <a href="/feed/workshop/events.ical" class="feed-link">{{$.Strings.T "filter_type_workshop"}} iCal</a>
+    <a href="/feed/festival/events.ical" class="feed-link">Festival iCal</a>
+  </span>
+</div>
+
+{{end}}
+
 
 <!-- defer (#1130): these are the last elements on the page, so deferring the
      two external tags below doesn't change execution order — it just lets

@@ -30,6 +30,7 @@
  */
 import { test, expect } from "@playwright/test";
 import { clearMailbox, waitForManageToken } from "../../helpers/mailbox";
+import { skipWithoutMailbox } from "../../helpers/mailguard";
 import { getTokenFromCookie } from "../../helpers/seed";
 
 const WEB_BASE = process.env.BASE_URL ?? "http://localhost:8080";
@@ -265,6 +266,7 @@ test("suggest-wizard: full lifecycle (A→C→B→D→approve)", async ({
   page,
   browser,
 }) => {
+  skipWithoutMailbox(); // #1423
   // ── Skip guard ──────────────────────────────────────────────────────────
   // The suggest page returns 404 when SMTP / sendmail / Telegram is not
   // configured in web.yaml — skip gracefully in that case.

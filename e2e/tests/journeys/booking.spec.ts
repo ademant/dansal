@@ -8,6 +8,11 @@ const API_BASE = process.env.API_URL ?? "http://localhost:8000";
 let seed: SeedResult;
 
 test.describe("Booking flow", () => {
+  // #1423: a unique User-Agent per run, so a re-run within the pending-
+  // submission window (keyed on IP + UA) isn't rejected as a resubmission —
+  // dedup can hand the seed back the same event id as an earlier run.
+  test.use({ userAgent: `Mozilla/5.0 (E2E booking test ${Date.now()})` });
+
   test.beforeAll(async ({ browser }) => {
     const context = await browser.newContext({ storageState: AUTH_FILE });
     const setupPage = await context.newPage();

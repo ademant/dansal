@@ -1,5 +1,5 @@
 import { execSync } from "child_process";
-import { Browser, BrowserContext, Page } from "@playwright/test";
+import { APIResponse, Browser, BrowserContext, Page } from "@playwright/test";
 import {
   ADMIN,
   EDITOR,
@@ -231,13 +231,24 @@ export async function apiPost(
     },
     data: JSON.stringify(body),
   });
-  return resp.json();
+  return jsonOrThrow(resp, "POST", path);
 }
 
 export async function apiGet(page: Page, path: string): Promise<any> {
   const resp = await page.request.fetch(`${API_BASE}${path}`, {
     method: "GET",
   });
+  return jsonOrThrow(resp, "GET", path);
+}
+
+// jsonOrThrow (#1423): a rejected seed call (e.g. 429 from the per-account
+// mutation limit) used to surface later as an unrelated
+// "Cannot read properties of undefined" — fail right here with the reason.
+async function jsonOrThrow(resp: APIResponse, method: string, path: string): Promise<any> {
+  if (!resp.ok()) {
+    const body = (await resp.text().catch(() => "")).slice(0, 500);
+    throw new Error(`${method} ${path} → ${resp.status()}: ${body}`);
+  }
   return resp.json();
 }
 

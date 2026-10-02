@@ -31,7 +31,7 @@ const (
 	tagsTTL      = 5 * time.Minute
 	musiciansTTL = 30 * time.Second
 	locationsTTL = 30 * time.Second
-	eventsTTL    = 30 * time.Second
+	eventsTTL    = 2 * time.Second // #1423: burst guard only — GetEvents revalidates via ETag (304 ≈ 5 ms), so changes made outside dansal-web show within seconds
 
 	// maxAPIErrorBody caps how much of an API error response apiErr and
 	// apiErrorMessage read before giving up — enough for a JSON error payload.

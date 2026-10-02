@@ -19,6 +19,7 @@
 import { test, expect } from "@playwright/test";
 import { fullSeed, SeedResult, getTokenFromCookie, loginViaApi } from "../../helpers/seed";
 import { clearMailbox, waitForVerifyToken } from "../../helpers/mailbox";
+import { skipWithoutMailbox } from "../../helpers/mailguard";
 import { AUTH_FILE } from "../../helpers/auth";
 
 const WEB_BASE = process.env.BASE_URL ?? "http://localhost:8080";
@@ -42,6 +43,7 @@ test.describe("Invitation-link registration", () => {
     page,
     browser,
   }) => {
+    skipWithoutMailbox(); // #1423
     const adminToken = await getTokenFromCookie(page);
 
     // ── Admin creates a plain (no preset email), org-linked invite ──────────

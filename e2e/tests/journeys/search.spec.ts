@@ -56,10 +56,20 @@ function isoDateTime(d: Date, hour: number): string {
 
 // ── Page helpers ──────────────────────────────────────────────────────────────
 
+// showMonthOf steps the open calendar back or forward until iso's day cell
+// is in the grid (#1423).
+async function showMonthOf(page: Page, iso: string): Promise<void> {
+  for (let i = 0; i < 36; i++) {
+    if (await page.locator(`#sf-cal-grid td[data-iso="${iso}"]`).count()) return;
+    const first = await page.locator("#sf-cal-grid td[data-iso]").first().getAttribute("data-iso");
+    await page.click(first && iso < first ? "#sf-cal-prev" : "#sf-cal-next");
+  }
+}
+
 /**
  * Open the date-range calendar popup and pick two dates by clicking their
- * grid cells.  Navigates forward month by month until each cell is visible
- * (max 4 advances).  Waits for the /search/results fetch triggered by the
+ * grid cells, stepping the calendar to each date's month first (see
+ * showMonthOf).  Waits for the /search/results fetch triggered by the
  * second click.
  */
 async function setSearchDates(page: Page, from: Date, to: Date): Promise<void> {
@@ -68,11 +78,11 @@ async function setSearchDates(page: Page, from: Date, to: Date): Promise<void> {
 
   await page.click("#sf-date-btn");
 
-  // Navigate to from-date's month
-  for (let i = 0; i < 4; i++) {
-    if (await page.locator(`#sf-cal-grid td[data-iso="${fromIso}"]`).count()) break;
-    await page.click("#sf-cal-next");
-  }
+  // Navigate to from-date's month. #1423: the calendar opens on the month of
+  // the *previous* selection (or today), and dates can be far out (200+ days)
+  // — so step back or forward until the target day is shown, comparing it
+  // with the first day currently in the grid (capped against endless loops).
+  await showMonthOf(page, fromIso);
   await page.click(`#sf-cal-grid td[data-iso="${fromIso}"]`);
 
   // After the first click the calendar re-renders with pendingStart set
@@ -84,10 +94,7 @@ async function setSearchDates(page: Page, from: Date, to: Date): Promise<void> {
   await Promise.all([
     page.waitForResponse((r) => r.url().includes("/search/results")),
     (async () => {
-      for (let i = 0; i < 4; i++) {
-        if (await page.locator(`#sf-cal-grid td[data-iso="${toIso}"]`).count()) break;
-        await page.click("#sf-cal-next");
-      }
+      await showMonthOf(page, toIso);
       await page.click(`#sf-cal-grid td[data-iso="${toIso}"]`);
     })(),
   ]);

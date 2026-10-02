@@ -85,6 +85,10 @@ test.describe("WCAG 2.1 AA accessibility sweep", () => {
   });
 
   test.describe("public routes", () => {
+    // #1423: as an anonymous visitor — with the admin storageState /login
+    // redirected to the dashboard and was never actually checked.
+    test.use({ storageState: { cookies: [], origins: [] } });
+
     test("index (/)", async ({ page, metrics }) => {
       await runAxe(page, "/", "index", allowlist);
       await metrics.collect("a11y_public_index");

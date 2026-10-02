@@ -21,6 +21,7 @@
  */
 import { test, expect } from "@playwright/test";
 import { clearMailbox, waitForBoardManageToken } from "../../helpers/mailbox";
+import { skipWithoutMailbox } from "../../helpers/mailguard";
 import { fullSeed, SeedResult } from "../../helpers/seed";
 import { AUTH_FILE } from "../../helpers/auth";
 import { makeImage } from "../../helpers/images";
@@ -48,6 +49,7 @@ test.describe("Bulletin board", () => {
     page,
     browser,
   }) => {
+    skipWithoutMailbox(); // #1423
     const eventId = seed.eventIds[0];
     clearMailbox();
 

@@ -17,6 +17,7 @@ import { test, expect } from "@playwright/test";
 import { MAGIC_USER } from "../../fixtures/data";
 import { createUser, loginViaApi } from "../../helpers/seed";
 import { clearMailbox, waitForMagicLoginToken, waitForVerifyToken } from "../../helpers/mailbox";
+import { skipWithoutMailbox } from "../../helpers/mailguard";
 
 const WEB_BASE = process.env.BASE_URL ?? "http://localhost:8080";
 const API_BASE = process.env.API_URL ?? "http://localhost:8000";
@@ -28,6 +29,7 @@ function extractHidden(html: string, name: string): string {
 }
 
 test("magic link: request, receive by email, log in, then can't replay", async ({ browser }) => {
+  skipWithoutMailbox(); // #1423
   const userId = createUser(MAGIC_USER.email, MAGIC_USER.password, "user");
   clearMailbox();
 

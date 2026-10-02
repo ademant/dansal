@@ -50,6 +50,10 @@ jobs:
           # the packaging default of 100/min is exhausted mid-run (#1345).
           sed -i 's/^  rate_limit: 100$/  rate_limit: 1000/' /etc/dansal/e2e/config.yaml
           grep -q '^  rate_limit: 1000$' /etc/dansal/e2e/config.yaml
+          # Seeding alone exceeds the default 30 creates/updates per minute
+          # per account (#1423) — same value the dev e2e target uses.
+          sed -i 's/^  account_mutation_rate_limit: 0$/  account_mutation_rate_limit: 600/' /etc/dansal/e2e/config.yaml
+          grep -q '^  account_mutation_rate_limit: 600$' /etc/dansal/e2e/config.yaml
           sed -i 's/listen: :8080/listen: :18080/' /etc/dansal/e2e/web.yaml
           sed -i 's/listen: :8090/listen: :18090/' /etc/dansal/e2e/webmin.yaml
           ./dansal --config /etc/dansal/e2e/config.yaml &
@@ -121,6 +125,10 @@ jobs:
           # the packaging default of 100/min is exhausted mid-run (#1345).
           sed -i 's/^  rate_limit: 100$/  rate_limit: 1000/' /etc/dansal/e2e/config.yaml
           grep -q '^  rate_limit: 1000$' /etc/dansal/e2e/config.yaml
+          # Seeding alone exceeds the default 30 creates/updates per minute
+          # per account (#1423) — same value the dev e2e target uses.
+          sed -i 's/^  account_mutation_rate_limit: 0$/  account_mutation_rate_limit: 600/' /etc/dansal/e2e/config.yaml
+          grep -q '^  account_mutation_rate_limit: 600$' /etc/dansal/e2e/config.yaml
           sed -i 's/listen: :8080/listen: :18080/' /etc/dansal/e2e/web.yaml
           sed -i 's/listen: :8090/listen: :18090/' /etc/dansal/e2e/webmin.yaml
           ./dansal --config /etc/dansal/e2e/config.yaml &

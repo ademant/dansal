@@ -74,7 +74,12 @@
 .fest-year-current{font-size:1.3rem;font-weight:700}
 #map-container{height:360px;border-radius:6px;overflow:hidden;border:1px solid var(--border);margin-bottom:1.25rem}
 .fest-folded-heading{margin-top:1.5rem;color:var(--fg-2);font-size:1.05rem}
-table.fest-folded{opacity:.75}
+/* #1426: no opacity here — fading the whole table pushed links and type
+   badges below WCAG AA contrast (3.2–4.1:1). The section is set apart by its
+   heading, a soft background and a dashed border instead; only the secondary
+   columns are muted (all ≥ 4.9:1 in light and dark). */
+table.fest-folded{background:var(--bg-subtle);border:1px dashed var(--border-mid);border-radius:6px}
+table.fest-folded .col-time,table.fest-folded .col-venue{color:var(--fg-muted)}
 .empty-state{color:var(--fg-muted);padding:1rem;text-align:center}
 </style>
 

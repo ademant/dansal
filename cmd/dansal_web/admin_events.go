@@ -1399,6 +1399,11 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			// Need all events (published + unpublished) to find pending edits.
 			params.Set("include_past", "true")
 		}
+		if filterFlagged {
+			// #1427: filtered server-side so the page limit can't drop
+			// flagged events; the in-memory filter below stays as a guard.
+			params.Set("needs_duplicate_review", "true")
+		}
 		if filterFlagged && !includePast {
 			params.Set("include_past", "true")
 		}

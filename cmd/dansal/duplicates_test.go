@@ -119,3 +119,41 @@ func TestDuplicateResolveFlow(t *testing.T) {
 		t.Errorf("publisher: %d, want 403", rec.Code)
 	}
 }
+
+// The admin list filters flagged events server-side (before LIMIT), so a page
+// full of older events can't hide them (#1427 e2e finding).
+func TestListEventsNeedsDuplicateReviewFilter(t *testing.T) {
+	old := db
+	defer func() { db = old }()
+	conn, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "calendar.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	db = conn
+	if err := createTables(); err != nil {
+		t.Fatal(err)
+	}
+	migrateDB()
+	start := time.Now().Add(-48 * time.Hour).Unix()
+	for i := 1; i <= 5; i++ { // older, unflagged
+		db.Exec(`INSERT INTO events (id, title, description, start_time, end_time, is_published) VALUES (?, ?, '', ?, ?, 1)`, i, "old", start+int64(i), start+int64(i)+3600)
+	}
+	future := time.Now().Add(72 * time.Hour).Unix()
+	db.Exec(`INSERT INTO events (id, title, description, start_time, end_time, is_published, needs_duplicate_review) VALUES (9, 'flagged', '', ?, ?, 1, 1)`, future, future+3600)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/events?include_past=true&needs_duplicate_review=true&limit=2", nil)
+	req.Header.Set("X-User-ID", "1")
+	req.Header.Set("X-User-Role", RoleAdmin)
+	rec := httptest.NewRecorder()
+	getEvents(rec, req)
+	var got []struct {
+		ID int `json:"id"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v; body=%s", err, rec.Body.String())
+	}
+	if len(got) != 1 || got[0].ID != 9 {
+		t.Errorf("flagged filter returned %+v, want only event 9", got)
+	}
+}

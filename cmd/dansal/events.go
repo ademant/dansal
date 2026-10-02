@@ -1762,6 +1762,13 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 		case "true":
 			where += " AND e.email_verified = 1"
 		}
+		// #1427: the admin "possible duplicates" view filtered in memory after
+		// fetching at most one page (oldest first with include_past), so on an
+		// instance with more events than that page, flagged future events
+		// never showed up. Filter here, before LIMIT.
+		if r.URL.Query().Get("needs_duplicate_review") == "true" {
+			where += " AND e.needs_duplicate_review = 1"
+		}
 	}
 
 	if !isAuthorizedAdmin {

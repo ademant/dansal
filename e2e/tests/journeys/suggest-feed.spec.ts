@@ -223,15 +223,18 @@ test.describe("Suggest a feed (#1333)", () => {
       ).toBeTruthy();
       expect(createdSource.organization_id).toBe(orgId);
 
-      const eventsResp = await page.request.fetch(
-        `${API_BASE}/api/v1/events?limit=1000&include_past=true&organization_id=${orgId}`,
-        { headers: { Authorization: `Bearer ${adminToken}` } }
-      );
-      const events = await eventsResp.json();
+      // Asserted on the source's own fetch result, not on the org's event
+      // count: the feed always carries the same events, and on a long-lived
+      // target (dev) earlier runs already imported them, so dedup (UID/URL)
+      // updates those rows instead of creating new ones in this run's org.
       expect(
-        Array.isArray(events) && events.length > 0,
+        createdSource.last_fetched_at,
         "approval must trigger a real, immediate import of the feed's events"
-      ).toBe(true);
+      ).toBeTruthy();
+      expect(
+        Number(createdSource.last_result),
+        `the immediate import must have read events (last_result=${createdSource.last_result})`
+      ).toBeGreaterThan(0);
     } finally {
       await anonCtx.close();
     }

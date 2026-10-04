@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -13,12 +14,20 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ademant/dansal/internal/places"
 )
 
 // Online city fallback for /search's town filter (#977): when a visitor
 // types a place that has no events (and so no match against the DB's known
-// towns), this endpoint geocodes it via Nominatim so the radius filter can
-// still be used, exactly like the existing "Locate me" flow.
+// towns), this endpoint finds it so the radius filter can still be used,
+// exactly like the existing "Locate me" flow.
+//
+// While typing it answers from the local GeoNames place table only (#1429):
+// prefix plus typo-tolerant match in SQLite, for the countries configured in
+// webmin. Nominatim is asked only when the visitor presses Enter (full=1)
+// and the place table has nothing — its usage policy forbids autocomplete,
+// and it doesn't match partial words anyway.
 
 // geocodeCacheTTL is how long a cached Nominatim result is served without
 // re-fetching. City coordinates are effectively static, so this is generous;
@@ -47,10 +56,15 @@ var nominatimBaseURL = "https://nominatim.openstreetmap.org"
 // geocodeResult is the trimmed shape sent to the browser — just enough to
 // label a suggestion and drive the radius filter.
 type geocodeResult struct {
-	Name string  `json:"name"`
-	Lat  float64 `json:"lat"`
-	Lng  float64 `json:"lng"`
+	Name   string  `json:"name"`
+	Region string  `json:"region,omitempty"` // state, to tell same-named places apart
+	Lat    float64 `json:"lat"`
+	Lng    float64 `json:"lng"`
+	Source string  `json:"src,omitempty"` // "geonames" for place-table hits (attribution)
 }
+
+// geocodePlaceLimit is how many place-table suggestions are returned.
+const geocodePlaceLimit = 8
 
 // nominatimItem mirrors the subset of Nominatim's /search response used here.
 type nominatimItem struct {
@@ -75,9 +89,31 @@ func geocodeHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 			http.Error(w, "q must be at least 3 characters", http.StatusBadRequest)
 			return
 		}
-		cacheKey := strings.ToLower(q)
+		full := r.URL.Query().Get("full") == "1"
 
 		w.Header().Set("Content-Type", "application/json")
+		if siteCfg != nil {
+			if countries := siteCfg.PlaceCountries(); len(countries) > 0 {
+				found, err := places.Search(db, countries, q, geocodePlaceLimit)
+				if err != nil {
+					log.Printf("geocode: place search: %v", err)
+				}
+				if len(found) > 0 {
+					out := make([]geocodeResult, 0, len(found))
+					for _, p := range found {
+						out = append(out, geocodeResult{Name: p.Name, Region: p.Region, Lat: p.Lat, Lng: p.Lng, Source: "geonames"})
+					}
+					json.NewEncoder(w).Encode(out)
+					return
+				}
+			}
+		}
+		if !full {
+			w.Write([]byte("[]"))
+			return
+		}
+
+		cacheKey := strings.ToLower(q)
 		if cached, ok := getGeocodeCache(db, cacheKey, geocodeCacheTTL); ok {
 			w.Write([]byte(cached))
 			return

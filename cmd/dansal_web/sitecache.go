@@ -11,6 +11,8 @@ import (
 
 	"github.com/ademant/dansal/internal/webcommon"
 	"gopkg.in/yaml.v2"
+
+	"github.com/ademant/dansal/internal/places"
 )
 
 // siteSettingsCache reads contact, site_name and impressum_* from web.db at
@@ -27,6 +29,7 @@ type siteSettingsCache struct {
 	impressum            map[string]string
 	indexNowKey          string
 	holidayCountry       string
+	placeCountries       []string // #1429: countries whose GeoNames places feed the city type-ahead
 	rescheduledBadgeDays int
 	defaultDanceIDs      []int
 	bannerAIGenerated    bool
@@ -50,6 +53,7 @@ func (c *siteSettingsCache) load() {
 	siteName := getSiteSetting(c.db, "site_name")
 	indexNowKey := getSiteSetting(c.db, "indexnow_key")
 	holidayCountry := getSiteSetting(c.db, "holiday_country")
+	placeCountries := places.ParseCountries(getSiteSetting(c.db, "place_countries"))
 	rescheduledBadgeDays := 7
 	if v := getSiteSetting(c.db, "rescheduled_badge_days"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
@@ -82,6 +86,7 @@ func (c *siteSettingsCache) load() {
 		defaultDanceIDs, bannerAIGenerated, logoAIGenerated,
 		dateFormat, timeFormatSite, tileToken, sameAs, homeIntro,
 		descBall, descWorkshop, descFestival, time.Now()
+	c.placeCountries = placeCountries
 	c.mu.Unlock()
 }
 
@@ -173,6 +178,15 @@ func (c *siteSettingsCache) IndexNowKey() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.indexNowKey
+}
+
+// PlaceCountries lists the countries configured for the city type-ahead's
+// local place table (#1429); empty means none.
+func (c *siteSettingsCache) PlaceCountries() []string {
+	c.ensure()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.placeCountries
 }
 
 func (c *siteSettingsCache) HolidayCountry() string {

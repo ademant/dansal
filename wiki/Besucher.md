@@ -30,7 +30,7 @@ Jede Veranstaltungsseite kann folgende Infos enthalten:
 
 ### Veranstaltungen filtern
 - **Nach Datum**: Wochenkalender oder die Liste kommender Veranstaltungen nutzen
-- **Nach Ort**: Karte zoomen/verschieben oder nach Stadt filtern
+- **Nach Ort**: Karte zoomen/verschieben oder nach Stadt filtern. Auf der Suchseite (`/search`) schlägt das Feld **Ort** schon beim Tippen passende Orte vor – auch bei Tippfehlern („Magdeburh“ findet Magdeburg). Orte mit 🌐 haben (noch) keine Veranstaltungen; wählst du einen davon, zeigt die Suche Veranstaltungen im gewählten Umkreis. Findet sich nichts, drücke **Enter**, um den vollständigen Namen online nachschlagen zu lassen.
 - **Nach Typ**: Filter nach Ball, Workshop, Festival usw.
 
 ## 🏛️ Organisationen entdecken

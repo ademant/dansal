@@ -17,6 +17,8 @@ import (
 
 	"github.com/ademant/dansal/internal/webcommon"
 	_ "github.com/mattn/go-sqlite3"
+
+	"github.com/ademant/dansal/internal/places"
 )
 
 var siteConfigLangs = []string{"de", "en", "fr", "nl", "it", "es", "br"}
@@ -264,6 +266,8 @@ type siteConfigData struct {
 	ImpressumTexts       map[string]string
 	ImpressumLangs       []string
 	HolidayCountry       string
+	PlaceCountries       string                // #1429: countries for the city type-ahead's place table
+	PlaceImports         []places.ImportStatus // #1429: import state per country
 	IndexNowKey          string
 	RescheduledBadgeDays string
 	DateFormat           string // "" locale-based, "de" DD.MM.YYYY
@@ -320,6 +324,10 @@ func siteConfigPageHandler(cfg *Config, tmpls *Templates, db *sql.DB) http.Handl
 		data.LogoAIGenerated = getSiteSetting(db, "logo_ai_generated") == "1"
 		data.BannerAIGenerated = getSiteSetting(db, "banner_ai_generated") == "1"
 		data.HolidayCountry = getSiteSetting(db, "holiday_country")
+		data.PlaceCountries = getSiteSetting(db, "place_countries")
+		if err := places.EnsureSchema(db); err == nil {
+			data.PlaceImports, _ = places.Statuses(db)
+		}
 		data.IndexNowKey = getSiteSetting(db, "indexnow_key")
 		if v := getSiteSetting(db, "rescheduled_badge_days"); v != "" {
 			data.RescheduledBadgeDays = v
@@ -398,6 +406,12 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		setSiteSetting(db, "site_name", strings.TrimSpace(r.FormValue("site_name")))
 		setSiteSetting(db, "contact", strings.TrimSpace(r.FormValue("contact")))
 		setSiteSetting(db, "holiday_country", strings.ToUpper(strings.TrimSpace(r.FormValue("holiday_country"))))
+		// #1429: the city type-ahead's countries. Every save syncs the place
+		// table in the background — a no-op unless a country was added
+		// (download + import) or removed (rows deleted).
+		placeCountries := places.ParseCountries(r.FormValue("place_countries"))
+		setSiteSetting(db, "place_countries", strings.Join(placeCountries, ","))
+		startPlaceSync(cfg, db, placeCountries, false)
 		setSiteSetting(db, "indexnow_key", strings.TrimSpace(r.FormValue("indexnow_key")))
 
 		// Date/time notation (validated to known values only).
@@ -525,6 +539,34 @@ func siteConfigRelayRedeliverHandler(cfg *Config) http.HandlerFunc {
 		}
 		resp.Body.Close()
 		http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Re-delivering events to relay followers in the background"), http.StatusSeeOther)
+	}
+}
+
+// placesHTTPClient downloads GeoNames dumps (a few MB per country).
+var placesHTTPClient = &http.Client{Timeout: 10 * time.Minute}
+
+// startPlaceSync runs places.Sync in the background (#1429); a var so tests
+// can observe it without downloading anything.
+var startPlaceSync = func(cfg *Config, db *sql.DB, countries []string, force bool) {
+	go places.Sync(context.Background(), db, placesHTTPClient, cfg.GeoNamesURL, countries, force)
+}
+
+// POST /site-config/places/import — re-import every configured country's
+// place names now (#1429), e.g. after a failed download or to pick up
+// GeoNames updates.
+func siteConfigPlacesImportHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if db == nil {
+			http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Error: web_db_path not configured in webmin.yaml"), http.StatusSeeOther)
+			return
+		}
+		countries := places.ParseCountries(getSiteSetting(db, "place_countries"))
+		if len(countries) == 0 {
+			http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("No countries configured for the city search"), http.StatusSeeOther)
+			return
+		}
+		startPlaceSync(cfg, db, countries, true)
+		http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Re-importing place names for "+strings.Join(countries, ", ")+" in the background — reload this page to see the status"), http.StatusSeeOther)
 	}
 }
 

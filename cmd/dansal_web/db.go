@@ -7,6 +7,8 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
+
+	"github.com/ademant/dansal/internal/places"
 )
 
 func migrationApplied(db *sql.DB, version int) bool {
@@ -328,6 +330,21 @@ CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY);
 				canonical    TEXT    NOT NULL,
 				UNIQUE(country_code, alias)
 			)`)
+		}
+	}
+
+	// Migration v7: places/places_import — GeoNames place names for the
+	// /search city type-ahead (#1429), imported by dansal-webmin.
+	if !migrationApplied(db, 7) {
+		db.Exec(places.Schema)
+		db.Exec("INSERT OR IGNORE INTO schema_migrations VALUES (7)")
+	}
+	// Safety net: ensure the tables exist even if v7 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='places'").Scan(&n)
+		if n == 0 {
+			db.Exec(places.Schema)
 		}
 	}
 

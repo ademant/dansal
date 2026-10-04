@@ -22,7 +22,7 @@
 
   <div class="sf-field sf-town-field">
     <label>{{$.Strings.T "col_location"}}</label>
-    <input type="text" id="sf-town" placeholder="{{$.Strings.T "filter_location_search"}}" autocomplete="off">
+    <input type="text" id="sf-town" placeholder="{{$.Strings.T "filter_location_search"}}" autocomplete="off" data-geo-attrib="{{$.Strings.T "geocode_attribution"}}">
     <div id="sf-town-suggest" class="sf-town-suggest" hidden></div>
   </div>
 
@@ -132,6 +132,9 @@
 .sf-town-suggest{position:absolute;top:100%;left:0;right:0;z-index:10;background:var(--bg-card);border:1px solid var(--border-mid);border-radius:4px;max-height:160px;overflow-y:auto;box-shadow:0 2px 8px rgba(0,0,0,.15)}
 .sf-town-suggest div{padding:.35rem .5rem;cursor:pointer;font-size:.85rem}
 .sf-town-suggest div:hover{background:var(--bg-hover)}
+.sf-town-suggest .geo-region{color:var(--fg-2);font-size:.78rem;margin-left:.35rem;white-space:nowrap}
+.sf-town-suggest div.geo-attrib{font-size:.72rem;color:var(--fg-2);cursor:default;border-top:1px solid var(--border-mid)}
+.sf-town-suggest div.geo-attrib:hover{background:none}
 .sf-geo-row{display:flex;gap:.4rem}
 .sf-geo-btn{padding:.35rem .6rem;border:1px solid var(--link);border-radius:4px;background:var(--bg-card);color:var(--link);cursor:pointer;font-size:.85rem;white-space:nowrap}
 .sf-geo-btn:hover{background:var(--link);color:#fff}
@@ -451,9 +454,11 @@
 
   // ── Town suggest ─────────────────────────────────────────────────────────
   // Local matches (against towns that already have events) are instant.
-  // When there are none and the query is long enough, a debounced online
-  // lookup (#977) geocodes the typed place via /search/geocode so it can
-  // still be used as a radius-search origin, same as "Locate me".
+  // When there are none and the query is long enough, a debounced lookup
+  // (#977) searches /search/geocode so the place can still be used as a
+  // radius-search origin, same as "Locate me". While typing that endpoint
+  // answers from the local GeoNames place table only (#1429, typo-tolerant);
+  // Enter asks again with full=1, which may fall back to Nominatim.
   (function(){
     var input = document.getElementById('sf-town');
     var box = document.getElementById('sf-town-suggest');
@@ -463,6 +468,29 @@
     var GEOCODE_MIN_LEN = 3;
     var GEOCODE_DEBOUNCE_MS = 500;
 
+    function hideBox(){ box.hidden=true; box.innerHTML=''; }
+
+    function lookup(q, full){
+      var myToken = ++geocodeReqToken;
+      box.innerHTML = '<div style="color:#999;padding:.35rem .5rem">…</div>';
+      box.hidden = false;
+      fetch('/search/geocode?q='+encodeURIComponent(q)+(full?'&full=1':''))
+        .then(function(r){ return r.ok ? r.json() : []; })
+        .then(function(results){
+          if(myToken!==geocodeReqToken) return; // input changed since this fired
+          geocodeResults = results || [];
+          if(!geocodeResults.length){ hideBox(); return; }
+          var fromPlaces = false;
+          box.innerHTML = geocodeResults.map(function(res,idx){
+            if(res.src==='geonames') fromPlaces = true;
+            return '<div data-kind="online" data-idx="'+idx+'">🌐 '+escHtml(res.name)+
+              (res.region ? '<span class="geo-region">'+escHtml(res.region)+'</span>' : '')+'</div>';
+          }).join('') + (fromPlaces ? '<div class="geo-attrib">'+escHtml(input.dataset.geoAttrib||'')+'</div>' : '');
+          box.hidden = false;
+        })
+        .catch(function(){ if(myToken===geocodeReqToken) hideBox(); });
+    }
+
     input.addEventListener('input', function(){
       townFilter = this.value.trim();
       geoFilter = null;
@@ -471,34 +499,28 @@
       clearTimeout(geocodeTimer);
       geocodeReqToken++; // invalidate any in-flight online lookup
       var q = townFilter.toLowerCase();
-      if(q.length<2){ box.hidden=true; box.innerHTML=''; render(); return; }
+      if(q.length<2){ hideBox(); render(); return; }
       var matches = allTowns.filter(function(t){ return t.toLowerCase().indexOf(q)>=0; }).slice(0,8);
       box.innerHTML = matches.map(function(t){ return '<div data-kind="local">'+escHtml(t)+'</div>'; }).join('');
       box.hidden = matches.length===0;
       render();
       if(matches.length===0 && townFilter.length>=GEOCODE_MIN_LEN){
-        box.innerHTML = '<div style="color:#999;padding:.35rem .5rem">…</div>';
-        box.hidden = false;
-        var myToken = geocodeReqToken;
         var q2 = townFilter;
-        geocodeTimer = setTimeout(function(){
-          fetch('/search/geocode?q='+encodeURIComponent(q2))
-            .then(function(r){ return r.ok ? r.json() : []; })
-            .then(function(results){
-              if(myToken!==geocodeReqToken) return; // input changed since this fired
-              geocodeResults = results || [];
-              if(!geocodeResults.length){ box.hidden=true; box.innerHTML=''; return; }
-              box.innerHTML = geocodeResults.map(function(res,idx){
-                return '<div data-kind="online" data-idx="'+idx+'">🌐 '+escHtml(res.name)+'</div>';
-              }).join('');
-              box.hidden = false;
-            })
-            .catch(function(){ if(myToken===geocodeReqToken){ box.hidden=true; box.innerHTML=''; } });
-        }, GEOCODE_DEBOUNCE_MS);
+        geocodeTimer = setTimeout(function(){ lookup(q2, false); }, GEOCODE_DEBOUNCE_MS);
       }
     });
+    // Enter: take the first suggestion if there is one, otherwise search the
+    // full name (this is where Nominatim may be asked, never while typing).
+    input.addEventListener('keydown', function(e){
+      if(e.key!=='Enter') return;
+      e.preventDefault();
+      clearTimeout(geocodeTimer);
+      var first = box.hidden ? null : box.querySelector('div[data-kind]');
+      if(first){ first.click(); return; }
+      if(townFilter.length>=GEOCODE_MIN_LEN) lookup(townFilter, true);
+    });
     box.addEventListener('click', function(e){
-      var div = e.target && e.target.tagName==='DIV' ? e.target : null;
+      var div = e.target && e.target.closest ? e.target.closest('div[data-kind]') : null;
       if(!div) return;
       if(div.dataset.kind==='online'){
         var res = geocodeResults[parseInt(div.dataset.idx,10)];

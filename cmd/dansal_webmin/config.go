@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v2"
+
+	"github.com/ademant/dansal/internal/places"
 )
 
 var Version = "dev"
@@ -26,6 +28,7 @@ type Config struct {
 	WebURL                string `yaml:"web_url"`      // internal URL of dansal-web (for relay redeliver)
 	BotStatsDBPath        string `yaml:"bot_stats_db"` // path to bot-stats.db; defaults to /var/lib/dansal/bot-stats.db
 	CertOnly              bool   `yaml:"cert_only"`    // when true, disable password login entirely — mTLS client cert required (#994)
+	GeoNamesURL           string `yaml:"geonames_url"` // #1429: GeoNames dump directory for the city type-ahead's place import; file:// for offline installs
 	ReadHeaderTimeoutSecs int    `yaml:"read_header_timeout_secs"`
 	ReadTimeoutSecs       int    `yaml:"read_timeout_secs"`
 	WriteTimeoutSecs      int    `yaml:"write_timeout_secs"`
@@ -51,6 +54,9 @@ func loadConfigFrom(path string) *Config {
 	applyWebminEnvOverrides(&cfg)
 	if cfg.Listen == "" {
 		cfg.Listen = "127.0.0.1:8090"
+	}
+	if cfg.GeoNamesURL == "" {
+		cfg.GeoNamesURL = places.DefaultBaseURL
 	}
 	if cfg.ReadHeaderTimeoutSecs == 0 {
 		cfg.ReadHeaderTimeoutSecs = 5

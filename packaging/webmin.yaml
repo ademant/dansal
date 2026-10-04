@@ -15,6 +15,13 @@ admin_socket: "/var/lib/dansal/dansal.sock"
 # Path to the dansal-web SQLite database (web.db), used for site-config editing.
 web_db_path: "/var/lib/dansal-web/web.db"
 
+# GeoNames dump directory for the /search city type-ahead's place names
+# (#1429; countries are chosen in Site config). Default: GeoNames itself.
+# For an offline install, download {CC}.zip and admin1CodesASCII.txt from
+# there into a local directory and point this at it, e.g.
+# "file:///var/lib/dansal/geonames/".
+# geonames_url: "https://download.geonames.org/export/dump/"
+
 # Systemd instance name (e.g. dev, prod). Used to resolve monitored unit names
 # like dansal@prod, dansal-fetch@prod.timer, etc. in the dashboard.
 instance: ""

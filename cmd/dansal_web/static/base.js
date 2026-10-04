@@ -258,6 +258,39 @@ function nominatimLang(countryCode){
 var _geoToken = '';
 function setGeoToken(tok){ _geoToken = tok || ''; }
 
+// keepFormTokensFresh (#1211, shared since #1430) keeps the hidden
+// _form_token inputs of a long-open public form valid: every 10 minutes, and
+// once when the tab becomes visible again, it fetches a fresh token for each
+// input (tokens are single-use, so each form needs its own). The timer does
+// nothing while the tab is hidden — forgotten background tabs used to poll
+// for days — and the refresh on return covers the gap. onRefresh(d), if
+// given, receives the first response of each run (e.g. for d.geo_token).
+// Fails soft: on any error the old token stays.
+function keepFormTokensFresh(inputs, onRefresh){
+  inputs = Array.prototype.filter.call(inputs || [], Boolean);
+  if (!inputs.length && !onRefresh) return;
+  var last = 0;
+  function refresh(){
+    if (document.visibilityState === 'hidden') return;
+    var now = Date.now();
+    if (now - last < 10000) return;
+    last = now;
+    var n = Math.max(inputs.length, 1);
+    for (var i = 0; i < n; i++) (function(el, first){
+      fetch('/api-internal/refresh-form-token', {credentials:'same-origin'})
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(d){
+          if (!d) return;
+          if (el && d.token) el.value = d.token;
+          if (first && onRefresh) onRefresh(d);
+        })
+        .catch(function(){});
+    })(inputs[i], i === 0);
+  }
+  document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') refresh(); });
+  setInterval(refresh, 10 * 60 * 1000);
+}
+
 // tzNote (#1392, de-duplicated #1404): builds the "N <fallback label>, N
 // <unparsed label>" warning suffix appended to a fetch-source run toast when
 // a feed carried events with unresolvable TZIDs or events that couldn't be

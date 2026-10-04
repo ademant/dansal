@@ -1454,23 +1454,9 @@ document.querySelectorAll('.board-post-form').forEach(function(form){
 // the geocode search stays token-less (403 for anonymous visitors, #1379).
 document.addEventListener('DOMContentLoaded', function(){
   setGeoToken({{$.Data.GeoToken | jsStr}});
-  var el = document.querySelector('.booking-form input[name="_form_token"]');
-  var last = 0;
-  function refresh(){
-    var now = Date.now();
-    if (now - last < 10000) return;
-    last = now;
-    fetch('/api-internal/refresh-form-token', {credentials:'same-origin'})
-      .then(function(r){ return r.ok ? r.json() : null; })
-      .then(function(d){
-        if (!d) return;
-        if (el && d.token) el.value = d.token;
-        if (d.geo_token) setGeoToken(d.geo_token);
-      })
-      .catch(function(){});
-  }
-  document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') refresh(); });
-  setInterval(refresh, 10 * 60 * 1000);
+  keepFormTokensFresh([document.querySelector('.booking-form input[name="_form_token"]')], function(d){
+    if (d.geo_token) setGeoToken(d.geo_token);
+  });
 });
 </script>
 

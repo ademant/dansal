@@ -185,6 +185,12 @@ func main() {
 		r.HandleFunc("GET /org/{name}/followers", requireAPSignature(cfg, followersHandler(cfg, db)))
 		r.HandleFunc("POST /org/{name}/inbox", inboxHandler(cfg, db, client))
 		r.HandleFunc("POST /inbox", sharedInboxHandler(cfg, db, client))
+		// Gancio's old inboxes (#1432): servers that still have the former
+		// Gancio relay/accounts subscribed keep delivering here. 202 and
+		// drop — a 405/410 is equally permanent for them and unsubscribes
+		// nobody, it just fills the logs.
+		r.HandleFunc("POST /federation/u/{name}/inbox", legacyGancioInboxHandler)
+		r.HandleFunc("POST /federation/inbox", legacyGancioInboxHandler)
 		r.HandleFunc("POST /telegram/webhook", telegramWebhookProxyHandler(cfg))
 
 		// #1374: the API hands out root-relative /api/v1/... image URLs and
@@ -636,6 +642,8 @@ func main() {
 	relayActor, err := ensureRelayActor(db, cfg.RelayActorName)
 	if err != nil {
 		log.Printf("relay actor init: %v", err)
+	} else {
+		setKeyFetchSigner(actorKeyID(cfg, relayActor.OrgSlug), relayActor.PrivateKeyPEM)
 	}
 	go startDelivery(cfg, db, client, relayActor)
 	go startExternalOverlay(cfg, client)

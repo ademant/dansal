@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/yuin/goldmark"
+
+	"github.com/ademant/dansal/internal/netutil"
 )
 
 // safeFedDial resolves the target host and rejects any address that resolves
@@ -44,8 +46,14 @@ func safeFedDial(ctx context.Context, network, addr string) (net.Conn, error) {
 			return nil, fmt.Errorf("safeFedDial: %q resolves to non-routable IP %s", host, a)
 		}
 	}
-	var d net.Dialer
-	return d.DialContext(ctx, network, net.JoinHostPort(resolved[0], port))
+	// Try every checked address in turn (#1432, same fix as the API's #1428):
+	// dialing only resolved[0] — usually IPv6 — failed or hung on hosts with
+	// a broken IPv6 route, including the inbox's sender-key fetches.
+	ips := make([]net.IPAddr, 0, len(resolved))
+	for _, a := range resolved {
+		ips = append(ips, net.IPAddr{IP: net.ParseIP(a)})
+	}
+	return netutil.DialAddrsInTurn(ctx, network, port, ips, (&net.Dialer{}).DialContext)
 }
 
 // fedHTTPClient is used for all outbound ActivityPub requests.
@@ -1376,4 +1384,11 @@ func sendUndoFollow(cfg *Config, actor *ActorRecord, followeeAPID, followeeInbox
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	return postToInbox(ctx, followeeInbox, actorKeyID(cfg, actor.OrgSlug), actor.PrivateKeyPEM, body)
+}
+
+// legacyGancioInboxHandler accepts and discards deliveries to Gancio's old
+// inbox URLs (#1432).
+func legacyGancioInboxHandler(w http.ResponseWriter, r *http.Request) {
+	io.Copy(io.Discard, io.LimitReader(r.Body, maxRemoteJSONBody))
+	w.WriteHeader(http.StatusAccepted)
 }

@@ -17,6 +17,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"sync/atomic"
+
+	"log"
 )
 
 type pubKeyEntry struct {
@@ -24,6 +28,7 @@ type pubKeyEntry struct {
 	owner     string
 	fetchedAt time.Time
 	gone      bool // true when the remote returned 404 or 410 (negative cache entry)
+	denied    bool // true when the remote answered 401/403 to our (signed) fetch (#1432)
 }
 
 var (
@@ -31,6 +36,10 @@ var (
 	pubKeyCacheMu  sync.Mutex
 	pubKeyCacheTTL = 10 * time.Minute
 	negCacheTTL    = 5 * time.Minute // how long to suppress re-fetches for dead actors
+	// deniedCacheTTL suppresses re-fetches of a key whose server refused our
+	// signed fetch with 401/403 (authorized fetch blocking us, suspended
+	// account): every new delivery from that actor used to refetch (#1432).
+	deniedCacheTTL = time.Hour
 )
 
 // errActorGone is returned by fetchActorPublicKey when the remote key endpoint
@@ -60,6 +69,10 @@ func fetchActorPublicKey(ctx context.Context, httpClient *http.Client, keyID str
 			pubKeyCacheMu.Unlock()
 			return "", "", errActorGone{keyID: keyID}
 		}
+		if e.denied && time.Since(e.fetchedAt) < deniedCacheTTL {
+			pubKeyCacheMu.Unlock()
+			return "", "", fmt.Errorf("actor key fetch refused (cached)")
+		}
 		if !e.gone && time.Since(e.fetchedAt) < pubKeyCacheTTL {
 			pubKeyCacheMu.Unlock()
 			return e.pem, e.owner, nil
@@ -69,11 +82,20 @@ func fetchActorPublicKey(ctx context.Context, httpClient *http.Client, keyID str
 
 	// Strip fragment for the HTTP request (fragments are client-side only).
 	u.Fragment = ""
+	ctx, cancel := context.WithTimeout(ctx, keyFetchTimeout)
+	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return "", "", err
 	}
 	req.Header.Set("Accept", "application/activity+json")
+	// Sign the fetch with the instance's relay actor key (#1432): servers
+	// with authorized fetch (secure mode) refuse unsigned GETs with 401.
+	if s := keyFetchSigner.Load(); s != nil {
+		if err := SignGETRequest(req, s.keyID, s.privateKeyPEM); err != nil {
+			log.Printf("sign key fetch: %v", err)
+		}
+	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return "", "", err
@@ -88,6 +110,12 @@ func fetchActorPublicKey(ctx context.Context, httpClient *http.Client, keyID str
 		if resp.StatusCode == http.StatusGone {
 			return "", "", errActorGone{keyID: keyID}
 		}
+		return "", "", fmt.Errorf("actor fetch returned HTTP %d", resp.StatusCode)
+	}
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		pubKeyCacheMu.Lock()
+		pubKeyCache[keyID] = pubKeyEntry{denied: true, fetchedAt: time.Now()}
+		pubKeyCacheMu.Unlock()
 		return "", "", fmt.Errorf("actor fetch returned HTTP %d", resp.StatusCode)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -156,6 +184,48 @@ func parsePublicKey(pemStr string) (*rsa.PublicKey, error) {
 		return nil, fmt.Errorf("not an RSA public key")
 	}
 	return rsaPub, nil
+}
+
+// keyFetchTimeout bounds a sender-key fetch made while the sender waits for
+// our inbox answer; senders give up after ~10 s (499 in nginx) (#1432). A var
+// so tests can shorten it.
+var keyFetchTimeout = 5 * time.Second
+
+// keyFetchSigner is the key fetchActorPublicKey signs its GETs with — the
+// relay actor's, set at startup by setKeyFetchSigner (#1432). nil = unsigned.
+var keyFetchSigner atomic.Pointer[fetchSigner]
+
+type fetchSigner struct{ keyID, privateKeyPEM string }
+
+func setKeyFetchSigner(keyID, privateKeyPEM string) {
+	keyFetchSigner.Store(&fetchSigner{keyID: keyID, privateKeyPEM: privateKeyPEM})
+}
+
+// SignGETRequest signs a body-less request (draft-cavage, rsa-sha256) over
+// (request-target), host and date — what servers with authorized fetch
+// expect on an actor/key fetch. Sets Date and Signature.
+func SignGETRequest(r *http.Request, keyID, privateKeyPEM string) error {
+	privKey, err := parsePrivateKey(privateKeyPEM)
+	if err != nil {
+		return fmt.Errorf("parse private key: %w", err)
+	}
+	date := time.Now().UTC().Format(http.TimeFormat)
+	r.Header.Set("Date", date)
+	host := r.URL.Host
+	if host == "" {
+		host = r.Host
+	}
+	signingString := fmt.Sprintf("(request-target): %s %s\nhost: %s\ndate: %s",
+		strings.ToLower(r.Method), r.URL.RequestURI(), host, date)
+	hashed := sha256.Sum256([]byte(signingString))
+	sig, err := rsa.SignPKCS1v15(rand.Reader, privKey, crypto.SHA256, hashed[:])
+	if err != nil {
+		return fmt.Errorf("sign: %w", err)
+	}
+	r.Header.Set("Signature", fmt.Sprintf(
+		`keyId="%s",algorithm="rsa-sha256",headers="(request-target) host date",signature="%s"`,
+		keyID, base64.StdEncoding.EncodeToString(sig)))
+	return nil
 }
 
 // SignRequest signs an outgoing HTTP POST request using HTTP Signatures (rsa-sha256).

@@ -271,7 +271,7 @@ Full removal of `has_*` from the API and DB is tracked in issue #871 (Layer 1: `
 `cmd/dansal_web/httpsig.go` implements two signature schemes side-by-side:
 
 - **draft-cavage** (current, widely deployed): `Signature:` header, `keyId` param, pseudo-headers `(request-target)` / `host` / `date` / `digest`
-- **RFC 9421** (tracked in issue #1115, not yet implemented): `Signature-Input:` + `Signature:` headers, derived components `@method` / `@target-uri` / `@authority`, body digest via `Content-Digest: sha-256=:<base64>:`, `created` timestamp in signature params
+- **RFC 9421** (#1115, implemented in #1432 — `httpsig_rfc9421.go`): `Signature-Input:` + `Signature:` headers, derived components `@method` / `@target-uri` / `@authority` / `@path` / `@request-target` / `@query`, body digest via `Content-Digest: sha-256=:<base64>:` (or sha-512), `created`/`expires` in the signature params; `rsa-v1_5-sha256` (what Mastodon uses; also the default when `alg` is absent) and `rsa-pss-sha512`. Inbox POSTs must cover `@method`, the target (`@target-uri`, or `@authority` + `@path`/`@request-target`) and `content-digest`; GETs the first two. Verification failures are returned as `rfc9421 (label=… alg=… components=[…]): …` so the log shows what a sender covered
 
 **Rules for any future change to httpsig.go:**
 
@@ -281,12 +281,12 @@ Full removal of `has_*` from the API and DB is tracked in issue #871 (Layer 1: `
 
 3. **`fetchActorPublicKey` is scheme-agnostic.** Both schemes use the same `keyId`/key-URL lookup and the same `pubKeyCache`. Do not fork key fetching per scheme.
 
-4. **Negative cache (`errActorGone`, `negCacheTTL`) applies to both schemes.** A gone actor is gone regardless of which signature scheme the remote used.
+4. **Negative caches apply to both schemes:** 404/410 (`errActorGone`, `negCacheTTL`) and, since #1432, 401/403 to our signed key fetch (`denied`, `deniedCacheTTL` = 1 h). A gone or refusing actor is so regardless of which signature scheme the remote used. Key fetches are capped at `keyFetchTimeout` (5 s) because the sender is waiting on our inbox answer.
 
-5. **`VerifyRequest` is draft-cavage only.** When RFC 9421 is implemented, add a separate `VerifyRequestRFC9421(r, pubKeyPEM, sigInput, sigBytes string) error` rather than extending `VerifyRequest`. The signing-base construction is fundamentally different (`\n`-joined `"name": value` lines, not a joining of header values).
+5. **`VerifyRequest` is draft-cavage only;** RFC 9421 goes through the separate `VerifyRequestRFC9421(r, pubKeyPEM, sigInput, sigBytes string) error`. The signing-base construction is fundamentally different (`\n`-joined `"name": value` lines ending in `"@signature-params"`, not a joining of header values). The structured-field parser (`parseSFDictionary`) keeps each member's raw text, because the `@signature-params` line must reproduce the sender's serialization byte for byte.
 
 6. **`Content-Digest` vs `Digest`.** RFC 9421 uses `Content-Digest: sha-256=:<base64>:` (note the colons around the base64, and a different header name). Draft-cavage uses `Digest: SHA-256=<base64>`. Do not conflate them — check each only on its own path.
 
-7. **Authorized fetch (`requireAPSignature`) covers both schemes.** When RFC 9421 verification is added to `verifyGETRequest`, authorized fetch enforcement is automatically correct — no change needed at the call sites.
+7. **Authorized fetch (`requireAPSignature`) covers both schemes** — `verifyGETRequest` dispatches like `verifyInboxRequest`, so the call sites didn't change.
 
-The trigger for implementing #1115 is a specific remote sender failing inbox verification whose request carries `Signature-Input` but no legacy `Signature` header. Until then, Mastodon sends both schemes simultaneously and dansal verifies the draft-cavage one, so interoperability is complete with all current major implementations.
+Not every Mastodon sends both schemes: newer versions (actor URLs like `/ap/users/…`) delivered RFC 9421 only, which showed up as ~100 `missing keyId in Signature header` rejects a day until #1432. Outgoing requests (deliveries in `SignRequest`, sender-key fetches in `SignGETRequest`, signed with the relay actor key) still use draft-cavage, which every major implementation accepts.

@@ -331,6 +331,14 @@ const inboxDateTolerance = 12 * time.Hour
 // ActivityPub POST: required-header enforcement, Digest validation, Date
 // freshness, key-owner↔actor matching, and RSA signature verification.
 func verifyInboxRequest(ctx context.Context, httpClient *http.Client, r *http.Request, body []byte, actorField string) error {
+	// RFC 9421 requests carry Signature-Input; draft-cavage ones don't
+	// (CLAUDE.md httpsig rule 1).
+	if r.Header.Get("Signature-Input") != "" {
+		if body == nil {
+			body = []byte{}
+		}
+		return verifyRFC9421(ctx, httpClient, r, body, actorField)
+	}
 	sigHeader := r.Header.Get("Signature")
 	if sigHeader == "" {
 		return fmt.Errorf("missing Signature header")
@@ -410,6 +418,9 @@ func verifyInboxRequest(ctx context.Context, httpClient *http.Client, r *http.Re
 // GET requests have no body, so Digest is not required or checked. The
 // signed headers must cover (request-target), host, and date at minimum.
 func verifyGETRequest(ctx context.Context, httpClient *http.Client, r *http.Request) error {
+	if r.Header.Get("Signature-Input") != "" {
+		return verifyRFC9421(ctx, httpClient, r, nil, "")
+	}
 	sigHeader := r.Header.Get("Signature")
 	if sigHeader == "" {
 		return fmt.Errorf("missing Signature header")

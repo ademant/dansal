@@ -21,9 +21,12 @@ func TestSuggestPreviewParsesHTMLEventPage(t *testing.T) {
 	config = &Config{}
 	initSuggestRateLimiters()
 
+	// A date relative to now: the preview skips past events, so a fixed
+	// date turned this test red once it had passed.
+	day := time.Now().AddDate(0, 1, 0).Format("2006-01-02")
 	page := `<!DOCTYPE html><html><head><title>Journée baroque</title>
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"Event",
-"name":"Wirkstatt Journée baroque","startDate":"2026-10-03T10:00:00+02:00","endDate":"2026-10-03T18:00:00+02:00",
+"name":"Wirkstatt Journée baroque","startDate":"` + day + `T10:00:00+02:00","endDate":"` + day + `T18:00:00+02:00",
 "location":{"@type":"Place","name":"Karlsburg Durlach","address":{"@type":"PostalAddress","streetAddress":"Pfinztalstraße 9","postalCode":"76227","addressLocality":"Karlsruhe"}}}</script>
 </head><body>…</body></html>`
 
@@ -44,7 +47,7 @@ func TestSuggestPreviewParsesHTMLEventPage(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &events); err != nil || len(events) != 1 {
 		t.Fatalf("events = %d (%v), body=%s", len(events), err, rec.Body.String())
 	}
-	if !strings.HasPrefix(events[0].StartTime, "2026-10-03") || events[0].Location.Location != "Karlsburg Durlach" {
+	if !strings.HasPrefix(events[0].StartTime, day) || events[0].Location.Location != "Karlsburg Durlach" {
 		t.Errorf("parsed start=%q location=%q", events[0].StartTime, events[0].Location.Location)
 	}
 }

@@ -576,9 +576,12 @@ func feedURL(cfg *Config, path, format string) string {
 	return "https://" + cfg.Domain + path + "/events." + format
 }
 
-// feedRouter is an HTTP middleware that intercepts GET requests whose paths match
-// feed or ICS URL patterns that Go's net/http ServeMux rejects at startup because
-// the wildcard is not the whole path segment (e.g. "{id}.ics", "events.{format}").
+// feedRouter is an HTTP middleware that intercepts GET and HEAD requests whose
+// paths match feed or ICS URL patterns that Go's net/http ServeMux rejects at
+// startup because the wildcard is not the whole path segment (e.g. "{id}.ics",
+// "events.{format}"). HEAD (#1431) runs the same handler — net/http drops the
+// body — since calendar clients, feed readers and link checkers probe with
+// HEAD before subscribing, and a 404 there made the feeds look dead.
 func feedRouter(cfg *Config, db *sql.DB, client *DansalClient) func(http.Handler) http.Handler {
 	icsH := feedEventICSHandler(cfg, client)
 	timetableICSH := feedEventTimetableICSHandler(cfg, client)
@@ -599,7 +602,7 @@ func feedRouter(cfg *Config, db *sql.DB, client *DansalClient) func(http.Handler
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet {
+			if r.Method != http.MethodGet && r.Method != http.MethodHead {
 				next.ServeHTTP(w, r)
 				return
 			}

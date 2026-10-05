@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -264,5 +265,68 @@ func TestFeedRouterTimetableICSPrecedence(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "SUMMARY:Opening bal") {
 		t.Fatalf("expected the timetable VEVENT, got:\n%s", rec.Body.String())
+	}
+}
+
+// TestFeedRouterHeadMatchesGet (#1431): every suffix-routed feed URL answers
+// HEAD with the same status as GET (it used to fall through to the mux and
+// 404), and with no body.
+func TestFeedRouterHeadMatchesGet(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/events/1", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(Event{
+			ID: 1, Title: "Festival", StartTime: "2026-09-15T18:00:00+02:00", IsPublished: true,
+			Timetable: []TimetableEntry{{ID: 10, Title: "Opening bal", StartTime: "18:00", EndTime: "19:00"}},
+		})
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("[]")) })
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	client := &DansalClient{BaseURL: srv.URL, HTTP: srv.Client()}
+	cfg := &Config{Domain: "example.test"}
+	dbConn := initDB(filepath.Join(t.TempDir(), "web.db"))
+	defer dbConn.Close()
+	oldCfg := siteCfg
+	siteCfg = newSiteSettingsCache(dbConn)
+	defer func() { siteCfg = oldCfg }()
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("%s %s fell through to the mux", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusTeapot)
+	})
+	handler := feedRouter(cfg, dbConn, client)(next)
+
+	for _, path := range []string{
+		"/events/1.ics",
+		"/events/1/timetable.ics",
+		"/events/1/timetable.csv",
+		"/events/1/timetable.json",
+		"/feed/events.ics",
+		"/feed/events.rss",
+		"/feed/org/some-org/events.ics",
+		"/feed/musician/some-band/events.ics",
+		"/feed/instructor/1/events.ics",
+		"/feed/location/some-hall/events.ics",
+		"/feed/ball/events.ics",
+	} {
+		get := httptest.NewRecorder()
+		handler.ServeHTTP(get, httptest.NewRequest(http.MethodGet, path, nil))
+		head := httptest.NewRecorder()
+		handler.ServeHTTP(head, httptest.NewRequest(http.MethodHead, path, nil))
+		if head.Code != get.Code {
+			t.Errorf("%s: HEAD %d, GET %d", path, head.Code, get.Code)
+		}
+		if get.Header().Get("Content-Type") != head.Header().Get("Content-Type") {
+			t.Errorf("%s: Content-Type HEAD %q, GET %q", path, head.Header().Get("Content-Type"), get.Header().Get("Content-Type"))
+		}
+		t.Logf("%-40s %d", path, get.Code)
+	}
+	// The cases the issue reported must actually succeed.
+	for _, path := range []string{"/events/1.ics", "/events/1/timetable.ics", "/feed/events.ics"} {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodHead, path, nil))
+		if rec.Code != http.StatusOK {
+			t.Errorf("HEAD %s = %d, want 200", path, rec.Code)
+		}
 	}
 }

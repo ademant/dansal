@@ -15,6 +15,7 @@ Complete documentation for the dansal dance event management system.
 ├── CONTRIBUTING.md             # Contribution guidelines
 ├── CODE_OF_CONDUCT.md          # Community behavior standards
 ├── DOCKER.md                   # Docker deployment guide
+├── COMPLIANCE_AUDIT.md         # GDPR / ePrivacy / DSA compliance audit & gap register
 └── dansal_admin.md             # CLI administration tool reference
 ```
 

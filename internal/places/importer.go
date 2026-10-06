@@ -21,6 +21,18 @@ import (
 // DefaultBaseURL is GeoNames' per-country dump directory.
 const DefaultBaseURL = "https://download.geonames.org/export/dump/"
 
+// ZipBaseURL derives the GeoNames postal-code zip directory (#1459) from the
+// populated-place dump directory: on the real server, export/zip/ is a
+// sibling of export/dump/, so a baseURL ending in ".../dump/" becomes
+// ".../zip/". A baseURL that doesn't end in "dump" (a non-standard mirror,
+// or a file:// fixture) gets "zip/" appended as a subdirectory instead —
+// still a reasonable "next to the dump" convention, just not a literal
+// sibling in that case.
+func ZipBaseURL(baseURL string) string {
+	trimmed := strings.TrimSuffix(strings.TrimRight(baseURL, "/"), "dump")
+	return strings.TrimRight(trimmed, "/") + "/zip/"
+}
+
 // maxDownload caps a single downloaded file.
 const maxDownload = 300 << 20
 
@@ -30,16 +42,17 @@ var skipFeature = map[string]bool{"PPLH": true, "PPLQ": true, "PPLW": true, "PPL
 
 // ImportStatus is one row of places_import.
 type ImportStatus struct {
-	Country    string
-	Status     string // "running", "ok", "error"
-	PlaceCount int
-	ImportedAt time.Time
-	Error      string
+	Country       string
+	Status        string // "running", "ok", "error"
+	PlaceCount    int
+	PostcodeCount int // #1459: 0 when the country has no GeoNames postal-code dump
+	ImportedAt    time.Time
+	Error         string
 }
 
 // Statuses returns the import state of every country that has one.
 func Statuses(db *sql.DB) ([]ImportStatus, error) {
-	rows, err := db.Query("SELECT country, status, place_count, imported_at, error FROM places_import ORDER BY country")
+	rows, err := db.Query("SELECT country, status, place_count, postcode_count, imported_at, error FROM places_import ORDER BY country")
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +61,7 @@ func Statuses(db *sql.DB) ([]ImportStatus, error) {
 	for rows.Next() {
 		var s ImportStatus
 		var at int64
-		if err := rows.Scan(&s.Country, &s.Status, &s.PlaceCount, &at, &s.Error); err != nil {
+		if err := rows.Scan(&s.Country, &s.Status, &s.PlaceCount, &s.PostcodeCount, &at, &s.Error); err != nil {
 			return nil, err
 		}
 		if at > 0 {
@@ -80,6 +93,7 @@ func Sync(ctx context.Context, db *sql.DB, client *http.Client, baseURL string, 
 		for _, s := range old {
 			if !keep[s.Country] {
 				db.Exec("DELETE FROM places WHERE country = ?", s.Country)
+				db.Exec("DELETE FROM postcodes WHERE country = ?", s.Country)
 				db.Exec("DELETE FROM places_import WHERE country = ?", s.Country)
 			}
 		}
@@ -101,23 +115,31 @@ func Sync(ctx context.Context, db *sql.DB, client *http.Client, baseURL string, 
 		log.Printf("places: state names unavailable, importing without them: %v", err)
 	}
 	for _, c := range todo {
-		setStatus(db, c, "running", 0, "")
+		setStatus(db, c, "running", 0, 0, "")
 		n, err := importCountry(ctx, db, client, baseURL, c, admin1)
 		if err != nil {
 			log.Printf("places: import %s: %v", c, err)
-			setStatus(db, c, "error", 0, err.Error())
+			setStatus(db, c, "error", 0, 0, err.Error())
 			continue
 		}
-		log.Printf("places: imported %s: %d places", c, n)
-		setStatus(db, c, "ok", n, "")
+		// #1459: postal codes are best-effort — not every country has a
+		// GeoNames postal-code dump, and a failure here must not undo the
+		// place import that just succeeded.
+		pn, pErr := importPostcodes(ctx, db, client, ZipBaseURL(baseURL), c)
+		if pErr != nil {
+			log.Printf("places: postcode import %s: %v (place import still ok)", c, pErr)
+		}
+		log.Printf("places: imported %s: %d places, %d postcodes", c, n, pn)
+		setStatus(db, c, "ok", n, pn, "")
 	}
 }
 
-func setStatus(db *sql.DB, country, status string, count int, errMsg string) {
+func setStatus(db *sql.DB, country, status string, count, postcodeCount int, errMsg string) {
 	if status == "ok" {
-		db.Exec(`INSERT INTO places_import (country, status, place_count, imported_at, error) VALUES (?, ?, ?, ?, '')
+		db.Exec(`INSERT INTO places_import (country, status, place_count, postcode_count, imported_at, error) VALUES (?, ?, ?, ?, ?, '')
 			ON CONFLICT(country) DO UPDATE SET status=excluded.status, place_count=excluded.place_count,
-			imported_at=excluded.imported_at, error=''`, country, status, count, time.Now().Unix())
+			postcode_count=excluded.postcode_count, imported_at=excluded.imported_at, error=''`,
+			country, status, count, postcodeCount, time.Now().Unix())
 		return
 	}
 	// Keep the previous count/date while running or after a failed re-import:
@@ -169,30 +191,38 @@ func loadAdmin1(ctx context.Context, client *http.Client, baseURL string) (map[s
 	return m, sc.Err()
 }
 
-// importCountry downloads {country}.zip and replaces the country's rows.
-func importCountry(ctx context.Context, db *sql.DB, client *http.Client, baseURL, country string, admin1 map[string]string) (int, error) {
+// downloadCountryTxt downloads {country}.zip from baseURL and returns an
+// open reader for the {country}.txt entry inside it — shared by the
+// populated-place dump (importCountry) and the postal-code dump
+// (importPostcodes, #1459), which are both one zip holding one same-named
+// txt file, just under different directories and with different columns.
+// The caller must Close the returned reader and call cleanup once done.
+func downloadCountryTxt(ctx context.Context, client *http.Client, baseURL, country string) (r io.ReadCloser, cleanup func(), err error) {
+	noop := func() {}
 	rc, err := open(ctx, client, baseURL, country+".zip")
 	if err != nil {
-		return 0, err
+		return nil, noop, err
 	}
 	tmp, err := os.CreateTemp("", "geonames-*.zip")
 	if err != nil {
 		rc.Close()
-		return 0, err
+		return nil, noop, err
 	}
-	defer os.Remove(tmp.Name())
-	defer tmp.Close()
+	cleanup = func() { tmp.Close(); os.Remove(tmp.Name()) }
 	n, err := io.Copy(tmp, io.LimitReader(rc, maxDownload+1))
 	rc.Close()
 	if err != nil {
-		return 0, err
+		cleanup()
+		return nil, noop, err
 	}
 	if n > maxDownload {
-		return 0, fmt.Errorf("%s.zip larger than %d MB", country, maxDownload>>20)
+		cleanup()
+		return nil, noop, fmt.Errorf("%s.zip larger than %d MB", country, maxDownload>>20)
 	}
 	zr, err := zip.NewReader(tmp, n)
 	if err != nil {
-		return 0, err
+		cleanup()
+		return nil, noop, err
 	}
 	var txt *zip.File
 	for _, f := range zr.File {
@@ -201,14 +231,42 @@ func importCountry(ctx context.Context, db *sql.DB, client *http.Client, baseURL
 		}
 	}
 	if txt == nil {
-		return 0, fmt.Errorf("%s.zip has no %s.txt", country, country)
+		cleanup()
+		return nil, noop, fmt.Errorf("%s.zip has no %s.txt", country, country)
 	}
-	r, err := txt.Open()
+	r, err = txt.Open()
+	if err != nil {
+		cleanup()
+		return nil, noop, err
+	}
+	return r, cleanup, nil
+}
+
+// importCountry downloads {country}.zip and replaces the country's rows.
+func importCountry(ctx context.Context, db *sql.DB, client *http.Client, baseURL, country string, admin1 map[string]string) (int, error) {
+	r, cleanup, err := downloadCountryTxt(ctx, client, baseURL, country)
 	if err != nil {
 		return 0, err
 	}
+	defer cleanup()
 	defer r.Close()
 	return load(db, country, r, admin1)
+}
+
+// importPostcodes downloads {country}.zip from zipBaseURL (GeoNames'
+// postal-code export, #1459) and replaces the country's rows in postcodes.
+// Not every country has one — the caller treats a failure as best-effort,
+// not fatal to the place import. Unlike the populated-place dump, the
+// postal-code dump's admin1 column is already a readable name (not a code
+// needing admin1CodesASCII.txt), so no admin1 map is needed here.
+func importPostcodes(ctx context.Context, db *sql.DB, client *http.Client, zipBaseURL, country string) (int, error) {
+	r, cleanup, err := downloadCountryTxt(ctx, client, zipBaseURL, country)
+	if err != nil {
+		return 0, err
+	}
+	defer cleanup()
+	defer r.Close()
+	return loadPostcodes(db, country, r)
 }
 
 // load replaces country's rows with the populated places in r (a GeoNames
@@ -258,6 +316,57 @@ func load(db *sql.DB, country string, r io.Reader, admin1 map[string]string) (in
 	}
 	if count == 0 {
 		return 0, fmt.Errorf("no populated places found for %s", country)
+	}
+	return count, tx.Commit()
+}
+
+// loadPostcodes replaces country's rows in postcodes with the GeoNames
+// postal-code dump in r (#1459): tab-separated, 12 columns — country code,
+// postal code, place name, admin name1, admin code1, admin name2, admin
+// code2, admin name3, admin code3, latitude, longitude, accuracy.
+func loadPostcodes(db *sql.DB, country string, r io.Reader) (int, error) {
+	tx, err := db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec("DELETE FROM postcodes WHERE country = ?", country); err != nil {
+		return 0, err
+	}
+	stmt, err := tx.Prepare(`INSERT OR IGNORE INTO postcodes (country, code, name, admin1, lat, lng) VALUES (?, ?, ?, ?, ?, ?)`)
+	if err != nil {
+		return 0, err
+	}
+	defer stmt.Close()
+
+	count := 0
+	sc := bufio.NewScanner(r)
+	sc.Buffer(make([]byte, 64<<10), 4<<20)
+	for sc.Scan() {
+		f := strings.Split(sc.Text(), "\t")
+		if len(f) < 11 || f[0] != country {
+			continue
+		}
+		lat, err1 := strconv.ParseFloat(f[9], 64)
+		lng, err2 := strconv.ParseFloat(f[10], 64)
+		if err := errors.Join(err1, err2); err != nil {
+			continue
+		}
+		code := strings.ToUpper(strings.TrimSpace(f[1]))
+		name := strings.TrimSpace(f[2])
+		if code == "" || name == "" {
+			continue
+		}
+		if _, err := stmt.Exec(country, code, name, strings.TrimSpace(f[3]), lat, lng); err != nil {
+			return 0, err
+		}
+		count++
+	}
+	if err := sc.Err(); err != nil {
+		return 0, err
+	}
+	if count == 0 {
+		return 0, fmt.Errorf("no postcodes found for %s", country)
 	}
 	return count, tx.Commit()
 }

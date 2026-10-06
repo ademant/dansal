@@ -94,7 +94,17 @@ func geocodeHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		if siteCfg != nil {
 			if countries := siteCfg.PlaceCountries(); len(countries) > 0 {
-				found, err := places.Search(db, countries, q, geocodePlaceLimit)
+				// #1459: a postcode-shaped query ("72108") searches the
+				// postcodes table instead of place names — digits never
+				// prefix-match a town name, so Search would always return
+				// nothing for these.
+				var found []places.Result
+				var err error
+				if places.IsPostcodeQuery(q) {
+					found, err = places.SearchPostcodes(db, countries, q, geocodePlaceLimit)
+				} else {
+					found, err = places.Search(db, countries, q, geocodePlaceLimit)
+				}
 				if err != nil {
 					log.Printf("geocode: place search: %v", err)
 				}
@@ -135,17 +145,31 @@ func geocodeHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 	}
 }
 
-// fetchNominatim queries Nominatim's /search endpoint restricted to
-// settlement-level results (city/town/village) so street addresses and POIs
-// don't clutter city-radius suggestions.
+// fetchNominatim queries Nominatim's /search endpoint. For a postcode-shaped
+// query (#1459) it searches by postalcode (scoped to the configured
+// countries, since Nominatim's postcode index isn't geographically
+// restricted otherwise); for anything else it restricts to settlement-level
+// results (city/town/village) so street addresses and POIs don't clutter
+// city-radius suggestions — postcode results have no featureType to filter
+// on, so the two modes use different parameter sets entirely.
 func fetchNominatim(ctx context.Context, cfg *Config, q string) ([]geocodeResult, error) {
-	body, err := nominatimGet(ctx, cfg, "/search", url.Values{
-		"q":              {q},
+	params := url.Values{
 		"format":         {"json"},
 		"limit":          {"5"},
 		"addressdetails": {"0"},
-		"featureType":    {"settlement"},
-	})
+	}
+	if places.IsPostcodeQuery(q) {
+		params.Set("postalcode", q)
+		if siteCfg != nil {
+			if countries := siteCfg.PlaceCountries(); len(countries) > 0 {
+				params.Set("countrycodes", strings.ToLower(strings.Join(countries, ",")))
+			}
+		}
+	} else {
+		params.Set("q", q)
+		params.Set("featureType", "settlement")
+	}
+	body, err := nominatimGet(ctx, cfg, "/search", params)
 	if err != nil {
 		return nil, err
 	}

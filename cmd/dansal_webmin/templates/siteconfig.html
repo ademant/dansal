@@ -202,16 +202,17 @@
   <div class="form-group">
     <label>Countries <span class="hint">(ISO 3166-1 alpha-2, comma-separated)</span></label>
     <input type="text" name="place_countries" value="{{.PlaceCountries}}" placeholder="{{if .HolidayCountry}}{{.HolidayCountry}}{{else}}DE,AT,CH{{end}}" style="max-width:240px">
-    <div class="hint">Place names of these countries (from <a href="https://www.geonames.org/" target="_blank" rel="noopener">GeoNames</a>, CC BY 4.0) suggest towns while visitors type in the /search city filter, typos included. Saving downloads and imports newly added countries in the background (a few MB each); removing a country deletes its places. Leave blank to disable — then only towns with events are suggested, and other places are looked up on Enter.</div>
+    <div class="hint">Place names and postcodes of these countries (from <a href="https://www.geonames.org/" target="_blank" rel="noopener">GeoNames</a>, CC BY 4.0) suggest towns while visitors type in the /search city filter — place names with typo tolerance, postcodes as an exact prefix match. Saving downloads and imports newly added countries in the background (a few MB each); removing a country deletes its places and postcodes. Not every country has a GeoNames postcode dump — "none" below just means this one doesn't, place search still works. Leave the field blank to disable — then only towns with events are suggested, and other places are looked up on Enter.</div>
   </div>
   {{if .PlaceImports}}
   <table class="places-status">
-    <tr><th>Country</th><th>Status</th><th>Places</th><th>Imported</th></tr>
+    <tr><th>Country</th><th>Status</th><th>Places</th><th>Postcodes</th><th>Imported</th></tr>
     {{range .PlaceImports}}
     <tr>
       <td>{{.Country}}</td>
       <td>{{.Status}}{{with .Error}} <span class="hint" style="color:var(--danger,#c0392b)">— {{.}}</span>{{end}}</td>
       <td>{{if .PlaceCount}}{{.PlaceCount}}{{end}}</td>
+      <td>{{if .PostcodeCount}}{{.PostcodeCount}}{{else}}<span class="hint">none</span>{{end}}</td>
       <td>{{if not .ImportedAt.IsZero}}{{.ImportedAt.Format "2006-01-02 15:04"}}{{end}}</td>
     </tr>
     {{end}}

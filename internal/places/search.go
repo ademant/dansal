@@ -108,6 +108,47 @@ func Search(db *sql.DB, countries []string, q string, limit int) ([]Result, erro
 	return out, nil
 }
 
+// SearchPostcodes returns up to limit postcodes of the given countries whose
+// code starts with q (#1459) — a plain prefix scan, no typo tolerance:
+// postcodes are short enough that a near-enough match would be noise, not
+// help, unlike a misspelled town name. Result.Name is "<code> <place>" (e.g.
+// "72108 Rottenburg am Neckar") so the existing geocodeResult rendering on
+// the /search page needs no changes to show it.
+func SearchPostcodes(db *sql.DB, countries []string, q string, limit int) ([]Result, error) {
+	code := strings.ToUpper(strings.TrimSpace(q))
+	if code == "" || len(countries) == 0 || limit <= 0 {
+		return nil, nil
+	}
+	args := make([]any, 0, len(countries)+3)
+	for _, c := range countries {
+		args = append(args, c)
+	}
+	args = append(args, code, code+"\U0010FFFF", limit)
+	rows, err := db.Query(`SELECT code, name, admin1, country, lat, lng
+		FROM postcodes WHERE country IN (?`+strings.Repeat(",?", len(countries)-1)+`)
+		AND code >= ? AND code < ? ORDER BY code LIMIT ?`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	seen := map[string]bool{}
+	var out []Result
+	for rows.Next() {
+		var code, name, admin1, country string
+		var lat, lng float64
+		if err := rows.Scan(&code, &name, &admin1, &country, &lat, &lng); err != nil {
+			return nil, err
+		}
+		label := code + " " + name
+		if seen[label] {
+			continue
+		}
+		seen[label] = true
+		out = append(out, Result{Name: label, Region: admin1, Country: country, Lat: lat, Lng: lng})
+	}
+	return out, rows.Err()
+}
+
 func keepBest(best map[int64]*Result, r *Result) {
 	if old, ok := best[r.geonameid]; !ok || r.dist < old.dist {
 		best[r.geonameid] = r

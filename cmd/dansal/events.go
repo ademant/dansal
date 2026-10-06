@@ -1855,8 +1855,16 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// #1437: ?order=desc flips to newest-first, for a venue page's "most
+	// recent N past events" (ascending + limit would give the OLDEST N
+	// instead). Defaults to the existing ascending order so every other
+	// caller is unaffected.
+	orderBy := "e.start_time ASC"
+	if r.URL.Query().Get("order") == "desc" {
+		orderBy = "e.start_time DESC"
+	}
 	query := eventListSelect + " " + where
-	applyListPagination(r, "e.start_time ASC", &query, &args)
+	applyListPagination(r, orderBy, &query, &args)
 
 	rows, err := db.Query(query, args...)
 	if err != nil {

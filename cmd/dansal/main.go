@@ -4707,6 +4707,8 @@ func main() {
 	// token is present (e.g. editable flag, unpublished events).
 	smux.HandleFunc("GET /api/v1/vocabulary", getVocabulary)
 	smux.Handle("GET /api/v1/events", optAuth(http.HandlerFunc(getEvents)))
+	// #1436: always public/published-only, so no optAuth wrapper needed.
+	smux.HandleFunc("GET /api/v1/events/nearby-counts", getEventsNearbyCounts)
 	smux.Handle("GET /api/v1/events/{id}", optAuth(http.HandlerFunc(getEvent)))
 	smux.HandleFunc("GET /api/v1/redirects/{entity}/{id}", getEntityRedirect)
 	smux.Handle("GET /api/v1/locations", optAuth(http.HandlerFunc(getLocations)))

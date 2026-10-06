@@ -4,8 +4,15 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 )
+
+// searchRadiiKm are the radius options the search page's own <select
+// id="sf-radius"> offers (cmd/dansal_web/templates/search.html) — must match
+// nearbyCountRadiiKm in cmd/dansal so a venue page's "N events within X km"
+// link (#1436) always carries a radius this page can actually preselect.
+var searchRadiiKm = []int{10, 50, 100, 200, 500}
 
 // searchMaxResults is the threshold past which /search/results asks the user
 // to narrow their filters. It is advisory only: past the threshold the handler
@@ -26,6 +33,37 @@ type SearchData struct {
 	DateTo   string // ISO date, defaults to the end of the current week
 	Dances   []Dance
 	Locs     template.JS // locationsJSON output, for the town-suggest source
+	// #1436: deep-link geo filter from e.g. a venue page's "no upcoming
+	// events, but N within X km" link. Each is "" when not set/invalid —
+	// the page JS only pre-applies the geo filter when Lat/Lng/Radius are
+	// all present, so a partially-malformed link just degrades to a normal
+	// page load instead of filtering on broken data.
+	InitialLat    string
+	InitialLng    string
+	InitialRadius string
+	InitialLabel  string // optional display label for the geo origin (e.g. venue name)
+}
+
+// validFloatParam returns s unchanged if it parses as a float64, else "".
+func validFloatParam(s string) string {
+	if _, err := strconv.ParseFloat(s, 64); err != nil {
+		return ""
+	}
+	return s
+}
+
+// validRadiusParam returns s unchanged if it's one of searchRadiiKm, else "".
+func validRadiusParam(s string) string {
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return ""
+	}
+	for _, r := range searchRadiiKm {
+		if r == n {
+			return s
+		}
+	}
+	return ""
 }
 
 func currentWeekRange() (string, string) {
@@ -67,12 +105,26 @@ func searchPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 		}
 
 		dateFrom, dateTo := currentWeekRange()
+		q := r.URL.Query()
+		// #1436: a deep link (e.g. the venue-page nearby fallback) can carry
+		// its own date range — only override the current-week default when
+		// both are present and form a valid, non-inverted range.
+		if from, ok := parseISODate(q.Get("from")); ok {
+			if to, ok2 := parseISODate(q.Get("to")); ok2 && !to.Before(from) {
+				dateFrom, dateTo = q.Get("from"), q.Get("to")
+			}
+		}
+
 		title := i18n.T(r, "search_title")
 		td := tmplData(r, cfg, i18n, title, SearchData{
-			DateFrom: dateFrom,
-			DateTo:   dateTo,
-			Dances:   dances,
-			Locs:     tmplFuncMap["locationsJSON"].(func([]Location) template.JS)(locs),
+			DateFrom:      dateFrom,
+			DateTo:        dateTo,
+			Dances:        dances,
+			Locs:          tmplFuncMap["locationsJSON"].(func([]Location) template.JS)(locs),
+			InitialLat:    validFloatParam(q.Get("lat")),
+			InitialLng:    validFloatParam(q.Get("lng")),
+			InitialRadius: validRadiusParam(q.Get("radius")),
+			InitialLabel:  q.Get("label"),
 		})
 		td.Hreflang = true
 		renderTemplate(w, tmpls.search, td)

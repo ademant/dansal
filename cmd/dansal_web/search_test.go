@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -144,4 +145,73 @@ func TestSearchCapInvariants(t *testing.T) {
 	if searchLimit > 1000 {
 		t.Errorf("searchLimit=%d exceeds the API's own 1000 ceiling (applyListPagination)", searchLimit)
 	}
+}
+
+// TestSearchPageHandlerDeepLink covers #1436: a deep link (e.g. a venue
+// page's nearby-radius fallback) pre-fills the geo filter and date range,
+// but an invalid/unrecognized lat or radius is dropped rather than passed
+// through to break the page's JS with garbage.
+func TestSearchPageHandlerDeepLink(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.Exec(`CREATE TABLE site_settings (key TEXT PRIMARY KEY, value TEXT)`)
+	siteCfg = newSiteSettingsCache(db)
+
+	srv := searchStub(t, 0, 0)
+	client := &DansalClient{BaseURL: srv.URL, HTTP: http.DefaultClient}
+	h := searchPageHandler(&Config{Domain: "example.test"}, loadTemplates(), client, loadI18n(""))
+
+	t.Run("valid deep link pre-fills the geo filter and date range", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/search?lat=50.73&lng=7.1&radius=100&from=2026-10-06&to=2027-01-06&label=Tanzplatte+Rhein", nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		body := rec.Body.String()
+		for _, want := range []string{
+			`var initLat    = "50.73"`,
+			`var initLng    = "7.1"`,
+			`var initRadius = "100"`,
+			`var dateFrom = "2026-10-06"`,
+			`var dateTo   = "2027-01-06"`,
+		} {
+			if !strings.Contains(body, want) {
+				t.Errorf("missing %q in rendered page", want)
+			}
+		}
+	})
+
+	t.Run("an unrecognized radius is dropped, not passed through", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/search?lat=50.73&lng=7.1&radius=37&from=2026-10-06&to=2027-01-06", nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		body := rec.Body.String()
+		if !strings.Contains(body, `var initRadius = ""`) {
+			t.Error("an unlisted radius (37) must be dropped, not echoed into the page")
+		}
+	})
+
+	t.Run("a non-numeric lat is dropped", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/search?lat=not-a-number&lng=7.1&radius=100", nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		body := rec.Body.String()
+		if !strings.Contains(body, `var initLat    = ""`) {
+			t.Error("a non-numeric lat must be dropped, not echoed into the page")
+		}
+	})
+
+	t.Run("an inverted date range falls back to the current week", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/search?from=2026-10-06&to=2026-10-01", nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		body := rec.Body.String()
+		if strings.Contains(body, `var dateFrom = "2026-10-06"`) {
+			t.Error("an inverted (to < from) range must not override the current-week default")
+		}
+	})
 }

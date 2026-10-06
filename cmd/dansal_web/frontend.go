@@ -399,9 +399,30 @@ func recurringSeriesFromEvents(events []Event) []SeriesCadenceEntry {
 }
 
 type LocationPageData struct {
-	Location Location
-	Events   []Event
+	Location        Location
+	Events          []Event // upcoming
+	PastEvents      []Event // #1437: most recent past events at this location, newest first
+	PastEventsTotal int     // #1437: total past events ever held here (X-Total-Count), for the trust-signal count
+	NearbyHint      *NearbyHint
 }
+
+// NearbyHint is the venue page's "no upcoming events here, but N within
+// X km" fallback (#1436) — nil unless the venue has no upcoming events, has
+// coordinates, and at least one radius around it has >=1 event in the next
+// locationNearbyMonths.
+type NearbyHint struct {
+	Count     int
+	RadiusKm  int
+	SearchURL string
+}
+
+// locationPastEventsLimit caps the venue page's "recent past events" teaser
+// (#1437) — a short list, not a full history.
+const locationPastEventsLimit = 5
+
+// locationNearbyMonths is the lookahead window the nearby-radius fallback
+// (#1436) checks for events — matches the proposal's "next 3 months".
+const locationNearbyMonths = 3
 
 type OrgListItem struct {
 	Org           Organization
@@ -1327,9 +1348,49 @@ func locationPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 		if title == "" {
 			title = loc.Location
 		}
+
+		// #1437: recent past events at this location (not aggregated across
+		// a building's rooms the way upcoming Events is above — a room's own
+		// past-events teaser is a smaller, separate concern than this page's
+		// "is this venue still active" signal).
+		pastEvents, pastTotal, pErr := client.GetPastEventsByLocationWithTotal(r.Context(), id, locationPastEventsLimit)
+		if pErr != nil {
+			log.Printf("location %d: could not load past events: %v", id, pErr)
+		}
+
+		// #1436: when there's nothing upcoming, offer the nearest radius
+		// with at least one event instead of a dead end.
+		var nearbyHint *NearbyHint
+		if len(events) == 0 && loc.Latitude != nil && loc.Longitude != nil {
+			from := time.Now().Format("2006-01-02")
+			to := time.Now().AddDate(0, locationNearbyMonths, 0).Format("2006-01-02")
+			nc, ncErr := client.GetNearbyCounts(r.Context(), *loc.Latitude, *loc.Longitude, from, to)
+			if ncErr != nil {
+				log.Printf("location %d: could not load nearby counts: %v", id, ncErr)
+			} else {
+				for _, radius := range nc.RadiiKm {
+					if n := nc.Counts[strconv.Itoa(radius)]; n >= 1 {
+						qs := url.Values{
+							"lat":    {strconv.FormatFloat(*loc.Latitude, 'f', -1, 64)},
+							"lng":    {strconv.FormatFloat(*loc.Longitude, 'f', -1, 64)},
+							"radius": {strconv.Itoa(radius)},
+							"from":   {from},
+							"to":     {to},
+							"label":  {title},
+						}
+						nearbyHint = &NearbyHint{Count: n, RadiusKm: radius, SearchURL: "/search?" + qs.Encode()}
+						break
+					}
+				}
+			}
+		}
+
 		td := tmplData(r, cfg, i18n, title, LocationPageData{
-			Location: loc,
-			Events:   events,
+			Location:        loc,
+			Events:          events,
+			PastEvents:      pastEvents,
+			PastEventsTotal: pastTotal,
+			NearbyHint:      nearbyHint,
 		})
 		parts := []string{title}
 		if loc.Town != "" && loc.Town != title {

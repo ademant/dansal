@@ -1,4 +1,17 @@
 {{template "base" .}}
+{{/* #1437: the past-events <li> markup is identical whether shown collapsed
+     (upcoming events exist) or directly (no upcoming events) — one partial,
+     two call sites in "content" below. {{define}} must be top-level, not
+     nested inside {{with .Data}}, hence it lives up here. */}}
+{{define "loc-past-event-item"}}
+<li class="event-item past-item">
+  <h3><a href="/events/{{.Event.ID}}">{{.Event.Title}}</a></h3>
+  <div class="event-meta">
+    {{if .Event.StartTime}}<span>{{formatTime .LangCode .TimeFormat .DateFormat .Event.StartTime}}</span>{{end}}
+    {{if .Event.IsCancelled}}<span class="badge cancelled">{{.Strings.T "badge_cancelled"}}</span>{{end}}
+  </div>
+</li>
+{{end}}
 {{define "head_extra"}}{{with .Data.Location}}
 <script type="application/ld+json">
 {
@@ -120,11 +133,11 @@
 
 {{end}}{{/* .Location */}}
 
+{{if .Events}}
 {{/* Follow-up to #1161/#1167: rolling monthly calendar, same shared component as /org/{slug}. */}}
 {{template "month-calendar" (dict "ID" "loc-calendar" "Events" .Events "Strings" $.Strings "Nonce" $.Nonce)}}
 
 <h2 class="section-heading">{{$.Strings.T "org_events_title"}}</h2>
-{{if .Events}}
 <ul class="event-list">
 {{range .Events}}
 <li class="event-item">
@@ -143,8 +156,37 @@
 </li>
 {{end}}
 </ul>
+
+{{/* #1437: collapsed, so a well-established venue's history doesn't push
+     the useful (upcoming) part down the page. */}}
+{{if .PastEvents}}
+<details class="loc-past-events">
+  <summary>{{$.Strings.T "org_show_past"}} ({{len .PastEvents}})</summary>
+  <ul class="event-list">
+    {{range .PastEvents}}{{template "loc-past-event-item" (dict "Event" . "Strings" $.Strings "LangCode" $.LangCode "TimeFormat" $.TimeFormat "DateFormat" $.DateFormat)}}{{end}}
+  </ul>
+  {{if .PastEventsTotal}}<p class="loc-events-total">{{$.Strings.TF "loc_events_total" .PastEventsTotal}}</p>{{end}}
+</details>
+{{end}}
+
 {{else}}
-<p class="empty-msg">{{$.Strings.T "org_no_events"}}</p>
+{{/* #1436/#1437: no upcoming events — a nearby-radius fallback instead of a
+     dead end, plus the venue's recent past events shown directly (nothing
+     else competing for the space, so no need to collapse them). */}}
+<p class="empty-msg">
+  {{$.Strings.T "loc_no_upcoming"}}
+  {{if .NearbyHint}} <a href="{{.NearbyHint.SearchURL}}">{{$.Strings.TF "loc_nearby_hint" .NearbyHint.Count .NearbyHint.RadiusKm}}</a>{{end}}
+</p>
+
+{{if .PastEvents}}
+<div class="loc-past-events">
+  <h2 class="section-heading">{{$.Strings.T "org_show_past"}}</h2>
+  <ul class="event-list">
+    {{range .PastEvents}}{{template "loc-past-event-item" (dict "Event" . "Strings" $.Strings "LangCode" $.LangCode "TimeFormat" $.TimeFormat "DateFormat" $.DateFormat)}}{{end}}
+  </ul>
+  {{if .PastEventsTotal}}<p class="loc-events-total">{{$.Strings.TF "loc_events_total" .PastEventsTotal}}</p>{{end}}
+</div>
+{{end}}
 {{end}}
 
 {{end}}{{/* .Data */}}
@@ -168,6 +210,10 @@
 .loc-notes p{margin:.5rem 0}
 .loc-notes a{color:var(--link)}
 .empty-msg{color:var(--fg-faint);font-size:.9rem}
+.empty-msg a{color:var(--link);font-weight:600}
+.loc-past-events{margin-top:1.25rem}
+.loc-past-events summary{font-size:1.05rem;font-weight:700;color:var(--heading);text-transform:uppercase;letter-spacing:.04em;border-bottom:2px solid var(--border);padding-bottom:.35rem;margin-bottom:.6rem;cursor:pointer}
+.loc-events-total{color:var(--fg-faint);font-size:.85rem;margin-top:.5rem}
 .loc-siteplan{margin-bottom:1.25rem}
 .loc-siteplan-summary{font-size:1.05rem;font-weight:700;color:var(--heading);text-transform:uppercase;letter-spacing:.04em;border-bottom:2px solid var(--border);padding-bottom:.35rem;margin-bottom:.6rem;cursor:pointer}
 .siteplan-canvas{position:relative;max-width:100%;border-radius:6px;overflow:hidden;border:1px solid var(--border-mid);background:var(--bg-subtle)}

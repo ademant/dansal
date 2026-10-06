@@ -1177,6 +1177,40 @@ func (c *DansalClient) GetEventsByLocation(ctx context.Context, locationID int) 
 	return events, c.get(ctx, fmt.Sprintf("/api/v1/events?location_id=%d&with_musicians=true", locationID), &events)
 }
 
+// GetPastEventsByLocationWithTotal fetches the most recent limit past
+// (already-ended) events at a location, newest first, plus the total number
+// of past events ever held there via X-Total-Count (#1437's venue page past-
+// events section, and its optional "N events here" trust-signal count).
+// Requires the API's ?order=desc support (#1437).
+func (c *DansalClient) GetPastEventsByLocationWithTotal(ctx context.Context, locationID, limit int) ([]Event, int, error) {
+	var events []Event
+	total, err := c.getWithTotal(ctx, fmt.Sprintf(
+		"/api/v1/events?location_id=%d&include_past=true&end_time_before=%d&order=desc&limit=%d",
+		locationID, time.Now().Unix(), limit,
+	), &events)
+	return events, total, err
+}
+
+// NearbyCounts is the /api/v1/events/nearby-counts response (#1436): how
+// many published events fall within each of RadiiKm, cumulatively, around a
+// point in a given date range.
+type NearbyCounts struct {
+	RadiiKm []int          `json:"radii_km"`
+	Counts  map[string]int `json:"counts"`
+}
+
+// GetNearbyCounts calls the nearby-counts endpoint for a venue page's "no
+// upcoming events here, but N within X km" fallback (#1436). from/to are
+// ISO dates (YYYY-MM-DD).
+func (c *DansalClient) GetNearbyCounts(ctx context.Context, lat, lon float64, from, to string) (NearbyCounts, error) {
+	var out NearbyCounts
+	err := c.get(ctx, fmt.Sprintf(
+		"/api/v1/events/nearby-counts?lat=%s&lon=%s&from=%s&to=%s",
+		strconv.FormatFloat(lat, 'f', -1, 64), strconv.FormatFloat(lon, 'f', -1, 64), from, to,
+	), &out)
+	return out, err
+}
+
 func (c *DansalClient) GetEventsBySeries(ctx context.Context, seriesID int) ([]Event, error) {
 	var events []Event
 	return events, c.get(ctx, fmt.Sprintf("/api/v1/events?series_id=%d&include_past=true&include_cancelled=true", seriesID), &events)

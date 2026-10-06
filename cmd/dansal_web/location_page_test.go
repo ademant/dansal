@@ -130,3 +130,104 @@ func TestLocationPageToiletBadge(t *testing.T) {
 		}
 	})
 }
+
+// TestLocationPageNoUpcomingNearbyHint covers #1436: a venue with no
+// upcoming events shows the nearby-radius fallback link instead of an empty
+// calendar, and #1437's recent-past-events teaser alongside it.
+func TestLocationPageNoUpcomingNearbyHint(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.Exec(`CREATE TABLE site_settings (key TEXT PRIMARY KEY, value TEXT)`)
+	siteCfg = newSiteSettingsCache(db)
+
+	tmpls := loadTemplates()
+	i18n := loadI18n("")
+	cfg := &Config{Domain: "example.test"}
+	req := httptest.NewRequest(http.MethodGet, "/location/16", nil)
+	req.Header.Set("Accept-Language", "en")
+
+	data := LocationPageData{
+		Location: Location{ID: 16, Location: "Tanzplatte Rhein"},
+		PastEvents: []Event{
+			{ID: 900, Title: "Sommerfest", StartTime: "2025-07-03T19:00:00Z"},
+		},
+		PastEventsTotal: 12,
+		NearbyHint: &NearbyHint{
+			Count: 4, RadiusKm: 100,
+			SearchURL: "/search?from=2026-10-06&label=Tanzplatte+Rhein&lat=50.73&lng=7.1&radius=100&to=2027-01-06",
+		},
+	}
+	rec := httptest.NewRecorder()
+	renderTemplate(rec, tmpls.location, tmplData(req, cfg, i18n, data.Location.Location, data))
+	body, _ := io.ReadAll(rec.Body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, body)
+	}
+
+	for _, want := range []string{
+		"No upcoming events here.",
+		// html/template escapes "+" to its HTML entity in a URL attribute —
+		// still decodes to a literal "+" in the browser, just not bare in markup.
+		`href="/search?from=2026-10-06&amp;label=Tanzplatte&#43;Rhein&amp;lat=50.73&amp;lng=7.1&amp;radius=100&amp;to=2027-01-06"`,
+		"4 event(s) within 100 km",
+		"Sommerfest",
+		"12 event(s) here",
+	} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("no-upcoming render missing %q, body tail: %s", want, body[max(0, len(body)-600):])
+		}
+	}
+	// The empty calendar/empty-list fallback this replaces must be gone.
+	if strings.Contains(string(body), "No events found for this organisation") {
+		t.Error("should not fall back to the generic org_no_events message")
+	}
+}
+
+// TestLocationPageUpcomingWithCollapsedPastEvents covers #1437's second
+// case: upcoming events keep the calendar/list as before, with past events
+// in a separate, collapsed (not auto-open) <details> section.
+func TestLocationPageUpcomingWithCollapsedPastEvents(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.Exec(`CREATE TABLE site_settings (key TEXT PRIMARY KEY, value TEXT)`)
+	siteCfg = newSiteSettingsCache(db)
+
+	tmpls := loadTemplates()
+	i18n := loadI18n("")
+	cfg := &Config{Domain: "example.test"}
+	req := httptest.NewRequest(http.MethodGet, "/location/17", nil)
+	req.Header.Set("Accept-Language", "en")
+
+	data := LocationPageData{
+		Location: Location{ID: 17, Location: "Bürgerhaus Stollwerck"},
+		Events:   []Event{{ID: 500, Title: "Herbstball", StartTime: "2033-05-18T03:33:20Z"}},
+		PastEvents: []Event{
+			{ID: 499, Title: "Sommerfest", StartTime: "2025-07-03T19:00:00Z"},
+		},
+		PastEventsTotal: 3,
+	}
+	rec := httptest.NewRecorder()
+	renderTemplate(rec, tmpls.location, tmplData(req, cfg, i18n, data.Location.Location, data))
+	body, _ := io.ReadAll(rec.Body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, body)
+	}
+
+	if !strings.Contains(string(body), `<details class="loc-past-events">`) {
+		t.Error("expected a collapsed <details> past-events section")
+	}
+	if strings.Contains(string(body), `<details class="loc-past-events" open>`) {
+		t.Error("past-events <details> must be collapsed by default")
+	}
+	for _, want := range []string{"Herbstball", "Sommerfest", "Past events (1)", "3 event(s) here"} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("render missing %q, body tail: %s", want, body[max(0, len(body)-600):])
+		}
+	}
+}

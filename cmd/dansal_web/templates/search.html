@@ -176,9 +176,18 @@
 
   var dateFrom = {{.Data.DateFrom | jsStr}};
   var dateTo   = {{.Data.DateTo | jsStr}};
+  // #1436: deep-link geo filter (e.g. a venue page's "N events within X km"
+  // link) — empty strings when not set/invalid, see searchPageHandler.
+  var initLat    = {{.Data.InitialLat | jsStr}};
+  var initLng    = {{.Data.InitialLng | jsStr}};
+  var initRadius = {{.Data.InitialRadius | jsStr}};
+  var initLabel  = {{.Data.InitialLabel | jsStr}};
   var typeFilter = {ball:true, workshop:true, festival:true};
   var townFilter = '';
   var geoFilter = null; // {lat,lng,radiusKm}
+  if (initLat && initLng && initRadius) {
+    geoFilter = {lat: parseFloat(initLat), lng: parseFloat(initLng), radiusKm: parseInt(initRadius, 10)};
+  }
   var countryFilter = ''; // country name string matching data-country
   var regionFilter  = ''; // region string matching data-region
   var rows = [];
@@ -302,6 +311,14 @@
     detabifyHiddenMap(map);
     clusterGroup = L.markerClusterGroup({maxClusterRadius:40});
     map.addLayer(clusterGroup);
+    // #1436: deep-linked geo filter — recenter on it and reflect it in the
+    // radius select / location field. render() picks it up on its own once
+    // fetchResults() returns; nothing else to trigger here.
+    if (geoFilter) {
+      map.setView([geoFilter.lat, geoFilter.lng], 9);
+      document.getElementById('sf-radius').value = initRadius;
+      if (initLabel) document.getElementById('sf-town').value = initLabel;
+    }
     setupGeoButton(document.getElementById('sf-geo-btn'), document.getElementById('sf-geo-hint'), function(pos){
       geoFilter = {lat:pos.coords.latitude, lng:pos.coords.longitude, radiusKm:parseInt(document.getElementById('sf-radius').value,10)};
       townFilter = '';

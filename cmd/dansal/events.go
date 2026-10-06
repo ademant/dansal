@@ -2227,6 +2227,10 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	event, err := scanEventRow(db.QueryRow(query, id))
 	if err == sql.ErrNoRows {
+		if idWasAllocated("events", id) {
+			writeError(w, "Event is gone", http.StatusGone)
+			return
+		}
 		writeError(w, "Event not found", http.StatusNotFound)
 		return
 	} else if err != nil {
@@ -3033,6 +3037,7 @@ func deleteEvent(w http.ResponseWriter, r *http.Request) {
 	var deletedOrg sql.NullInt64
 	db.QueryRow("SELECT organization_id FROM events WHERE id=?", id).Scan(&deletedOrg)
 
+	insertEntityTombstone("event", id)
 	result, err := db.Exec("DELETE FROM events WHERE id = ?", id)
 	if err != nil {
 		writeInternalError(w, err)

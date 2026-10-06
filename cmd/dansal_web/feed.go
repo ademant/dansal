@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -22,7 +23,15 @@ func feedEventICSHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		}
 		event, err := client.GetEvent(r.Context(), id)
 		if err != nil {
-			http.NotFound(w, r)
+			if redir, rerr := client.GetEntityRedirect(r.Context(), "event", id); rerr == nil {
+				http.Redirect(w, r, fmt.Sprintf("/events/%d.ics", redir.NewID), http.StatusMovedPermanently)
+				return
+			}
+			if errors.Is(err, errExpired) {
+				http.Error(w, "event is gone", http.StatusGone)
+			} else {
+				http.NotFound(w, r)
+			}
 			return
 		}
 		cal := ics.NewCalendar()

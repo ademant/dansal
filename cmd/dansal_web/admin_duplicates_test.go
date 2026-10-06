@@ -95,7 +95,8 @@ func (f *fakeAPI) handler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(f.events[strings.TrimPrefix(r.URL.Path, "/api/v1/events/")])
 	case r.Method == http.MethodPatch || r.Method == http.MethodPut:
 		json.NewEncoder(w).Encode(Event{})
-	case r.Method == http.MethodDelete || strings.HasSuffix(r.URL.Path, "/assign-events"):
+	case r.Method == http.MethodDelete || strings.HasSuffix(r.URL.Path, "/assign-events") ||
+		(r.Method == http.MethodPost && r.URL.Path == "/api/v1/entity-redirects"):
 		w.WriteHeader(http.StatusNoContent)
 	default:
 		w.Write([]byte(`[]`))

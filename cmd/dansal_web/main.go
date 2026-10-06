@@ -303,13 +303,19 @@ func main() {
 			})
 		}
 		r.HandleFunc("GET /federated-events/{id}", federatedEventHandler(db))
-		// Legacy Gancio URL patterns dansal doesn't support: 301 instead of
-		// silently falling through to the "/" catch-all with a 200 (issue #823).
-		r.HandleFunc("GET /event/{slug}", legacyGancioRedirect("/"))
-		r.HandleFunc("GET /tag/{slug}", legacyGancioRedirect("/"))
-		r.HandleFunc("GET /collection/{name}", legacyGancioRedirect("/"))
-		r.HandleFunc("GET /place/{id}/{slug...}", legacyGancioRedirect("/"))
-		r.HandleFunc("GET /export", legacyGancioRedirect("/"))
+		// Legacy Gancio identifiers belonged to a different database, so they
+		// cannot be safely redirected to a current Dansal resource. 410 is
+		// truthful and avoids homepage soft-404s in search engines (#1433).
+		r.HandleFunc("GET /event/{slug}", legacyGancioGone)
+		r.HandleFunc("GET /tag/{slug}", legacyGancioGone)
+		r.HandleFunc("GET /collection/{name}", legacyGancioGone)
+		r.HandleFunc("GET /place/{id}/{slug...}", legacyGancioGone)
+		r.HandleFunc("GET /export", legacyGancioGone)
+		// Gancio's RSS endpoints do have an unambiguous modern equivalent.
+		r.HandleFunc("GET /feed/rss", legacyGancioRedirect("/feed/events.rss"))
+		r.HandleFunc("GET /feed/rss/", legacyGancioRedirect("/feed/events.rss"))
+		r.HandleFunc("GET /feed/rss/place/{id}", legacyGancioRedirect("/feed/events.rss"))
+		r.HandleFunc("GET /feed/", legacyGancioRedirect("/feed/events.rss"))
 		r.HandleFunc("GET /add", legacyGancioRedirect("/events/suggest"))
 		r.HandleFunc("GET /", indexHandler(cfg, tmpls, db, client, i18n))
 		r.HandleFunc("GET /events-more", eventsMoreHandler(tmpls, i18n, client))

@@ -54,6 +54,8 @@ var writeSchemaExemptions = map[string]string{
 	// dances: admin dance-dictionary maintenance
 	"/api/v1/dances":      "dances",
 	"/api/v1/dances/{id}": "dances",
+	// entity-redirects: admin-only forwarding table write; no integration target, always driven from admin merge flows
+	"/api/v1/entity-redirects": "entity-redirects",
 	// events: admin/curator workflow on an already schema-covered resource (bulk-*, preview, suggest, publish, cancel, clone, enrich, pending-edit, timetable, syndication, join rows, assign-org, recheck-source, remove-from-series)
 	"/api/v1/events/bulk-set-attributes":                  "events",
 	"/api/v1/events/bulk-set-location":                    "events",

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/xml"
 	"fmt"
 	"log"
@@ -28,6 +29,7 @@ type sitemapCache struct {
 	mu        sync.Mutex
 	data      []byte
 	fetchedAt time.Time
+	etag      string
 }
 
 var smCache sitemapCache
@@ -40,9 +42,15 @@ func sitemapHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		if time.Since(smCache.fetchedAt) < sitemapTTL && len(smCache.data) > 0 {
 			data := smCache.data
 			fetchedAt := smCache.fetchedAt
+			etag := smCache.etag
 			smCache.mu.Unlock()
 			w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 			w.Header().Set("Cache-Control", "public, max-age=1800")
+			w.Header().Set("ETag", etag)
+			if r.Header.Get("If-None-Match") == etag {
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
 			// #1129: fetchedAt bounds freshness to sitemapTTL already, so it's
 			// a safe Last-Modified value even though it's a build time, not a
 			// content-change time.
@@ -61,13 +69,21 @@ func sitemapHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		}
 
 		fetchedAt := time.Now()
+		sum := sha256.Sum256(data)
+		etag := fmt.Sprintf(`"%x"`, sum[:])
 		smCache.mu.Lock()
 		smCache.data = data
 		smCache.fetchedAt = fetchedAt
+		smCache.etag = etag
 		smCache.mu.Unlock()
 
 		w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 		w.Header().Set("Cache-Control", "public, max-age=1800")
+		w.Header().Set("ETag", etag)
+		if r.Header.Get("If-None-Match") == etag {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
 		if checkLastModified(w, r, fetchedAt) {
 			return
 		}

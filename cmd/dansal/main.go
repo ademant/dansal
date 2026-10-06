@@ -2872,6 +2872,29 @@ func migrateDB() {
 		}
 		db.Exec("CREATE INDEX IF NOT EXISTS idx_owner_gallery_owner ON owner_gallery(owner_type, owner_id, sort_order)")
 	}
+
+	// v47 (#1433): preserve canonical public URLs when an event or location is
+	// merged. Explicit records are required because hard deletes otherwise lose
+	// the old ID before the web layer can redirect a visitor or crawler.
+	const entityRedirectsSchema = `CREATE TABLE IF NOT EXISTS entity_redirects (
+		entity     TEXT NOT NULL CHECK(entity IN ('event','location')),
+		old_id     INTEGER NOT NULL,
+		new_id     INTEGER NOT NULL,
+		created_at INTEGER NOT NULL,
+		PRIMARY KEY(entity, old_id)
+	)`
+	if !applied(47) {
+		db.Exec(entityRedirectsSchema)
+		mark(47)
+	}
+	// Safety net: a database may have its migration marker without the table.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='entity_redirects'").Scan(&n)
+		if n == 0 {
+			db.Exec(entityRedirectsSchema)
+		}
+	}
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -3837,6 +3860,13 @@ func createTables() error {
 		FOREIGN KEY (location_id)     REFERENCES locations(id),
 		FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE SET NULL
 	);
+	CREATE TABLE IF NOT EXISTS entity_redirects (
+		entity     TEXT NOT NULL CHECK(entity IN ('event','location')),
+		old_id     INTEGER NOT NULL,
+		new_id     INTEGER NOT NULL,
+		created_at INTEGER NOT NULL,
+		PRIMARY KEY(entity, old_id)
+	);
 	CREATE TABLE IF NOT EXISTS event_series (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		slug TEXT UNIQUE NOT NULL,
@@ -4678,6 +4708,7 @@ func main() {
 	smux.HandleFunc("GET /api/v1/vocabulary", getVocabulary)
 	smux.Handle("GET /api/v1/events", optAuth(http.HandlerFunc(getEvents)))
 	smux.Handle("GET /api/v1/events/{id}", optAuth(http.HandlerFunc(getEvent)))
+	smux.HandleFunc("GET /api/v1/redirects/{entity}/{id}", getEntityRedirect)
 	smux.Handle("GET /api/v1/locations", optAuth(http.HandlerFunc(getLocations)))
 	smux.Handle("GET /api/v1/locations/cities", optAuth(http.HandlerFunc(getCities)))
 	smux.Handle("GET /api/v1/locations/event-counts", auth(http.HandlerFunc(locationEventCounts)))
@@ -4743,6 +4774,7 @@ func main() {
 	smux.Handle("POST /api/v1/events/{id}/pending-edit/reject", auth(rejectPendingEdit))
 	smux.Handle("POST /api/v1/events/{id}/remove-from-series", auth(http.HandlerFunc(removeEventFromSeries)))
 	smux.Handle("DELETE /api/v1/events/{id}", auth(deleteEvent))
+	smux.Handle("POST /api/v1/entity-redirects", auth(putEntityRedirect))
 	smux.Handle("GET /api/v1/events/{id}/duplicate-check", auth(http.HandlerFunc(duplicateCheckHandler)))
 	smux.Handle("POST /api/v1/events/{id}/duplicate-resolve", auth(http.HandlerFunc(duplicateResolveHandler)))
 	smux.Handle("POST /api/v1/events/{id}/timetable", auth(addTimetableEntries))

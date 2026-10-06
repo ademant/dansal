@@ -917,6 +917,14 @@ func legacyGancioRedirect(target string) http.HandlerFunc {
 	}
 }
 
+// legacyGancioGone is used for old Gancio routes whose identifiers belonged to
+// a different database and therefore cannot be mapped reliably. A permanent
+// redirect to the homepage is a crawler soft-404 and sends visitors somewhere
+// unrelated; 410 lets both clients stop retrying the dead URL (#1433).
+func legacyGancioGone(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "This legacy URL is gone", http.StatusGone)
+}
+
 func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
@@ -1003,8 +1011,16 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		}
 		event, err := fetchEventWithFallback(r, client, id)
 		if err != nil {
-			if errors.Is(err, errNotFound) {
-				http.NotFound(w, r)
+			if errors.Is(err, errNotFound) || errors.Is(err, errExpired) {
+				if redir, rerr := client.GetEntityRedirect(r.Context(), "event", id); rerr == nil {
+					http.Redirect(w, r, fmt.Sprintf("/events/%d", redir.NewID), http.StatusMovedPermanently)
+					return
+				}
+				if errors.Is(err, errExpired) {
+					http.Error(w, "event is gone", http.StatusGone)
+				} else {
+					http.NotFound(w, r)
+				}
 			} else {
 				logHTTPError(w, r, "could not load event", http.StatusBadGateway)
 			}
@@ -1012,7 +1028,23 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		}
 
 		// ActivityPub: serve the event as a Note when requested by an AP client.
+		// Conditional GET is safe here — AP JSON carries no CSP nonce.
 		if isAPRequest(r) {
+			apETag := fmt.Sprintf(`"%d-%s"`, event.ID, event.ChangedAt)
+			w.Header().Set("ETag", apETag)
+			if ct, cerr := parseUnixOrRFC3339(event.ChangedAt); cerr == nil && !ct.IsZero() {
+				w.Header().Set("Last-Modified", ct.UTC().Truncate(time.Second).Format(http.TimeFormat))
+				if ims := r.Header.Get("If-Modified-Since"); ims != "" {
+					if since, perr := http.ParseTime(ims); perr == nil && !ct.UTC().Truncate(time.Second).After(since) {
+						w.WriteHeader(http.StatusNotModified)
+						return
+					}
+				}
+			}
+			if r.Header.Get("If-None-Match") == apETag {
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
 			slug := cfg.RelayActorName
 			if event.OrganizationID != nil {
 				if org, oerr := client.GetOrganization(r.Context(), *event.OrganizationID); oerr == nil {
@@ -1231,7 +1263,19 @@ func locationPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 		}
 		loc, err := client.GetLocation(r.Context(), id)
 		if err != nil {
-			http.NotFound(w, r)
+			if errors.Is(err, errNotFound) || errors.Is(err, errExpired) {
+				if redir, rerr := client.GetEntityRedirect(r.Context(), "location", id); rerr == nil {
+					http.Redirect(w, r, fmt.Sprintf("/location/%d", redir.NewID), http.StatusMovedPermanently)
+					return
+				}
+				if errors.Is(err, errExpired) {
+					http.Error(w, "location is gone", http.StatusGone)
+				} else {
+					http.NotFound(w, r)
+				}
+			} else {
+				logHTTPError(w, r, "could not load location", http.StatusBadGateway)
+			}
 			return
 		}
 		// A parent (building) page aggregates events across all its rooms

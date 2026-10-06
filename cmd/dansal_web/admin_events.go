@@ -948,6 +948,10 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 
 		for _, id := range ids {
 			if id != baseID {
+				if err := client.CreateEntityRedirect(ctx, "event", id, baseID, token); err != nil {
+					log.Printf("merge events: record redirect %d -> %d: %v", id, baseID, err)
+					continue
+				}
 				if err := client.DeleteEvent(ctx, id, token); err != nil {
 					log.Printf("merge events: delete %d: %v", id, err)
 				}

@@ -741,6 +741,10 @@ func getLocation(w http.ResponseWriter, r *http.Request) {
 		WHERE l.id=? GROUP BY l.id`, id), &location)
 
 	if err == sql.ErrNoRows {
+		if idWasAllocated("locations", id) {
+			writeError(w, "Location is gone", http.StatusGone)
+			return
+		}
 		writeError(w, "Location not found", http.StatusNotFound)
 		return
 	}
@@ -1437,6 +1441,7 @@ func deleteLocation(w http.ResponseWriter, r *http.Request) {
 
 	mediaOwnerIDs := locationAndChildIDs(db, locationID)
 
+	insertEntityTombstone("location", locationID)
 	result, err := db.Exec("DELETE FROM locations WHERE id = ?", id)
 	if err != nil {
 		writeInternalError(w, err)
@@ -1598,6 +1603,15 @@ func mergeLocations(w http.ResponseWriter, r *http.Request) {
 
 	// Fold the merged location's media links into the survivor, then delete it.
 	if err := mergeOwnerMedia(tx, ownerTypeLocation, keep.ID, merge.ID); err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	// Keep the old public location URL useful after this hard delete. The
+	// forwarding record is transactional with the merge, so it can never point
+	// at a survivor that failed to receive the merged data (#1433).
+	if _, err := tx.Exec(`INSERT INTO entity_redirects(entity,old_id,new_id,created_at)
+		VALUES('location',?,?,unixepoch())
+		ON CONFLICT(entity,old_id) DO UPDATE SET new_id=excluded.new_id, created_at=excluded.created_at`, merge.ID, keep.ID); err != nil {
 		writeInternalError(w, err)
 		return
 	}

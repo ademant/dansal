@@ -25,6 +25,15 @@ type cacheEntry[T any] struct {
 	etag      string // ETag from the last successful response, for conditional GETs
 }
 
+// EntityRedirect is returned by the API for a public resource that was merged
+// into another resource. It contains IDs so the web layer owns canonical URL
+// construction rather than persisting presentation URLs in the API database.
+type EntityRedirect struct {
+	Entity string `json:"entity"`
+	OldID  int    `json:"old_id"`
+	NewID  int    `json:"new_id"`
+}
+
 const (
 	orgsTTL      = 60 * time.Second
 	dancesTTL    = 5 * time.Minute
@@ -918,6 +927,9 @@ func (c *DansalClient) getWithHeader(ctx context.Context, path, token string, he
 		defer resp.Body.Close()
 		if resp.StatusCode == http.StatusNotFound {
 			return errNotFound
+		}
+		if resp.StatusCode == http.StatusGone {
+			return errExpired
 		}
 		if resp.StatusCode != http.StatusOK {
 			return apiErr(resp) // HTTP error — not retryable
@@ -2118,6 +2130,17 @@ func (c *DansalClient) DeleteEvent(ctx context.Context, id int, token string) er
 	}
 	c.invalidateEvents()
 	return nil
+}
+
+func (c *DansalClient) CreateEntityRedirect(ctx context.Context, entity string, oldID, newID int, token string) error {
+	body, _ := json.Marshal(EntityRedirect{Entity: entity, OldID: oldID, NewID: newID})
+	return c.do(ctx, http.MethodPost, "/api/v1/entity-redirects", token, body, nil, http.StatusNoContent)
+}
+
+func (c *DansalClient) GetEntityRedirect(ctx context.Context, entity string, oldID int) (EntityRedirect, error) {
+	var result EntityRedirect
+	err := c.get(ctx, fmt.Sprintf("/api/v1/redirects/%s/%d", entity, oldID), &result)
+	return result, err
 }
 
 type EnrichEventReq struct {

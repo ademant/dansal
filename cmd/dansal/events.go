@@ -3024,6 +3024,22 @@ func deleteEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	n, err := hardDeleteEvent(id, callerID)
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	if n == 0 {
+		writeError(w, "Event not found", http.StatusNotFound)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// hardDeleteEvent removes an event row and its side-effects (duplicate-review
+// cleanup, tombstone, delete webhook) and returns the number of rows deleted.
+// Shared by DELETE /events/{id} and the suggested-event decline (#1463).
+func hardDeleteEvent(id, callerID int) (int64, error) {
 	// Clear duplicate-review flags on partners of this event, but only when
 	// the partner has no OTHER flagged event still pointing to it.  If three
 	// events are mutually flagged and one is deleted, the remaining two may
@@ -3048,18 +3064,92 @@ func deleteEvent(w http.ResponseWriter, r *http.Request) {
 	insertEntityTombstone("event", id)
 	result, err := db.Exec("DELETE FROM events WHERE id = ?", id)
 	if err != nil {
-		writeInternalError(w, err)
-		return
+		return 0, err
 	}
-	if n, _ := result.RowsAffected(); n == 0 {
-		writeError(w, "Event not found", http.StatusNotFound)
-		return
-	}
+	n, _ := result.RowsAffected()
 	if deletedOrg.Valid {
 		o := int(deletedOrg.Int64)
 		go dispatchEventWebhooks(id, &o, "delete", callerID)
 	}
+	return n, nil
+}
+
+// POST /api/v1/events/{id}/decline — decline an unpublished suggested event:
+// delete it and email the suggester the admin's statement of reasons (#1442,
+// DSA Art. 17). Distinct from DELETE /events/{id}: the event must still be an
+// unpublished suggestion and a non-empty reason is required.
+func declineEventHandler(w http.ResponseWriter, r *http.Request) {
+	callerID, userRole := callerFromRequest(r)
+	id, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
+		return
+	}
+
+	reason := ""
+	if r.Body != nil {
+		var rb struct {
+			Reason string `json:"reason"`
+		}
+		json.NewDecoder(r.Body).Decode(&rb)
+		reason = strings.TrimSpace(rb.Reason)
+	}
+
+	var suggesterEmail, title string
+	var orgID sql.NullInt64
+	var isPublished int
+	err := db.QueryRow("SELECT COALESCE(suggester_email,''), COALESCE(title,''), organization_id, is_published FROM events WHERE id=?", id).
+		Scan(&suggesterEmail, &title, &orgID, &isPublished)
+	if err == sql.ErrNoRows {
+		writeError(w, "Event not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	if userRole != RoleAdmin && !requireExistingOrgMember(w, callerID, orgID) {
+		return
+	}
+	if reason == "" {
+		writeError(w, "a reason is required to decline a suggestion", http.StatusBadRequest)
+		return
+	}
+	if isPublished != 0 {
+		writeError(w, "only unpublished suggestions can be declined", http.StatusConflict)
+		return
+	}
+
+	n, err := hardDeleteEvent(id, callerID)
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	if n == 0 {
+		writeError(w, "Event not found", http.StatusNotFound)
+		return
+	}
+	log.Printf("events: declined suggestion %d (title=%q) — reason=%q", id, title, reason)
+	sendDeclineNotice(suggesterEmail, "Your suggested event was not published",
+		"Your suggested event was reviewed and not published.", reason)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// sendDeclineNotice emails a submitter the admin's statement of reasons for a
+// declined submission (#1442, DSA Art. 17). Sent from a goroutine so the HTTP
+// handler never blocks on SMTP; no contact address or an empty reason is a
+// no-op (DSA Art. 17(2): no notice where the recipient is unknown). The SMTP
+// config is captured on the calling goroutine so it stays race-free.
+func sendDeclineNotice(to, subject, intro, reason string) {
+	if to == "" || reason == "" {
+		return
+	}
+	body := intro + "\n\nReason: " + reason +
+		"\n\nIf you believe this decision was made in error, please contact the site administrators."
+	cfg := config.SMTP
+	go func() {
+		if _, err := sendEmailWithConfig(cfg, to, subject, body, false); err != nil {
+			log.Printf("decline notice to %s: %v", to, err)
+		}
+	}()
 }
 
 // eventDeletionDeadline computes the last moment a non-admin org member may

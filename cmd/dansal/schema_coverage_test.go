@@ -69,6 +69,7 @@ var writeSchemaExemptions = map[string]string{
 	"/api/v1/events/{id}/cancel":                          "events",
 	"/api/v1/events/{id}/clone":                           "events",
 	"/api/v1/events/{id}/dances/{dance_id}":               "events",
+	"/api/v1/events/{id}/decline":                         "events",
 	"/api/v1/events/{id}/enrich":                          "events",
 	"/api/v1/events/{id}/instructors":                     "events",
 	"/api/v1/events/{id}/instructors/{instructor_id}":     "events",

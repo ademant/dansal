@@ -4775,6 +4775,7 @@ func main() {
 	smux.Handle("POST /api/v1/events/{id}/pending-edit/approve", auth(approvePendingEdit))
 	smux.Handle("POST /api/v1/events/{id}/pending-edit/reject", auth(rejectPendingEdit))
 	smux.Handle("POST /api/v1/events/{id}/remove-from-series", auth(http.HandlerFunc(removeEventFromSeries)))
+	smux.Handle("POST /api/v1/events/{id}/decline", auth(declineEventHandler))
 	smux.Handle("DELETE /api/v1/events/{id}", auth(deleteEvent))
 	smux.Handle("POST /api/v1/entity-redirects", auth(putEntityRedirect))
 	smux.Handle("GET /api/v1/events/{id}/duplicate-check", auth(http.HandlerFunc(duplicateCheckHandler)))

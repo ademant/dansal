@@ -260,7 +260,8 @@ func adminPendingEditHandler(cfg *Config, client *DansalClient, approve bool) ht
 		if approve {
 			actionErr = client.ApprovePendingEdit(r.Context(), id, token)
 		} else {
-			actionErr = client.RejectPendingEdit(r.Context(), id, token)
+			r.ParseForm()
+			actionErr = client.RejectPendingEdit(r.Context(), id, token, strings.TrimSpace(r.FormValue("reason")))
 		}
 		if actionErr != nil {
 			http.Error(w, "pending edit action failed: "+actionErr.Error(), http.StatusBadGateway)
@@ -306,6 +307,31 @@ func adminEventDeleteHandler(cfg *Config, db *sql.DB, client *DansalClient) http
 		}
 		if fetchErr == nil && event.OrganizationID != nil {
 			go deliverDeleteToFollowers(cfg, db, id, *event.OrganizationID)
+		}
+		http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
+	}
+}
+
+// adminEventDeclineHandler declines an unpublished suggested event (#1463): the
+// API deletes it and emails the suggester the admin's reason (DSA Art. 17
+// statement of reasons, #1442).
+func adminEventDeclineHandler(client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		reason := strings.TrimSpace(r.FormValue("reason"))
+		if err := client.DeclineEvent(r.Context(), id, getSessionToken(r), reason); err != nil {
+			log.Printf("decline event %d: %v", id, err)
 		}
 		http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
 	}

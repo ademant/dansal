@@ -35,9 +35,7 @@
     <form method="post" action="/admin/events/{{.Event.ID}}/pending-edit/approve" style="display:inline">
       <button type="submit" class="btn-primary">{{$.Strings.T "admin_pending_edit_approve"}}</button>
     </form>
-    <form method="post" action="/admin/events/{{.Event.ID}}/pending-edit/reject" style="display:inline">
-      <button type="submit" class="btn-secondary">{{$.Strings.T "admin_pending_edit_reject"}}</button>
-    </form>
+    <button type="button" id="pending-edit-reject-btn" class="btn-secondary">{{$.Strings.T "admin_pending_edit_reject"}}</button>
   </div>
 </div>
 {{end}}
@@ -54,6 +52,9 @@
   {{if and (not .IsNew) .CanDelete}}<form method="post" action="/admin/events/{{.Event.ID}}/delete" style="margin:0" data-on="submit" data-confirm="{{$.Strings.T "admin_event_confirm_delete"}}">
     <button type="submit" class="btn-del">{{$.Strings.T "admin_delete"}}</button>
   </form>{{end}}
+  {{if and (not .IsNew) .Event.SuggesterEmail (not .Event.IsPublished)}}
+  <button type="button" id="decline-suggestion-btn" class="btn-del">{{$.Strings.T "admin_suggestion_decline"}}</button>
+  {{end}}
   {{end}}
 </div>
 
@@ -2538,6 +2539,57 @@ document.addEventListener('DOMContentLoaded', function(){
   _bindMdPaste('description','md-paste-hint');
   _bindMdAutosize('description');
 });
+</script>
+
+<div id="decline-modal" hidden style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center">
+  <div style="background:var(--bg-card);padding:1.2rem 1.4rem;border-radius:8px;max-width:32rem;width:90%">
+    <h3 id="decline-modal-title" style="margin:0 0 .8rem;font-size:1rem"></h3>
+    <label for="decline-reason" style="font-size:.9rem;font-weight:600;display:block;margin-bottom:.4rem">{{$.Strings.T "admin_reg_reject_reason_label"}}</label>
+    <textarea id="decline-reason" rows="3" style="width:100%;padding:.45rem .6rem;border:1px solid var(--border-mid);border-radius:4px;background:var(--bg-card);color:var(--fg);font-size:.9rem;box-sizing:border-box;resize:vertical" placeholder="{{$.Strings.T "admin_reg_reject_reason_hint"}}"></textarea>
+    <div style="display:flex;gap:.5rem;margin-top:.9rem;justify-content:flex-end">
+      <button type="button" class="btn-secondary" id="decline-cancel-btn">{{$.Strings.T "admin_magic_link_close"}}</button>
+      <button type="button" class="btn-del" id="decline-confirm-btn">{{$.Strings.T "admin_decline_confirm"}}</button>
+    </div>
+  </div>
+</div>
+<script nonce="{{$.Nonce}}">
+(function(){
+  var modal = document.getElementById('decline-modal');
+  if (!modal) return;
+  var ta = document.getElementById('decline-reason');
+  var title = document.getElementById('decline-modal-title');
+  var eventID = {{.Event.ID}};
+  var defaults = {
+    suggestion: {{$.Strings.T "admin_suggestion_decline_reason_default" | jsStr}},
+    pending_edit: {{$.Strings.T "admin_pending_edit_decline_reason_default" | jsStr}}
+  };
+  var titles = {
+    suggestion: {{$.Strings.T "admin_suggestion_decline" | jsStr}},
+    pending_edit: {{$.Strings.T "admin_pending_edit_reject" | jsStr}}
+  };
+  var currentAction = '';
+  function openDecline(type, action) {
+    currentAction = action;
+    title.textContent = titles[type] || '';
+    ta.value = defaults[type] || '';
+    modal.hidden = false;
+    ta.focus(); ta.select();
+  }
+  var ds = document.getElementById('decline-suggestion-btn');
+  if (ds) ds.addEventListener('click', function(){ openDecline('suggestion', '/admin/events/' + eventID + '/decline'); });
+  var pr = document.getElementById('pending-edit-reject-btn');
+  if (pr) pr.addEventListener('click', function(){ openDecline('pending_edit', '/admin/events/' + eventID + '/pending-edit/reject'); });
+  document.getElementById('decline-cancel-btn').addEventListener('click', function(){ modal.hidden = true; });
+  document.getElementById('decline-confirm-btn').addEventListener('click', function(){
+    var reason = ta.value.trim();
+    if (!reason) { alert({{$.Strings.T "admin_decline_reason_required" | jsStr}}); return; }
+    modal.hidden = true;
+    var f = document.createElement('form');
+    f.method = 'post'; f.action = currentAction;
+    var r = document.createElement('input'); r.type = 'hidden'; r.name = 'reason'; r.value = reason; f.appendChild(r);
+    document.body.appendChild(f); f.submit();
+  });
+})();
 </script>
 {{end}}{{/* .Data */}}
 {{end}}

@@ -3930,8 +3930,17 @@ func (c *DansalClient) ApprovePendingEdit(ctx context.Context, id int, token str
 	return c.do(ctx, http.MethodPost, fmt.Sprintf("/api/v1/events/%d/pending-edit/approve", id), token, nil, nil, http.StatusNoContent)
 }
 
-func (c *DansalClient) RejectPendingEdit(ctx context.Context, id int, token string) error {
-	return c.do(ctx, http.MethodPost, fmt.Sprintf("/api/v1/events/%d/pending-edit/reject", id), token, nil, nil, http.StatusNoContent)
+func (c *DansalClient) RejectPendingEdit(ctx context.Context, id int, token, reason string) error {
+	body, _ := json.Marshal(map[string]string{"reason": reason})
+	return c.do(ctx, http.MethodPost, fmt.Sprintf("/api/v1/events/%d/pending-edit/reject", id), token, body, nil, http.StatusNoContent)
+}
+
+// DeclineEvent declines an unpublished suggested event (#1463): the API deletes
+// it and emails the suggester the admin's reason (DSA Art. 17 statement of
+// reasons, #1442).
+func (c *DansalClient) DeclineEvent(ctx context.Context, id int, token, reason string) error {
+	body, _ := json.Marshal(map[string]string{"reason": reason})
+	return c.do(ctx, http.MethodPost, fmt.Sprintf("/api/v1/events/%d/decline", id), token, body, nil, http.StatusNoContent)
 }
 
 // Register calls POST /api/v1/register.

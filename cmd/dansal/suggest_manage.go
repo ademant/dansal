@@ -380,7 +380,8 @@ func handlePendingEdit(w http.ResponseWriter, r *http.Request, approve bool) {
 
 	var orgID sql.NullInt64
 	var pendingJSON sql.NullString
-	if err := db.QueryRow("SELECT organization_id, pending_edit_json FROM events WHERE id=?", id).Scan(&orgID, &pendingJSON); err == sql.ErrNoRows {
+	var suggesterEmail, eventTitle string
+	if err := db.QueryRow("SELECT organization_id, pending_edit_json, COALESCE(suggester_email,''), COALESCE(title,'') FROM events WHERE id=?", id).Scan(&orgID, &pendingJSON, &suggesterEmail, &eventTitle); err == sql.ErrNoRows {
 		writeError(w, "Event not found", http.StatusNotFound)
 		return
 	} else if err != nil {
@@ -486,7 +487,28 @@ func handlePendingEdit(w http.ResponseWriter, r *http.Request, approve bool) {
 			return
 		}
 	} else {
-		db.Exec("UPDATE events SET pending_edit_json=NULL, pending_edit_submitted_at=NULL WHERE id=?", id)
+		// Rejecting requires a reason: it is emailed to the submitter as the
+		// admin's statement of reasons (#1442, DSA Art. 17) and logged for the
+		// audit trail. The event title rides along for the log line.
+		reason := ""
+		if r.Body != nil {
+			var rb struct {
+				Reason string `json:"reason"`
+			}
+			json.NewDecoder(r.Body).Decode(&rb)
+			reason = strings.TrimSpace(rb.Reason)
+		}
+		if reason == "" {
+			writeError(w, "a reason is required to reject a suggested edit", http.StatusBadRequest)
+			return
+		}
+		if _, err := db.Exec("UPDATE events SET pending_edit_json=NULL, pending_edit_submitted_at=NULL WHERE id=?", id); err != nil {
+			writeInternalError(w, err)
+			return
+		}
+		log.Printf("pending-edit: rejected event %d (title=%q) — reason=%q", id, eventTitle, reason)
+		sendDeclineNotice(suggesterEmail, "Your suggested edit was not applied",
+			"Your suggested edit was reviewed and not applied.", reason)
 	}
 
 	w.WriteHeader(http.StatusNoContent)

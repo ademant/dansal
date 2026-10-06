@@ -858,7 +858,7 @@ func rejectRegHandler(w http.ResponseWriter, r *http.Request) {
 	if pr.UserID.Valid {
 		deleteUserByID(db, pr.UserID.Int64)
 	}
-	log.Printf("register: rejected pending registration %d", id)
+	log.Printf("register: rejected pending registration %d — reason=%q", id, strings.TrimSpace(body.Reason))
 
 	if pr.Verified == 1 {
 		rejectMsg := "Your registration request was not approved."

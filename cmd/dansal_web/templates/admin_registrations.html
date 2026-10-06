@@ -135,7 +135,7 @@ function rejectReg(id, verified) {
     submitReject(id, '');
   } else {
     _rejectID = id; _rejectVerified = true;
-    document.getElementById('reject-reason').value = '';
+    document.getElementById('reject-reason').value = {{$.Strings.T "admin_reg_reject_reason_default" | jsStr}};
     document.getElementById('reject-modal').hidden = false;
     document.getElementById('reject-reason').focus();
   }

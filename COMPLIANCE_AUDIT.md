@@ -1,5 +1,13 @@
 # Compliance Audit — dansal
 
+| | |
+|---|---|
+| **Author** | ademant (AI-assisted, opencode/big-pickle) |
+| **Date** | 2026-10-06 |
+| **Reviewed commit** | `daecfc5` (line references valid as of this commit) |
+| **Filed as** | `452ecde` — issues [#1438–#1452](https://github.com/ademant/dansal/issues?q=label%3Acompliance) (`compliance` label) |
+| **Status** | Current — update the date and reviewed commit when revisiting the audit |
+
 Regulatory gap analysis for a private, non-commercial, Europe-hosted event information
 service. Read-only review of the source tree; all `file:line` references are as of
 commit `daecfc5` and will drift with development.

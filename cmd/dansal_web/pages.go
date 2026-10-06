@@ -9,8 +9,17 @@ import (
 	"path/filepath"
 
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
 	"gopkg.in/yaml.v2"
 )
+
+// legalMarkdown is the shared renderer for impressum/privacy/terms (#1464):
+// GFM (tables, strikethrough, autolinks, task lists) on top of base
+// CommonMark. The bare goldmark.Convert() convenience function used before
+// only ran CommonMark — the privacy policy's data-category/cookie/transfer
+// tables (GFM pipe-table syntax, written per #1438's checklist) rendered as
+// raw "| pipe | text |" blobs inside a <p> instead of an HTML <table>.
+var legalMarkdown = goldmark.New(goldmark.WithExtensions(extension.GFM))
 
 type PagesContent struct {
 	Contact   map[string]string `yaml:"contact"`
@@ -94,7 +103,7 @@ func LegalMarkdownTextHTML(name, text string) template.HTML {
 		return ""
 	}
 	var buf bytes.Buffer
-	if err := goldmark.Convert([]byte(text), &buf); err != nil {
+	if err := legalMarkdown.Convert([]byte(text), &buf); err != nil {
 		log.Printf("legal markdown %s: render error: %v", name, err)
 		return template.HTML(`<pre>` + html.EscapeString(text) + `</pre>`)
 	}

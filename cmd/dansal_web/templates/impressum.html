@@ -1,5 +1,8 @@
 {{define "content"}}
-<h1>{{.Strings.T "nav_impressum"}}</h1>
+{{/* #1464: this template is shared by /impressum, /privacy, and /terms
+     (legalPageHandler renders all three through it) — the heading must use
+     the actual page title, not a hardcoded "Impressum" for every page. */}}
+<h1>{{.Title}}</h1>
 <div class="detail-section">
   {{.Data}}
 </div>

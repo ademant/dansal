@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"compress/gzip"
 	"context"
 	"database/sql"
@@ -18,8 +17,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/yuin/goldmark"
 )
 
 type webContextKey int
@@ -1744,13 +1741,10 @@ func impressumHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFun
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := i18n.detectLang(r)
 		var body template.HTML
+		// #1464: shares LegalMarkdownTextHTML's GFM-enabled renderer with
+		// privacy/terms instead of duplicating a goldmark.Convert call here.
 		if text := siteCfg.ImpressumText(lang); text != "" {
-			var buf bytes.Buffer
-			if err := goldmark.Convert([]byte(text), &buf); err != nil {
-				body = template.HTML(`<div class="impressum-text">` + template.HTMLEscapeString(text) + `</div>`)
-			} else {
-				body = template.HTML(sanitizeMarkdownHTML(buf.String()))
-			}
+			body = LegalMarkdownTextHTML("impressum", text)
 		} else if md := LegalMarkdownHTML(cfg.LegalDir, "impressum"); md != "" {
 			body = md
 		} else {

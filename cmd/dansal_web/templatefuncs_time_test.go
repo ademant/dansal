@@ -116,3 +116,24 @@ func TestIsPastDate(t *testing.T) {
 		})
 	}
 }
+
+// formatDateRange (#festivals): one date for a single-day festival, a
+// "start – end" span when the festival crosses midnight, and the bare start
+// date when no end is given.
+func TestFormatDateRange(t *testing.T) {
+	cases := []struct {
+		name             string
+		start, end, want string
+	}{
+		{"single day", "2026-06-12T18:00:00+02:00", "2026-06-12T23:00:00+02:00", "12 Jun 2026"},
+		{"crosses midnight", "2026-06-12T18:00:00+02:00", "2026-06-14T00:30:00+02:00", "12 Jun 2026 – 14 Jun 2026"},
+		{"no end", "2026-06-12T18:00:00+02:00", "", "12 Jun 2026"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := formatDateRange("en", "", c.start, c.end); got != c.want {
+				t.Errorf("formatDateRange(%q, %q) = %q, want %q", c.start, c.end, got, c.want)
+			}
+		})
+	}
+}

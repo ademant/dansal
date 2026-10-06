@@ -73,6 +73,23 @@ func parseTime(s string) (time.Time, bool) {
 	return strutil.ParseTime(s)
 }
 
+// formatDateRange renders a locale-formatted date range: a single date when
+// start and end fall on the same calendar day (or end is empty), otherwise
+// "start – end". Used by the /festivals tables, where a festival's span
+// matters more than its start clock time.
+func formatDateRange(lang, dateFormat, start, end string) string {
+	s := formatDateStr(lang, dateFormat, start)
+	if end == "" {
+		return s
+	}
+	st, ok1 := parseTime(start)
+	et, ok2 := parseTime(end)
+	if ok1 && ok2 && st.Year() == et.Year() && st.Month() == et.Month() && st.Day() == et.Day() {
+		return s
+	}
+	return s + " – " + formatDateStr(lang, dateFormat, end)
+}
+
 // isPastDate reports whether s (an absolute RFC3339 instant, as the API
 // always returns) falls before the start of today in the server process's
 // local time. Used by the admin import preview (#1416) to hide past-dated
@@ -451,6 +468,7 @@ var tmplFuncsTime = template.FuncMap{
 		}
 		return ""
 	},
+	"formatDateRange": formatDateRange,
 	"isoDate": func(s string) string {
 		if t, ok := parseTime(s); ok {
 			return t.Format("2006-01-02")

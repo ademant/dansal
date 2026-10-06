@@ -639,7 +639,7 @@ document.addEventListener('DOMContentLoaded', function(){
     data-visual-support="{{if index $ea "visual_support"}}1{{else}}0{{end}}"
     data-bar="{{if index $ea "bar"}}1{{else}}0{{end}}"
     data-kitchen="{{if index $ea "kitchen"}}1{{else}}0{{end}}">
-  <td class="col-time">{{isoTime .StartTime}}</td>
+  <td class="col-time">{{if $.DateRange}}{{formatDateRange $.LangCode $.DateFormat .StartTime .EndTime}}{{else}}{{isoTime .StartTime}}{{end}}</td>
   <td>
     <a href="/events/{{.ID}}"{{if .IsCancelled}} class="title-cancelled"{{end}}>{{.Title}}</a>
     {{if .SeriesID}}<span class="badge" title="{{$.Strings.T "badge_recurring"}}">🔁</span>{{end}}

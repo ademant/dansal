@@ -21,7 +21,7 @@
 <table class="event-table">
   <thead>
     <tr>
-      <th class="col-time">{{$.Strings.T "col_time"}}</th>
+      <th class="col-time">{{$.Strings.T "col_date"}}</th>
       <th>{{$.Strings.T "col_title"}}</th>
       <th>{{$.Strings.T "col_location"}}</th>
       <th class="col-type">{{$.Strings.T "col_type"}}</th>
@@ -30,7 +30,7 @@
   </thead>
   <tbody>
   {{range .YearEvents}}
-  {{template "event-row" (dict "Event" . "OrgMap" $orgMap "TagMap" $.Data.TagMap "Strings" $.Strings)}}
+  {{template "event-row" (dict "Event" . "OrgMap" $orgMap "TagMap" $.Data.TagMap "Strings" $.Strings "DateRange" true "LangCode" $.LangCode "DateFormat" $.DateFormat)}}
   {{end}}
   </tbody>
 </table>
@@ -45,7 +45,7 @@
 <table class="event-table fest-folded">
   <thead>
     <tr>
-      <th class="col-time">{{$.Strings.T "col_time"}}</th>
+      <th class="col-time">{{$.Strings.T "col_date"}}</th>
       <th>{{$.Strings.T "col_title"}}</th>
       <th>{{$.Strings.T "col_location"}}</th>
       <th class="col-type">{{$.Strings.T "col_type"}}</th>
@@ -54,7 +54,7 @@
   </thead>
   <tbody>
   {{range .FoldedEvents}}
-  {{template "event-row" (dict "Event" . "OrgMap" $orgMap "TagMap" $.Data.TagMap "Strings" $.Strings)}}
+  {{template "event-row" (dict "Event" . "OrgMap" $orgMap "TagMap" $.Data.TagMap "Strings" $.Strings "DateRange" true "LangCode" $.LangCode "DateFormat" $.DateFormat)}}
   {{end}}
   </tbody>
 </table>

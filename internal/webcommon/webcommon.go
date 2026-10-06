@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/ademant/dansal/internal/websession"
+	"gopkg.in/yaml.v2"
 )
 
 // Session wraps HMAC-signed session cookies (see websession) together with a
@@ -162,3 +163,47 @@ pt: "%s é o calendário comunitário de eventos de bal-folk, fest-noz e outras 
 pl: "%s to społecznościowy kalendarz wydarzeń bal-folk, fest-noz i innych tradycyjnych tańców w całej Europie. Znajdź nadchodzące bale, warsztaty, festiwale i sesje muzyczne – filtruj według kraju, regionu, miasta lub stylu tańca. Wszystkie wydarzenia są zgłaszane przez lokalnych organizatorów i publikowane bezpłatnie."
 cs: "%s je komunitní kalendář akcí bal-folk, fest-noz a dalších tradičních tanečních akcí po celé Evropě. Najděte nadcházející bály, workshopy, festivaly a hudební sezení – filtrujte podle země, regionu, města nebo tanečního stylu. Všechny akce zadávají místní organizátoři a jsou zveřejňovány zdarma."
 `
+
+// ParseLangYAML parses a compile-time-constant lang->text YAML mapping (the
+// shape DefaultHomeIntroYAML/DefaultDescBallYAML/etc. use) into a map. Not
+// meant for arbitrary user input — webmin's multi-language field editor
+// (#1461) stores one site_settings row per language rather than a YAML blob,
+// so the only caller of this today is parsing those shipped Go-constant
+// defaults at startup, where a parse error would be a bug in this binary,
+// not bad operator input. Still logs-and-returns-empty rather than panicking,
+// since a startup-time constant should never be allowed to crash the server.
+func ParseLangYAML(raw string) map[string]string {
+	m := map[string]string{}
+	if err := yaml.Unmarshal([]byte(raw), &m); err != nil {
+		log.Printf("parse lang-YAML default: %v", err)
+	}
+	return m
+}
+
+// MigrateLegacyLangBlob is a one-time, idempotent backfill from the
+// pre-#1461 single-blob site_settings row (key holding `lang: "text"` YAML
+// for all languages at once — home_intro and default_desc_ball/workshop/
+// festival's old format) into one row per language (key_lang), matching the
+// impressum_{lang}/privacy_{lang}/terms_{lang} convention every
+// multi-language field now uses.
+//
+// Safe to call on every startup of either binary: a no-op once the old blob
+// is empty (never set, or already migrated and cleared) — so dansal-web and
+// dansal-webmin can both call it without coordinating which one runs first
+// or tracking whether it already ran.
+func MigrateLegacyLangBlob(db *sql.DB, key string, langs []string) {
+	old := GetSiteSetting(db, key)
+	if old == "" {
+		return
+	}
+	parsed := ParseLangYAML(old)
+	for _, lang := range langs {
+		if text, ok := parsed[lang]; ok && text != "" {
+			SetSiteSetting(db, key+"_"+lang, text)
+		}
+	}
+	// Clear the old blob now that it's been split out, so this function is
+	// a true no-op on every future startup instead of re-parsing it forever.
+	SetSiteSetting(db, key, "")
+	log.Printf("migrated legacy %s site setting into per-language keys", key)
+}

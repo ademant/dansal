@@ -8,16 +8,27 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/ademant/dansal/internal/webcommon"
 )
 
-// TestParseHomeIntro covers #1298: the admin's YAML is merged on top of the
-// shipped default rather than replacing it, so a language the admin never
-// touches (or explicitly leaves blank) still resolves to working default
-// text instead of going silently blank; a malformed edit falls back to the
-// default for every language rather than breaking the homepage.
-func TestParseHomeIntro(t *testing.T) {
-	t.Run("empty setting returns the full shipped default", func(t *testing.T) {
-		m := parseHomeIntro("")
+// TestLoadLangMapWithDefault covers #1298/#1461: a per-language DB override
+// is merged on top of the shipped default rather than replacing it, so a
+// language the admin never touches (or whose row is explicitly empty —
+// webmin's save handler stores "" for a language that still matches its
+// default, see siteConfigLegalTextSaveHandler) still resolves to working
+// default text instead of going silently blank.
+func TestLoadLangMapWithDefault(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.Exec(`CREATE TABLE site_settings (key TEXT PRIMARY KEY, value TEXT)`)
+	defaults := webcommon.ParseLangYAML(webcommon.DefaultHomeIntroYAML)
+
+	t.Run("empty DB returns the full shipped default", func(t *testing.T) {
+		m := loadLangMapWithDefault(db, "home_intro", defaults)
 		if len(m) < 12 {
 			t.Fatalf("expected at least 12 default languages, got %d: %v", len(m), m)
 		}
@@ -26,39 +37,27 @@ func TestParseHomeIntro(t *testing.T) {
 		}
 	})
 
-	t.Run("admin override for one language leaves every other language on the default", func(t *testing.T) {
-		defaultM := parseHomeIntro("")
-		m := parseHomeIntro(`en: "Custom %s text."`)
+	t.Run("a DB override for one language leaves every other language on the default", func(t *testing.T) {
+		setSiteSetting(db, "home_intro_en", "Custom %s text.")
+		m := loadLangMapWithDefault(db, "home_intro", defaults)
 		if m["en"] != "Custom %s text." {
 			t.Errorf("en = %q, want the override", m["en"])
 		}
-		if m["de"] != defaultM["de"] {
+		if m["de"] != defaults["de"] {
 			t.Errorf("de should be unchanged from the default, got %q", m["de"])
 		}
-		if m["fr"] != defaultM["fr"] {
-			t.Errorf("fr should be unchanged from the default, got %q", m["fr"])
-		}
+		setSiteSetting(db, "home_intro_en", "")
 	})
 
-	t.Run("explicit blank value for a language does not blank the default", func(t *testing.T) {
-		defaultM := parseHomeIntro("")
-		m := parseHomeIntro("en: \"\"\nde: \"Custom.\"")
-		if m["en"] != defaultM["en"] {
-			t.Errorf("en with an empty override should keep the default, got %q", m["en"])
+	t.Run("an explicitly empty row for a language does not blank the default", func(t *testing.T) {
+		setSiteSetting(db, "home_intro_en", "")
+		setSiteSetting(db, "home_intro_de", "Custom.")
+		m := loadLangMapWithDefault(db, "home_intro", defaults)
+		if m["en"] != defaults["en"] {
+			t.Errorf("en with an empty row should keep the default, got %q", m["en"])
 		}
 		if m["de"] != "Custom." {
 			t.Errorf("de = %q, want the override", m["de"])
-		}
-	})
-
-	t.Run("malformed YAML falls back to the full default, not a partial/broken map", func(t *testing.T) {
-		defaultM := parseHomeIntro("")
-		m := parseHomeIntro("not: [valid: yaml")
-		if len(m) != len(defaultM) {
-			t.Fatalf("malformed YAML should yield the untouched default (%d langs), got %d: %v", len(defaultM), len(m), m)
-		}
-		if m["en"] != defaultM["en"] {
-			t.Errorf("en should be the default after a parse failure, got %q", m["en"])
 		}
 	})
 }

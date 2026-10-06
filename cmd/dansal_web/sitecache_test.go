@@ -63,7 +63,7 @@ func TestSiteSettingsCacheDescBuckets(t *testing.T) {
 		t.Errorf("DescFestival(en) = %q, want the shipped default mentioning festival", got)
 	}
 
-	setSiteSetting(db, "default_desc_ball", `en: "Custom ball description."`)
+	setSiteSetting(db, "default_desc_ball_en", "Custom ball description.")
 	cache = newSiteSettingsCache(db)
 	if got := cache.DescBall("en"); got != "Custom ball description." {
 		t.Errorf("DescBall(en) after override = %q, want the override", got)

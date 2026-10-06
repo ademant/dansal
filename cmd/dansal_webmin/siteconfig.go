@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"log"
 	"net/http"
@@ -44,6 +45,36 @@ const legalTextImportMaxBytes = 1 << 20
 type siteConfigLegalLanguage struct {
 	Code string
 	Name string
+}
+
+// multiLangDefaults registers the shipped Go-constant default text (#1298,
+// #1290) for every multi-language field that has one, parsed once into
+// lang->text maps at package init. impressum/privacy/terms have no entry —
+// they fall back to legal_dir/pages_file entirely in dansal-web, not to any
+// webmin-side default — so a lookup miss on this map means "no default",
+// not "field unknown" (validLegalDocument below is the actual registry of
+// valid field keys).
+var multiLangDefaults = map[string]map[string]string{
+	"home_intro":            webcommon.ParseLangYAML(webcommon.DefaultHomeIntroYAML),
+	"default_desc_ball":     webcommon.ParseLangYAML(webcommon.DefaultDescBallYAML),
+	"default_desc_workshop": webcommon.ParseLangYAML(webcommon.DefaultDescWorkshopYAML),
+	"default_desc_festival": webcommon.ParseLangYAML(webcommon.DefaultDescFestivalYAML),
+}
+
+// multiLangFieldView is the per-field data the generalized multi-language
+// text editor template renders (#1461): one dropdown + one textarea per
+// language, toggled client-side (base.html), no page reload. Used for all 7
+// site_settings fields edited this way — impressum/privacy/terms (Texts
+// has no default to fall back to, blank means "unset") and home_intro/
+// default_desc_ball/workshop/festival (Texts falls back to the field's
+// shipped default per language, see loadMultiLangTexts).
+type multiLangFieldView struct {
+	Key   string // site_settings key prefix, and the "page" form/query value
+	Title string
+	Hint  template.HTML
+	Rows  int
+	Langs []siteConfigLegalLanguage
+	Texts map[string]string // lang -> text to show in that language's textarea
 }
 
 type legalTextJSON struct {
@@ -292,11 +323,7 @@ type siteConfigData struct {
 	HasRelayBanner       bool
 	Dances               []dance
 	DefaultDanceIDs      map[int]bool
-	LegalPageLangs       []siteConfigLegalLanguage
-	LegalLang            string
-	ImpressumText        string
-	PrivacyText          string
-	TermsText            string
+	MultiLangFields      []multiLangFieldView // #1461: impressum/privacy/terms/home_intro/default_desc_*
 	HolidayCountry       string
 	PlaceCountries       string                // #1429: countries for the city type-ahead's place table
 	PlaceImports         []places.ImportStatus // #1429: import state per country
@@ -310,16 +337,63 @@ type siteConfigData struct {
 	// (timezone-get/timezone-set), never through db. TimezoneOptions is a
 	// curated common-zone list with the current effective value always
 	// present even if it isn't one of the curated options.
-	Timezone         string
-	TimezoneOptions  []string
-	TimezoneError    string
-	SameAs           string // one external profile URL per line (#1296)
-	HomeIntroYAML    string // #1298: lang -> homepage intro paragraph, as YAML text
-	DescBallYAML     string // #1290: lang -> default event description for a ball/fest-noz-tagged event, as YAML text
-	DescWorkshopYAML string // #1290: lang -> default event description for a workshop-tagged event, as YAML text
-	DescFestivalYAML string // #1290: lang -> default event description for a festival-tagged event, as YAML text
-	NoDB             bool
-	NoImagesDir      bool
+	Timezone        string
+	TimezoneOptions []string
+	TimezoneError   string
+	SameAs          string // one external profile URL per line (#1296)
+	NoDB            bool
+	NoImagesDir     bool
+}
+
+// buildMultiLangFields assembles the 7 fields the generalized multi-language
+// text editor renders (#1461): title/hint are static per field, Texts comes
+// from loadMultiLangTexts.
+func buildMultiLangFields(db *sql.DB) []multiLangFieldView {
+	field := func(key, title string, rows int, hint string) multiLangFieldView {
+		return multiLangFieldView{
+			Key:   key,
+			Title: title,
+			Hint:  template.HTML(hint), //nolint:gosec // static admin-authored hint text, not user input
+			Rows:  rows,
+			Langs: siteConfigLegalLanguages,
+			Texts: loadMultiLangTexts(db, key, multiLangDefaults[key]),
+		}
+	}
+	return []multiLangFieldView{
+		field("impressum", "Impressum / Legal notice", 8,
+			`Shown at <code>/impressum</code>. Edit any subset of languages below. Leave a language blank to use the default from <code>legal_dir</code> or <code>pages_file</code> (web.yaml).`),
+		field("privacy", "Privacy notice", 8,
+			`Operator-provided Markdown at <code>/privacy</code>. Include controller/contact details, enabled services, purposes, retention, cookies, transfers, and data-subject rights. This editor does not provide legal advice. A blank language falls back to another configured language; with none set at all, <code>privacy.md</code> in <code>legal_dir</code> is used.`),
+		field("terms", "Terms of use", 8,
+			`Operator-provided Markdown at <code>/terms</code>. Define acceptable use and instance-specific rules. This editor does not provide legal advice. A blank language falls back to another configured language; with none set at all, <code>terms.md</code> in <code>legal_dir</code> is used.`),
+		field("home_intro", "Homepage introduction", 8,
+			`Shown as a paragraph above the event list on the homepage. <code>%s</code> is replaced with the site name. Pre-filled with the shipped default per language — editing a language overrides it; leaving a language's text matching its shipped default (including clearing it back to that) keeps it tracking future updates to that default instead of freezing today's wording in place.`),
+		field("default_desc_ball", "Default event description — Ball / fest-noz", 6,
+			`When an event has no description of its own, one is composed automatically from its tags, its dance styles' own descriptions (editable per-dance on <a href="/admin/dances">Dance styles</a> in dansal-web), and its admission info. This is the type-specific opening sentence for a ball/fest-noz-tagged event. Same pre-filled-default behavior as the homepage introduction above.`),
+		field("default_desc_workshop", "Default event description — Workshop", 6,
+			`The opening sentence for a workshop-tagged event's composed description (see Ball / fest-noz above for how composition works).`),
+		field("default_desc_festival", "Default event description — Festival", 6,
+			`The opening sentence for a festival-tagged event's composed description (see Ball / fest-noz above for how composition works).`),
+	}
+}
+
+// loadMultiLangTexts reads one site_settings row per language (key_lang)
+// and, for a field with a shipped default (home_intro/default_desc_*, see
+// multiLangDefaults), falls back to that language's default text when
+// unset — so the editor shows working content instead of a blank field of
+// unclear expected shape. impressum/privacy/terms pass a nil defaults map
+// and so show blank when unset, matching their own "falls back to
+// legal_dir" behavior (handled entirely in dansal-web, not here).
+func loadMultiLangTexts(db *sql.DB, key string, defaults map[string]string) map[string]string {
+	out := make(map[string]string, len(legalPageLangs))
+	for _, lang := range legalPageLangs {
+		v := getSiteSetting(db, key+"_"+lang)
+		if v == "" && defaults != nil {
+			v = defaults[lang]
+		}
+		out[lang] = v
+	}
+	return out
 }
 
 func siteConfigPageHandler(cfg *Config, tmpls *Templates, db *sql.DB) http.HandlerFunc {
@@ -327,9 +401,7 @@ func siteConfigPageHandler(cfg *Config, tmpls *Templates, db *sql.DB) http.Handl
 		d := tmplData(r, cfg, "Site configuration", nil)
 
 		data := siteConfigData{
-			Flash:          r.URL.Query().Get("flash"),
-			LegalPageLangs: siteConfigLegalLanguages,
-			LegalLang:      selectedLegalLanguage(r.URL.Query().Get("legal_lang")),
+			Flash: r.URL.Query().Get("flash"),
 		}
 
 		// #1394: authoritative in the API's own config.yaml, fetched over the
@@ -368,39 +440,12 @@ func siteConfigPageHandler(cfg *Config, tmpls *Templates, db *sql.DB) http.Handl
 			data.RescheduledBadgeDays = "7"
 		}
 
-		data.ImpressumText = getSiteSetting(db, "impressum_"+data.LegalLang)
-		data.PrivacyText = getSiteSetting(db, "privacy_"+data.LegalLang)
-		data.TermsText = getSiteSetting(db, "terms_"+data.LegalLang)
 		data.Dances = fetchDances(r.Context(), cfg.DansalURL)
 		data.DefaultDanceIDs = loadDefaultDanceIDs(db)
 		data.DateFormat = getSiteSetting(db, "date_format")
 		data.TimeFormatSite = getSiteSetting(db, "time_format")
 		data.SameAs = getSiteSetting(db, "same_as")
-		// #1298: pre-fill with the shipped default when nothing's been saved
-		// yet, so the admin sees working, correctly-formatted content to
-		// edit rather than a blank field of unclear expected shape.
-		if v := getSiteSetting(db, "home_intro"); v != "" {
-			data.HomeIntroYAML = v
-		} else {
-			data.HomeIntroYAML = webcommon.DefaultHomeIntroYAML
-		}
-		// #1290: same pre-fill-with-shipped-default treatment for each of
-		// the three default-event-description buckets.
-		if v := getSiteSetting(db, "default_desc_ball"); v != "" {
-			data.DescBallYAML = v
-		} else {
-			data.DescBallYAML = webcommon.DefaultDescBallYAML
-		}
-		if v := getSiteSetting(db, "default_desc_workshop"); v != "" {
-			data.DescWorkshopYAML = v
-		} else {
-			data.DescWorkshopYAML = webcommon.DefaultDescWorkshopYAML
-		}
-		if v := getSiteSetting(db, "default_desc_festival"); v != "" {
-			data.DescFestivalYAML = v
-		} else {
-			data.DescFestivalYAML = webcommon.DefaultDescFestivalYAML
-		}
+		data.MultiLangFields = buildMultiLangFields(db)
 
 		if cfg.ImagesDir == "" {
 			data.NoImagesDir = true
@@ -462,18 +507,9 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		// (siteSettingsCache.SameAs) in dansal_web.
 		setSiteSetting(db, "same_as", strings.TrimSpace(r.FormValue("same_as")))
 
-		// #1298: homepage intro paragraph, YAML text (lang -> text). Stored
-		// as-is (whole-textarea trim only) — YAML parsing and per-language
-		// fallback to the shipped default happen at render time
-		// (siteSettingsCache.HomeIntro) in dansal_web, so a malformed edit
-		// here never blanks the homepage.
-		setSiteSetting(db, "home_intro", strings.TrimSpace(r.FormValue("home_intro")))
-
-		// #1290: default event-description sentences, one YAML text per tag
-		// bucket. Same storage convention as home_intro above.
-		setSiteSetting(db, "default_desc_ball", strings.TrimSpace(r.FormValue("default_desc_ball")))
-		setSiteSetting(db, "default_desc_workshop", strings.TrimSpace(r.FormValue("default_desc_workshop")))
-		setSiteSetting(db, "default_desc_festival", strings.TrimSpace(r.FormValue("default_desc_festival")))
+		// #1461: home_intro and default_desc_* save through
+		// siteConfigLegalTextSaveHandler now (same per-language, same-form
+		// shape as impressum/privacy/terms), not this main settings form.
 
 		var defaultDanceIDs []int
 		for _, v := range r.MultipartForm.Value["default_dance_ids"] {
@@ -503,21 +539,20 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		if len(uploadedAssets) > 0 {
 			log.Printf("audit: site_settings assets=[%s] updated by user=%d", strings.Join(uploadedAssets, ","), callerID)
 		}
-		log.Printf("audit: site_settings keys=[site_name,contact,holiday_country,default_dance_ids,indexnow_key,rescheduled_badge_days,logo_ai_generated,banner_ai_generated,date_format,time_format,same_as,home_intro,default_desc_ball,default_desc_workshop,default_desc_festival] updated by user=%d", callerID)
+		log.Printf("audit: site_settings keys=[site_name,contact,holiday_country,default_dance_ids,indexnow_key,rescheduled_badge_days,logo_ai_generated,banner_ai_generated,date_format,time_format,same_as] updated by user=%d", callerID)
 
 		http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Settings saved"), http.StatusSeeOther)
 	}
 }
 
-func selectedLegalLanguage(lang string) string {
-	for _, candidate := range legalPageLangs {
-		if lang == candidate {
-			return lang
-		}
-	}
-	return "de"
-}
-
+// siteConfigLegalTextSaveHandler saves all 12 languages of one multi-language
+// field in a single POST (#1461) — one "text_<lang>" form field per
+// language, instead of the pre-#1461 one-language-per-request shape. For a
+// field with a shipped default (home_intro/default_desc_*), submitted text
+// equal to that language's current default is stored as "" (no override)
+// rather than frozen verbatim, so a language nobody customized keeps
+// tracking future updates to the shipped default across a binary upgrade —
+// see loadMultiLangTexts/multiLangDefaults.
 func siteConfigLegalTextSaveHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if db == nil {
@@ -530,25 +565,45 @@ func siteConfigLegalTextSaveHandler(db *sql.DB) http.HandlerFunc {
 		}
 
 		page := r.FormValue("page")
-		if page != "impressum" && page != "privacy" && page != "terms" {
+		if !validLegalDocument(page) {
 			http.Error(w, "invalid legal page", http.StatusBadRequest)
 			return
 		}
-		lang := selectedLegalLanguage(r.FormValue("lang"))
-		if lang != r.FormValue("lang") {
-			http.Error(w, "invalid language", http.StatusBadRequest)
+		defaults := multiLangDefaults[page] // nil for impressum/privacy/terms
+
+		tx, err := db.Begin()
+		if err != nil {
+			log.Printf("begin legal text save %s: %v", page, err)
+			http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Error: could not save"), http.StatusSeeOther)
+			return
+		}
+		for _, lang := range legalPageLangs {
+			text := strings.TrimSpace(r.FormValue("text_" + lang))
+			if defaults != nil && text == defaults[lang] {
+				text = ""
+			}
+			if _, err := tx.Exec(
+				"INSERT INTO site_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+				page+"_"+lang, text,
+			); err != nil {
+				_ = tx.Rollback()
+				log.Printf("save legal text %s/%s: %v", page, lang, err)
+				http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Error: could not save"), http.StatusSeeOther)
+				return
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			log.Printf("commit legal text save %s: %v", page, err)
+			http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Error: could not save"), http.StatusSeeOther)
 			return
 		}
 
-		setSiteSetting(db, page+"_"+lang, strings.TrimSpace(r.FormValue("text")))
 		var callerID int
 		if u := getSessionUser(r); u != nil {
 			callerID = u.ID
 		}
-		log.Printf("audit: site_settings legal_page=%s language=%s updated by user=%d", page, lang, callerID)
-
-		q := url.Values{"legal_lang": {lang}, "flash": {"Legal text saved"}}
-		http.Redirect(w, r, "/site-config?"+q.Encode(), http.StatusSeeOther)
+		log.Printf("audit: site_settings legal_page=%s updated by user=%d", page, callerID)
+		http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Saved"), http.StatusSeeOther)
 	}
 }
 
@@ -636,6 +691,7 @@ func siteConfigLegalTextImportHandler(db *sql.DB) http.HandlerFunc {
 				return
 			}
 		}
+		defaults := multiLangDefaults[page] // nil for impressum/privacy/terms
 
 		tx, err := db.Begin()
 		if err != nil {
@@ -644,6 +700,13 @@ func siteConfigLegalTextImportHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 		for lang, text := range imported.Languages {
+			// Same "matches the shipped default" normalization as a manual
+			// save (#1461) — an exported-then-reimported backup must not
+			// freeze today's default text for a language nobody actually
+			// customized.
+			if defaults != nil && text == defaults[lang] {
+				text = ""
+			}
 			if _, err := tx.Exec(
 				"INSERT INTO site_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
 				page+"_"+lang, text,
@@ -669,8 +732,19 @@ func siteConfigLegalTextImportHandler(db *sql.DB) http.HandlerFunc {
 	}
 }
 
+// validLegalDocument reports whether page is one of the 7 multi-language
+// field keys (#1461): impressum/privacy/terms (no shipped default) plus
+// home_intro/default_desc_ball/workshop/festival (keys of multiLangDefaults,
+// which is also valid for the 3 that have no default — map lookup on a
+// missing key is fine, it's only used as a membership check here via the
+// explicit list below since multiLangDefaults itself doesn't list them).
 func validLegalDocument(page string) bool {
-	return page == "impressum" || page == "privacy" || page == "terms"
+	switch page {
+	case "impressum", "privacy", "terms", "home_intro", "default_desc_ball", "default_desc_workshop", "default_desc_festival":
+		return true
+	default:
+		return false
+	}
 }
 
 func isLegalLanguage(lang string) bool {
@@ -683,11 +757,7 @@ func isLegalLanguage(lang string) bool {
 }
 
 func redirectLegalTextImport(w http.ResponseWriter, r *http.Request, page, flash string) {
-	q := url.Values{
-		"legal_lang": {selectedLegalLanguage(r.FormValue("legal_lang"))},
-		"flash":      {flash},
-	}
-	http.Redirect(w, r, "/site-config?"+q.Encode(), http.StatusSeeOther)
+	http.Redirect(w, r, "/site-config?flash="+url.QueryEscape(flash), http.StatusSeeOther)
 }
 
 // POST /site-config/relay/assets — uploads relay actor avatar and/or banner.

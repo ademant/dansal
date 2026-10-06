@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/ademant/dansal/internal/webcommon"
-	"gopkg.in/yaml.v2"
 
 	"github.com/ademant/dansal/internal/places"
 )
@@ -84,10 +83,16 @@ func (c *siteSettingsCache) load() {
 	timeFormatSite := getSiteSetting(c.db, "time_format")
 	tileToken := getSiteSetting(c.db, "tile_token")
 	sameAs := parseSameAs(getSiteSetting(c.db, "same_as"))
-	homeIntro := parseLangYAML(getSiteSetting(c.db, "home_intro"), webcommon.DefaultHomeIntroYAML, "home_intro")
-	descBall := parseLangYAML(getSiteSetting(c.db, "default_desc_ball"), webcommon.DefaultDescBallYAML, "default_desc_ball")
-	descWorkshop := parseLangYAML(getSiteSetting(c.db, "default_desc_workshop"), webcommon.DefaultDescWorkshopYAML, "default_desc_workshop")
-	descFestival := parseLangYAML(getSiteSetting(c.db, "default_desc_festival"), webcommon.DefaultDescFestivalYAML, "default_desc_festival")
+	// #1461: home_intro/default_desc_* moved from a single YAML-blob
+	// site_settings row to one row per language (key_lang), same convention
+	// as impressum_{lang} above — loadLangMapWithDefault merges those DB
+	// overrides on top of the shipped Go-constant default per language,
+	// same end result as the old blob-merge but without a single malformed
+	// edit able to blank every language at once.
+	homeIntro := loadLangMapWithDefault(c.db, "home_intro", webcommon.ParseLangYAML(webcommon.DefaultHomeIntroYAML))
+	descBall := loadLangMapWithDefault(c.db, "default_desc_ball", webcommon.ParseLangYAML(webcommon.DefaultDescBallYAML))
+	descWorkshop := loadLangMapWithDefault(c.db, "default_desc_workshop", webcommon.ParseLangYAML(webcommon.DefaultDescWorkshopYAML))
+	descFestival := loadLangMapWithDefault(c.db, "default_desc_festival", webcommon.ParseLangYAML(webcommon.DefaultDescFestivalYAML))
 	c.mu.Lock()
 	c.contact, c.siteName, c.impressum, c.legalPages, c.indexNowKey, c.holidayCountry, c.rescheduledBadgeDays,
 		c.defaultDanceIDs, c.bannerAIGenerated, c.logoAIGenerated,
@@ -101,36 +106,26 @@ func (c *siteSettingsCache) load() {
 	c.mu.Unlock()
 }
 
-// parseLangYAML parses a webmin-managed lang->text site setting (YAML text)
-// — home_intro (#1298) and the default_desc_* buckets (#1290) all use this
-// same shape — merged ON TOP OF defaultYAML rather than replacing it, so an
-// admin who only edits (or only ever fills in) a subset of languages still
-// gets working default text for every language they didn't touch, instead
-// of that language silently going blank. A malformed edit is logged
-// (naming which setting, since several share this parser) and ignored
-// entirely, leaving the shipped default in place for every language.
-func parseLangYAML(raw, defaultYAML, settingName string) map[string]string {
-	m := map[string]string{}
-	yaml.Unmarshal([]byte(defaultYAML), &m)
-	if raw == "" {
-		return m
+// loadLangMapWithDefault reads one site_settings row per language
+// (keyPrefix_lang) for home_intro/default_desc_* (#1461's per-language
+// storage, same convention impressum_{lang} already used), merged ON TOP OF
+// defaults rather than replacing it, so an admin who only edits a subset of
+// languages still gets working default text for every language they didn't
+// touch, instead of that language silently going blank. webmin's save
+// handler clears (stores "") a language whose submitted text still matches
+// its shipped default, so "" here means "no override" the same way a
+// missing row does.
+func loadLangMapWithDefault(db *sql.DB, keyPrefix string, defaults map[string]string) map[string]string {
+	m := make(map[string]string, len(defaults))
+	for lang, text := range defaults {
+		m[lang] = text
 	}
-	var override map[string]string
-	if err := yaml.Unmarshal([]byte(raw), &override); err != nil {
-		log.Printf("could not parse %s YAML, using default for every language: %v", settingName, err)
-		return m
-	}
-	for lang, text := range override {
-		if text != "" {
-			m[lang] = text
+	for _, lang := range legalPageLangs {
+		if v := getSiteSetting(db, keyPrefix+"_"+lang); v != "" {
+			m[lang] = v
 		}
 	}
 	return m
-}
-
-// parseHomeIntro is parseLangYAML pinned to home_intro's own default (#1298).
-func parseHomeIntro(raw string) map[string]string {
-	return parseLangYAML(raw, webcommon.DefaultHomeIntroYAML, "home_intro")
 }
 
 // parseSameAs splits the webmin-managed same_as setting (one URL per line)

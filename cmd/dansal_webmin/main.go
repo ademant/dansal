@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/ademant/dansal/internal/instance"
+	"github.com/ademant/dansal/internal/webcommon"
 )
 
 var httpClient = &http.Client{Timeout: 15 * time.Second}
@@ -53,6 +54,12 @@ func main() {
 
 	tmpls := loadTemplates()
 	webDB := openWebDB(cfg.WebDBPath)
+	// #1461: one-time, idempotent backfill from the pre-#1461 single-blob
+	// home_intro/default_desc_* site settings into per-language rows. Safe
+	// to also run from dansal-web's startup (see MigrateLegacyLangBlob).
+	for _, key := range []string{"home_intro", "default_desc_ball", "default_desc_workshop", "default_desc_festival"} {
+		webcommon.MigrateLegacyLangBlob(webDB, key, legalPageLangs)
+	}
 
 	buildHandler := func(cfg *Config) http.Handler {
 		mux := http.NewServeMux()

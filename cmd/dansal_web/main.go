@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/ademant/dansal/internal/instance"
+	"github.com/ademant/dansal/internal/webcommon"
 )
 
 // authThrottle is the shared rate limiter for register, magic-login, and verify endpoints.
@@ -124,6 +125,13 @@ func main() {
 	initDBKey()
 	db := initDB(cfg.DBPath)
 	migrateActorKeyEncryption(db)
+	// #1461: one-time, idempotent backfill from the pre-#1461 single-blob
+	// home_intro/default_desc_* site settings into per-language rows.
+	// Harmless to also run from dansal-webmin's startup — see
+	// MigrateLegacyLangBlob's own doc comment for why order doesn't matter.
+	for _, key := range []string{"home_intro", "default_desc_ball", "default_desc_workshop", "default_desc_festival"} {
+		webcommon.MigrateLegacyLangBlob(db, key, legalPageLangs)
+	}
 	siteCfg = newSiteSettingsCache(db)
 	locAliasCache = newLocationAliasCache(db)
 	getOrCreateTileToken(db) // #1269: ensure the public tile token exists before the cache's first read

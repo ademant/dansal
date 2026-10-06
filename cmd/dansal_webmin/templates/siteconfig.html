@@ -1,4 +1,41 @@
 {{template "base" .}}
+{{/* #1461: one dropdown + one textarea per language, all server-rendered;
+     base.html's [data-legal-language] change handler toggles which
+     .legal-lang-pane is visible — no page reload, independent per field.
+     Used for all 7 multi-language fields (impressum/privacy/terms/
+     home_intro/default_desc_ball/workshop/festival). */}}
+{{define "multi-lang-field-editor"}}
+<div class="card legal-text-editor">
+  <div class="card-title">{{.Title}}</div>
+  <div class="hint legal-editor-hint">{{.Hint}}</div>
+  <form method="POST" action="/site-config/legal-text">
+    <input type="hidden" name="page" value="{{.Key}}">
+    <div class="form-group">
+      <label for="{{.Key}}-language">Language</label>
+      <select id="{{.Key}}-language" data-legal-language>
+        {{range .Langs}}<option value="{{.Code}}"{{if eq .Code "de"}} selected{{end}}>{{.Name}}</option>{{end}}
+      </select>
+    </div>
+    {{$texts := .Texts}}{{$rows := .Rows}}{{$key := .Key}}
+    {{range .Langs}}
+    <div class="form-group legal-lang-pane"{{if ne .Code "de"}} hidden{{end}} data-legal-lang="{{.Code}}">
+      <textarea id="{{$key}}-text-{{.Code}}" name="text_{{.Code}}" rows="{{$rows}}" class="legal-textarea" aria-label="{{.Name}}">{{index $texts .Code}}</textarea>
+    </div>
+    {{end}}
+    <button type="submit" class="btn">Save</button>
+  </form>
+  <div class="legal-transfer">
+    <a class="btn btn-secondary" href="/site-config/legal-text/export?page={{.Key}}">Download all languages (JSON)</a>
+    <form method="POST" action="/site-config/legal-text/import?page={{.Key}}" enctype="multipart/form-data">
+      <label class="form-group">Import translations (JSON)
+        <input type="file" name="file" accept=".json,application/json" required>
+      </label>
+      <button type="submit" class="btn btn-secondary">Import</button>
+    </form>
+    <div class="hint">Imports update only languages included in the file; an empty string clears that translation. Invalid files are rejected without saving changes.</div>
+  </div>
+</div>
+{{end}}
 {{define "content"}}
 <h1>Site configuration</h1>
 {{with .Data}}
@@ -215,31 +252,8 @@
   </div>
 </div>
 
-<div class="card">
-  <div class="card-title">Homepage introduction</div>
-  <div class="form-group">
-    <textarea name="home_intro" rows="10" style="width:100%;resize:vertical;font-family:inherit;padding:.4rem .6rem;border:1px solid var(--border);border-radius:4px;background:var(--bg-card);color:var(--fg);font-size:.88rem;font-family:monospace">{{.HomeIntroYAML}}</textarea>
-    <div class="hint">YAML text: one line per language (<code>en: "..."</code>), shown as a paragraph above the event list on the homepage. <code>%s</code> is replaced with the site name. Pre-filled with the shipped default — edit any subset of languages; a language you don't touch keeps using the default. Leave a language out entirely (or leave the whole field blank) to fall back to the default for it.</div>
-  </div>
-</div>
-
-<div class="card">
-  <div class="card-title">Default event descriptions</div>
-  <div class="hint" style="margin-bottom:.75rem">
-    When an event has no description of its own, one is composed automatically from its tags, its dance styles' own descriptions (editable per-dance on <a href="/admin/dances">Dance styles</a> in dansal-web), and its admission info. These three fields are the type-specific opening sentence, one YAML text per language each — same format and merge behavior as the homepage introduction above.
-  </div>
-  <div class="form-group">
-    <label>Ball / fest-noz events</label>
-    <textarea name="default_desc_ball" rows="6" style="width:100%;resize:vertical;font-family:monospace;padding:.4rem .6rem;border:1px solid var(--border);border-radius:4px;background:var(--bg-card);color:var(--fg);font-size:.88rem">{{.DescBallYAML}}</textarea>
-  </div>
-  <div class="form-group">
-    <label>Workshop events</label>
-    <textarea name="default_desc_workshop" rows="6" style="width:100%;resize:vertical;font-family:monospace;padding:.4rem .6rem;border:1px solid var(--border);border-radius:4px;background:var(--bg-card);color:var(--fg);font-size:.88rem">{{.DescWorkshopYAML}}</textarea>
-  </div>
-  <div class="form-group">
-    <label>Festival events</label>
-    <textarea name="default_desc_festival" rows="6" style="width:100%;resize:vertical;font-family:monospace;padding:.4rem .6rem;border:1px solid var(--border);border-radius:4px;background:var(--bg-card);color:var(--fg);font-size:.88rem">{{.DescFestivalYAML}}</textarea>
-  </div>
+<div class="hint" style="max-width:680px">
+  Homepage introduction, default event descriptions, Impressum, Privacy notice, and Terms of use all moved below the Save button — each is its own multi-language editor with a language dropdown, saved independently of this form.
 </div>
 
 <div>
@@ -250,95 +264,7 @@
 </form>
 
 <div class="legal-editors">
-<div class="card legal-text-editor">
-  <div class="card-title">Impressum / Legal notice</div>
-  <div class="hint legal-editor-hint">Shown at <code>/impressum</code>. Select a language to edit only that translation. Leave it blank to use the default from <code>legal_dir</code> or <code>pages_file</code> (web.yaml).</div>
-  <form method="POST" action="/site-config/legal-text">
-    <input type="hidden" name="page" value="impressum">
-    <input type="hidden" name="lang" value="{{.LegalLang}}">
-    <div class="form-group">
-      <label for="impressum-language">Language</label>
-      <select id="impressum-language" data-legal-language>
-        {{range .LegalPageLangs}}<option value="{{.Code}}"{{if eq .Code $.Data.LegalLang}} selected{{end}}>{{.Name}}</option>{{end}}
-      </select>
-    </div>
-    <div class="form-group">
-      <label for="impressum-text">Legal notice text</label>
-      <textarea id="impressum-text" name="text" rows="8" class="legal-textarea">{{.ImpressumText}}</textarea>
-    </div>
-    <button type="submit" class="btn">Save this translation</button>
-  </form>
-  <div class="legal-transfer">
-    <a class="btn btn-secondary" href="/site-config/legal-text/export?page=impressum">Download all languages (JSON)</a>
-    <form method="POST" action="/site-config/legal-text/import?page=impressum&amp;legal_lang={{.LegalLang}}" enctype="multipart/form-data">
-      <label class="form-group">Import translations (JSON)
-        <input type="file" name="file" accept=".json,application/json" required>
-      </label>
-      <button type="submit" class="btn btn-secondary">Import</button>
-    </form>
-    <div class="hint">Imports update only languages included in the file; an empty string clears that translation. Invalid files are rejected without saving changes.</div>
-  </div>
-</div>
-
-<div class="card legal-text-editor">
-  <div class="card-title">Privacy notice</div>
-  <div class="hint legal-editor-hint">Operator-provided Markdown at <code>/privacy</code>. Include controller/contact details, enabled services, purposes, retention, cookies, transfers, and data-subject rights. This editor does not provide legal advice. Blank translations use another configured language; with no webmin text, <code>privacy.md</code> in <code>legal_dir</code> is used.</div>
-  <form method="POST" action="/site-config/legal-text">
-    <input type="hidden" name="page" value="privacy">
-    <input type="hidden" name="lang" value="{{.LegalLang}}">
-    <div class="form-group">
-      <label for="privacy-language">Language</label>
-      <select id="privacy-language" data-legal-language>
-        {{range .LegalPageLangs}}<option value="{{.Code}}"{{if eq .Code $.Data.LegalLang}} selected{{end}}>{{.Name}}</option>{{end}}
-      </select>
-    </div>
-    <div class="form-group">
-      <label for="privacy-text">Privacy notice Markdown</label>
-      <textarea id="privacy-text" name="text" rows="8" class="legal-textarea">{{.PrivacyText}}</textarea>
-    </div>
-    <button type="submit" class="btn">Save this translation</button>
-  </form>
-  <div class="legal-transfer">
-    <a class="btn btn-secondary" href="/site-config/legal-text/export?page=privacy">Download all languages (JSON)</a>
-    <form method="POST" action="/site-config/legal-text/import?page=privacy&amp;legal_lang={{.LegalLang}}" enctype="multipart/form-data">
-      <label class="form-group">Import translations (JSON)
-        <input type="file" name="file" accept=".json,application/json" required>
-      </label>
-      <button type="submit" class="btn btn-secondary">Import</button>
-    </form>
-    <div class="hint">Imports update only languages included in the file; an empty string clears that translation. Invalid files are rejected without saving changes.</div>
-  </div>
-</div>
-
-<div class="card legal-text-editor">
-  <div class="card-title">Terms of use</div>
-  <div class="hint legal-editor-hint">Operator-provided Markdown at <code>/terms</code>. Define acceptable use and instance-specific rules. This editor does not provide legal advice. Blank translations use another configured language; with no webmin text, <code>terms.md</code> in <code>legal_dir</code> is used.</div>
-  <form method="POST" action="/site-config/legal-text">
-    <input type="hidden" name="page" value="terms">
-    <input type="hidden" name="lang" value="{{.LegalLang}}">
-    <div class="form-group">
-      <label for="terms-language">Language</label>
-      <select id="terms-language" data-legal-language>
-        {{range .LegalPageLangs}}<option value="{{.Code}}"{{if eq .Code $.Data.LegalLang}} selected{{end}}>{{.Name}}</option>{{end}}
-      </select>
-    </div>
-    <div class="form-group">
-      <label for="terms-text">Terms Markdown</label>
-      <textarea id="terms-text" name="text" rows="8" class="legal-textarea">{{.TermsText}}</textarea>
-    </div>
-    <button type="submit" class="btn">Save this translation</button>
-  </form>
-  <div class="legal-transfer">
-    <a class="btn btn-secondary" href="/site-config/legal-text/export?page=terms">Download all languages (JSON)</a>
-    <form method="POST" action="/site-config/legal-text/import?page=terms&amp;legal_lang={{.LegalLang}}" enctype="multipart/form-data">
-      <label class="form-group">Import translations (JSON)
-        <input type="file" name="file" accept=".json,application/json" required>
-      </label>
-      <button type="submit" class="btn btn-secondary">Import</button>
-    </form>
-    <div class="hint">Imports update only languages included in the file; an empty string clears that translation. Invalid files are rejected without saving changes.</div>
-  </div>
-</div>
+{{range .MultiLangFields}}{{template "multi-lang-field-editor" .}}{{end}}
 
 <div class="card">
   <div class="card-title">Fediverse / Relay actor</div>

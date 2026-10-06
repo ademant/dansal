@@ -106,25 +106,37 @@ func TestSiteConfigRendersPlaceStatus(t *testing.T) {
 func TestSiteConfigRendersLegalPageEditors(t *testing.T) {
 	tmpls := loadTemplates()
 	req := httptest.NewRequest(http.MethodGet, "/site-config", nil)
+	langs := []siteConfigLegalLanguage{{Code: "de", Name: "Deutsch"}, {Code: "en", Name: "English"}, {Code: "uk", Name: "Українська"}}
 	d := tmplData(req, &Config{}, "Site configuration", siteConfigData{
-		LegalPageLangs: []siteConfigLegalLanguage{{Code: "en", Name: "English"}, {Code: "uk", Name: "Українська"}},
-		LegalLang:      "en",
-		PrivacyText:    "# Privacy notice",
-		TermsText:      "# Terms",
+		MultiLangFields: []multiLangFieldView{
+			{
+				Key: "privacy", Title: "Privacy notice", Rows: 8, Langs: langs,
+				Texts: map[string]string{"de": "", "en": "# Privacy notice", "uk": ""},
+			},
+			{
+				Key: "terms", Title: "Terms of use", Rows: 8, Langs: langs,
+				Texts: map[string]string{"de": "", "en": "# Terms", "uk": ""},
+			},
+		},
 	})
 	rec := httptest.NewRecorder()
 	renderTemplate(rec, tmpls.siteConfig, d)
 	body := rec.Body.String()
 	for _, want := range []string{
 		`name="page" value="privacy"`,
-		`<option value="en" selected>English</option>`,
-		`name="text"`,
+		`<option value="de" selected>Deutsch</option>`,
+		`name="text_en"`,
 		`# Privacy notice</textarea>`,
 		`name="page" value="terms"`,
 		`# Terms</textarea>`,
 		`legal-text/export?page=privacy`,
 		`legal-text/import?page=terms`,
 		`name="file"`,
+		// #1461: every language renders, not just the one shown by default —
+		// toggling visibility is client-side (base.html), so an unselected
+		// language's textarea must still be present in the markup.
+		`data-legal-lang="en"`,
+		`hidden data-legal-lang="uk"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("site config page misses %q", want)
@@ -179,9 +191,6 @@ func TestSiteConfigLegalTextImportHandler(t *testing.T) {
 	importJSON := func(page, raw string) *httptest.ResponseRecorder {
 		var body bytes.Buffer
 		mw := multipart.NewWriter(&body)
-		if err := mw.WriteField("legal_lang", "uk"); err != nil {
-			t.Fatal(err)
-		}
 		part, err := mw.CreateFormFile("file", "translations.json")
 		if err != nil {
 			t.Fatal(err)
@@ -219,8 +228,8 @@ func TestSiteConfigLegalTextImportHandler(t *testing.T) {
 		t.Fatalf("import status=%d en=%q de=%q uk=%q", rec.Code,
 			getSiteSetting(db, "privacy_en"), getSiteSetting(db, "privacy_de"), getSiteSetting(db, "privacy_uk"))
 	}
-	if got := rec.Header().Get("Location"); !strings.Contains(got, "legal_lang=uk") {
-		t.Errorf("redirect = %q, want selected language preserved", got)
+	if got := rec.Header().Get("Location"); !strings.Contains(got, "flash=") {
+		t.Errorf("redirect = %q, want a flash message", got)
 	}
 
 	for _, tc := range []struct {
@@ -244,14 +253,19 @@ func TestSiteConfigLegalTextImportHandler(t *testing.T) {
 	}
 }
 
+// #1461: a save now carries all 12 languages of one field in a single POST
+// (text_<lang> per language) instead of one language per request.
 func TestSiteConfigLegalTextSaveHandler(t *testing.T) {
 	db := openWebDB(filepath.Join(t.TempDir(), "web.db"))
 	defer db.Close()
 	if _, err := db.Exec(`CREATE TABLE site_settings (key TEXT PRIMARY KEY, value TEXT)`); err != nil {
 		t.Fatal(err)
 	}
-	save := func(page, lang, text string) *httptest.ResponseRecorder {
-		form := url.Values{"page": {page}, "lang": {lang}, "text": {text}}
+	save := func(page string, texts map[string]string) *httptest.ResponseRecorder {
+		form := url.Values{"page": {page}}
+		for lang, text := range texts {
+			form.Set("text_"+lang, text)
+		}
 		req := httptest.NewRequest(http.MethodPost, "/site-config/legal-text", strings.NewReader(form.Encode()))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		rec := httptest.NewRecorder()
@@ -259,21 +273,39 @@ func TestSiteConfigLegalTextSaveHandler(t *testing.T) {
 		return rec
 	}
 
-	rec := save("privacy", "uk", "  # Конфіденційність  ")
-	if rec.Code != http.StatusSeeOther || getSiteSetting(db, "privacy_uk") != "# Конфіденційність" {
-		t.Fatalf("save response=%d value=%q", rec.Code, getSiteSetting(db, "privacy_uk"))
+	rec := save("privacy", map[string]string{"uk": "  # Конфіденційність  ", "en": "# Privacy"})
+	if rec.Code != http.StatusSeeOther || getSiteSetting(db, "privacy_uk") != "# Конфіденційність" || getSiteSetting(db, "privacy_en") != "# Privacy" {
+		t.Fatalf("save response=%d uk=%q en=%q", rec.Code, getSiteSetting(db, "privacy_uk"), getSiteSetting(db, "privacy_en"))
 	}
-	if got := rec.Header().Get("Location"); !strings.Contains(got, "legal_lang=uk") {
-		t.Errorf("redirect = %q, want selected language preserved", got)
+	// A language not included in this save's form (e.g. "de") is submitted
+	// as "" by a real browser (every language's textarea posts, even an
+	// untouched one) — saving must clear it, not leave a stale prior value.
+	setSiteSetting(db, "privacy_de", "stale")
+	save("privacy", map[string]string{"en": "# Privacy"})
+	if got := getSiteSetting(db, "privacy_de"); got != "" {
+		t.Errorf("privacy_de = %q, want cleared (omitted from the save = blank textarea)", got)
 	}
 
-	for _, tc := range []struct{ page, lang string }{
-		{"unknown", "en"},
-		{"terms", "xx"},
-	} {
-		rec = save(tc.page, tc.lang, "# Must not save")
-		if rec.Code != http.StatusBadRequest {
-			t.Errorf("invalid page/lang (%q,%q) status = %d, want 400", tc.page, tc.lang, rec.Code)
-		}
+	// A field with a shipped default (home_intro): text matching the
+	// current default for a language clears to "" (no override) rather
+	// than freezing it, so that language keeps tracking future updates to
+	// the shipped default (see multiLangDefaults/loadMultiLangTexts).
+	rec = save("home_intro", map[string]string{
+		"en": multiLangDefaults["home_intro"]["en"],
+		"de": "Custom intro.",
+	})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("home_intro save status = %d", rec.Code)
+	}
+	if got := getSiteSetting(db, "home_intro_en"); got != "" {
+		t.Errorf("home_intro_en = %q, want cleared (text matched the shipped default)", got)
+	}
+	if got := getSiteSetting(db, "home_intro_de"); got != "Custom intro." {
+		t.Errorf("home_intro_de = %q, want the override", got)
+	}
+
+	rec = save("unknown", map[string]string{"en": "# Must not save"})
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("invalid page status = %d, want 400", rec.Code)
 	}
 }

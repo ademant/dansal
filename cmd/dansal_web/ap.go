@@ -96,8 +96,9 @@ type APDocument struct {
 // the deleted object to be wrapped this way rather than sent as a bare URI
 // string (issue #1059).
 type APTombstone struct {
-	Type string `json:"type"`
-	ID   string `json:"id"`
+	Context any    `json:"@context,omitempty"`
+	Type    string `json:"type"`
+	ID      string `json:"id"`
 }
 
 type APEvent struct {

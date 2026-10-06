@@ -1012,6 +1012,17 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		event, err := fetchEventWithFallback(r, client, id)
 		if err != nil {
 			if errors.Is(err, errNotFound) || errors.Is(err, errExpired) {
+				// AP clients don't follow 301 for object IDs — respond with
+				// 410 + Tombstone for confirmed-gone events; 404 for IDs that
+				// were never allocated (above the high-water mark).
+				if isAPRequest(r) && errors.Is(err, errExpired) {
+					writeJSON(w, http.StatusGone, APTombstone{
+						Context: APContext,
+						Type:    "Tombstone",
+						ID:      fmt.Sprintf("https://%s/events/%d", cfg.Domain, id),
+					})
+					return
+				}
 				if redir, rerr := client.GetEntityRedirect(r.Context(), "event", id); rerr == nil {
 					http.Redirect(w, r, fmt.Sprintf("/events/%d", redir.NewID), http.StatusMovedPermanently)
 					return

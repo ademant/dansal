@@ -149,6 +149,28 @@ function toggleNav(){
   var btn=nav.querySelector('.nav-hamburger');
   if(btn)btn.setAttribute('aria-expanded',open);
 }
+document.querySelectorAll('[data-legal-language]').forEach(function(select){
+  select.addEventListener('change',function(){
+    var dirty=Array.from(document.querySelectorAll('.legal-text-editor textarea')).some(function(textarea){
+      return textarea.value!==textarea.dataset.savedValue;
+    })||Array.from(document.querySelectorAll('.legal-text-editor input[type="file"]')).some(function(input){
+      return input.files&&input.files.length>0;
+    });
+    if(dirty&&!confirm('Discard unsaved legal text changes?')){
+      select.value=select.dataset.current;
+      return;
+    }
+    var url=new URL(window.location.href);
+    url.searchParams.set('legal_lang',select.value);
+    window.location.assign(url.toString());
+  });
+});
+document.querySelectorAll('.legal-text-editor textarea').forEach(function(textarea){
+  textarea.dataset.savedValue=textarea.value;
+});
+document.querySelectorAll('[data-legal-language]').forEach(function(select){
+  select.dataset.current=select.value;
+});
 document.addEventListener('click',function(e){
   var nav=document.getElementById('main-nav');
   if(nav&&nav.classList.contains('nav-open')&&!nav.contains(e.target)){

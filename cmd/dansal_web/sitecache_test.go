@@ -48,6 +48,7 @@ func TestSiteSettingsCacheDescBuckets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	defer db.Close()
 	db.Exec(`CREATE TABLE site_settings (key TEXT PRIMARY KEY, value TEXT)`)
 	cache := newSiteSettingsCache(db)
@@ -74,5 +75,62 @@ func TestSiteSettingsCacheDescBuckets(t *testing.T) {
 
 	if got, want := cache.DescBall("xx"), cache.DescBall("de"); got != want {
 		t.Errorf("DescBall(xx) = %q, want the de fallback %q", got, want)
+	}
+}
+
+func TestSiteSettingsCacheLegalPages(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`CREATE TABLE site_settings (key TEXT PRIMARY KEY, value TEXT)`); err != nil {
+		t.Fatal(err)
+	}
+	setSiteSetting(db, "privacy_en", "# Privacy")
+	setSiteSetting(db, "privacy_uk", "# Конфіденційність")
+	setSiteSetting(db, "terms_fr", "# Conditions")
+
+	cache := newSiteSettingsCache(db)
+	if got := cache.LegalPageText("privacy", "en"); got != "# Privacy" {
+		t.Errorf("privacy en = %q, want configured text", got)
+	}
+	if got := cache.LegalPageText("privacy", "uk"); got != "# Конфіденційність" {
+		t.Errorf("privacy uk = %q, want configured Ukrainian text", got)
+	}
+	if got := cache.LegalPageText("privacy", "fr"); got != "# Privacy" {
+		t.Errorf("privacy fr fallback = %q, want English text", got)
+	}
+	if got := cache.LegalPageText("terms", "fr"); got != "# Conditions" {
+		t.Errorf("terms fr = %q, want configured text", got)
+	}
+	if !cache.HasLegalPage("privacy") || !cache.HasLegalPage("terms") {
+		t.Error("configured legal pages should be reported as available")
+	}
+	if cache.HasLegalPage("impressum") || cache.LegalPageText("unknown", "en") != "" {
+		t.Error("unconfigured page should not be available or return text")
+	}
+}
+
+func TestSiteSettingsCacheImpressumLanguageFallback(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`CREATE TABLE site_settings (key TEXT PRIMARY KEY, value TEXT)`); err != nil {
+		t.Fatal(err)
+	}
+	setSiteSetting(db, "impressum_en", "English notice")
+	setSiteSetting(db, "impressum_de", "German notice")
+	cache := newSiteSettingsCache(db)
+	if got := cache.ImpressumText("fr"); got != "English notice" {
+		t.Errorf("ImpressumText(fr) = %q, want English fallback", got)
+	}
+
+	setSiteSetting(db, "impressum_fr", "Avis français")
+	cache = newSiteSettingsCache(db)
+	if got := cache.ImpressumText("fr"); got != "Avis français" {
+		t.Errorf("ImpressumText(fr) = %q, want selected-language text", got)
 	}
 }

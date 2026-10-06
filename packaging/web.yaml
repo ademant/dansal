@@ -83,7 +83,9 @@ nodeinfo_maintainer_email: ""
 # security_policy: ""
 
 # Directory for legal documents in Markdown format.
-# Place impressum.md, privacy.md, terms.md, contact.md here.
+# Place impressum.md, privacy.md, terms.md, contact.md here. Webmin-managed
+# privacy/terms text takes precedence; these files are the fallback when the
+# corresponding webmin content is empty.
 # legal_dir: /etc/dansal/legal
 
 # --- Appearance ---

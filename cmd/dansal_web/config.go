@@ -184,7 +184,8 @@ type Config struct {
 	BingSiteVerification string `yaml:"bing_site_verification"`
 }
 
-var impressumLangs = []string{"de", "en", "fr", "nl", "it", "es", "br"}
+var impressumLangs = []string{"de", "br", "ca", "cs", "en", "es", "fr", "it", "nl", "pl", "pt", "uk"}
+var legalPageLangs = []string{"de", "br", "ca", "cs", "en", "es", "fr", "it", "nl", "pl", "pt", "uk"}
 
 // defaultTileCacheDir derives the default tile cache location from DBPath's
 // directory rather than ImagesDir — see the TileCacheDir field comment.

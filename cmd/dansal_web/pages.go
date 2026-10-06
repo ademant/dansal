@@ -78,10 +78,25 @@ func LegalMarkdownHTML(dir, name string) template.HTML {
 	if err != nil {
 		return ""
 	}
+	return LegalMarkdownTextHTML(name, string(data))
+}
+
+func LegalMarkdownFileAvailable(dir, name string) bool {
+	if dir == "" {
+		return false
+	}
+	info, err := os.Stat(filepath.Join(dir, name+".md"))
+	return err == nil && !info.IsDir()
+}
+
+func LegalMarkdownTextHTML(name, text string) template.HTML {
+	if text == "" {
+		return ""
+	}
 	var buf bytes.Buffer
-	if err := goldmark.Convert(data, &buf); err != nil {
+	if err := goldmark.Convert([]byte(text), &buf); err != nil {
 		log.Printf("legal markdown %s: render error: %v", name, err)
-		return template.HTML(`<pre>` + html.EscapeString(string(data)) + `</pre>`)
+		return template.HTML(`<pre>` + html.EscapeString(text) + `</pre>`)
 	}
 	return template.HTML(sanitizeMarkdownHTML(buf.String()))
 }

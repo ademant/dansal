@@ -39,6 +39,8 @@ type TemplateData struct {
 	Languages              []LangOption
 	Contact                string
 	ImpressumURL           string
+	PrivacyURL             string
+	TermsURL               string
 	Data                   any
 	BannerHeight           int
 	BannerSrcset           template.Srcset // #1343; empty = no variants
@@ -164,10 +166,17 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 	if contact == "" {
 		contact = cfg.pagesContent.ContactText(lang)
 	}
-	imp := siteCfg.Impressum()
 	impressumURL := ""
-	if imp[lang] != "" || cfg.pagesContent.ImpressumText(lang) != "" {
+	if siteCfg.ImpressumText(lang) != "" || cfg.pagesContent.ImpressumText(lang) != "" {
 		impressumURL = "/impressum"
+	}
+	privacyURL := ""
+	if siteCfg.HasLegalPage("privacy") || LegalMarkdownFileAvailable(cfg.LegalDir, "privacy") {
+		privacyURL = "/privacy"
+	}
+	termsURL := ""
+	if siteCfg.HasLegalPage("terms") || LegalMarkdownFileAvailable(cfg.LegalDir, "terms") {
+		termsURL = "/terms"
 	}
 	isMain := r.URL.Path == "/"
 	bannerHeight := cfg.BannerHeightSub
@@ -218,6 +227,8 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 		Languages:    i18n.Options(lang),
 		Contact:      contact,
 		ImpressumURL: impressumURL,
+		PrivacyURL:   privacyURL,
+		TermsURL:     termsURL,
 		Data:         data,
 		BannerHeight: bannerHeight,
 		BannerSrcset: bannerSrcsetVal,
@@ -1617,7 +1628,7 @@ func impressumHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFun
 	return func(w http.ResponseWriter, r *http.Request) {
 		lang := i18n.detectLang(r)
 		var body template.HTML
-		if text := siteCfg.Impressum()[lang]; text != "" {
+		if text := siteCfg.ImpressumText(lang); text != "" {
 			var buf bytes.Buffer
 			if err := goldmark.Convert([]byte(text), &buf); err != nil {
 				body = template.HTML(`<div class="impressum-text">` + template.HTMLEscapeString(text) + `</div>`)
@@ -1640,7 +1651,10 @@ func impressumHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFun
 
 func legalPageHandler(cfg *Config, tmpls *Templates, i18n *I18n, file, titleKey string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		body := LegalMarkdownHTML(cfg.LegalDir, file)
+		body := LegalMarkdownTextHTML(file, siteCfg.LegalPageText(file, i18n.detectLang(r)))
+		if body == "" {
+			body = LegalMarkdownHTML(cfg.LegalDir, file)
+		}
 		if body == "" {
 			http.NotFound(w, r)
 			return

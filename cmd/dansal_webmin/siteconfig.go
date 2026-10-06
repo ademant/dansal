@@ -21,8 +21,37 @@ import (
 	"github.com/ademant/dansal/internal/places"
 )
 
-var siteConfigLangs = []string{"de", "en", "fr", "nl", "it", "es", "br"}
+var legalPageLangs = []string{"de", "br", "ca", "cs", "en", "es", "fr", "it", "nl", "pl", "pt", "uk"}
+var siteConfigLegalLanguages = []siteConfigLegalLanguage{
+	{Code: "de", Name: "Deutsch"},
+	{Code: "br", Name: "Brezhoneg"},
+	{Code: "ca", Name: "Català"},
+	{Code: "cs", Name: "Čeština"},
+	{Code: "en", Name: "English"},
+	{Code: "es", Name: "Español"},
+	{Code: "fr", Name: "Français"},
+	{Code: "it", Name: "Italiano"},
+	{Code: "nl", Name: "Nederlands"},
+	{Code: "pl", Name: "Polski"},
+	{Code: "pt", Name: "Português"},
+	{Code: "uk", Name: "Українська"},
+}
 var siteAssetExts = []string{".svg", ".avif", ".jpg", ".gif"}
+
+const legalTextJSONFormat = "dansal-legal-text"
+const legalTextImportMaxBytes = 1 << 20
+
+type siteConfigLegalLanguage struct {
+	Code string
+	Name string
+}
+
+type legalTextJSON struct {
+	Format    string            `json:"format"`
+	Version   int               `json:"version"`
+	Document  string            `json:"document"`
+	Languages map[string]string `json:"languages"`
+}
 
 // commonTimezones is a curated list of IANA zone names covering every
 // continent, for the server.timezone dropdown (#1394). Go's time package
@@ -263,8 +292,11 @@ type siteConfigData struct {
 	HasRelayBanner       bool
 	Dances               []dance
 	DefaultDanceIDs      map[int]bool
-	ImpressumTexts       map[string]string
-	ImpressumLangs       []string
+	LegalPageLangs       []siteConfigLegalLanguage
+	LegalLang            string
+	ImpressumText        string
+	PrivacyText          string
+	TermsText            string
 	HolidayCountry       string
 	PlaceCountries       string                // #1429: countries for the city type-ahead's place table
 	PlaceImports         []places.ImportStatus // #1429: import state per country
@@ -296,7 +328,8 @@ func siteConfigPageHandler(cfg *Config, tmpls *Templates, db *sql.DB) http.Handl
 
 		data := siteConfigData{
 			Flash:          r.URL.Query().Get("flash"),
-			ImpressumLangs: siteConfigLangs,
+			LegalPageLangs: siteConfigLegalLanguages,
+			LegalLang:      selectedLegalLanguage(r.URL.Query().Get("legal_lang")),
 		}
 
 		// #1394: authoritative in the API's own config.yaml, fetched over the
@@ -335,11 +368,9 @@ func siteConfigPageHandler(cfg *Config, tmpls *Templates, db *sql.DB) http.Handl
 			data.RescheduledBadgeDays = "7"
 		}
 
-		impTexts := make(map[string]string)
-		for _, lang := range siteConfigLangs {
-			impTexts[lang] = getSiteSetting(db, "impressum_"+lang)
-		}
-		data.ImpressumTexts = impTexts
+		data.ImpressumText = getSiteSetting(db, "impressum_"+data.LegalLang)
+		data.PrivacyText = getSiteSetting(db, "privacy_"+data.LegalLang)
+		data.TermsText = getSiteSetting(db, "terms_"+data.LegalLang)
 		data.Dances = fetchDances(r.Context(), cfg.DansalURL)
 		data.DefaultDanceIDs = loadDefaultDanceIDs(db)
 		data.DateFormat = getSiteSetting(db, "date_format")
@@ -425,10 +456,6 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 			setSiteSetting(db, "rescheduled_badge_days", strconv.Itoa(n))
 		}
 
-		for _, lang := range siteConfigLangs {
-			setSiteSetting(db, "impressum_"+lang, strings.TrimSpace(r.FormValue("impressum_"+lang)))
-		}
-
 		// #1296: one external profile URL per line, for the site-wide WebSite
 		// JSON-LD's sameAs. Stored as-is (whole-textarea trim only) — split,
 		// per-line trim, and blank-dropping happen at render time
@@ -476,10 +503,191 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		if len(uploadedAssets) > 0 {
 			log.Printf("audit: site_settings assets=[%s] updated by user=%d", strings.Join(uploadedAssets, ","), callerID)
 		}
-		log.Printf("audit: site_settings keys=[site_name,contact,holiday_country,impressum_*,default_dance_ids,indexnow_key,rescheduled_badge_days,logo_ai_generated,banner_ai_generated,date_format,time_format,same_as,home_intro,default_desc_ball,default_desc_workshop,default_desc_festival] updated by user=%d", callerID)
+		log.Printf("audit: site_settings keys=[site_name,contact,holiday_country,default_dance_ids,indexnow_key,rescheduled_badge_days,logo_ai_generated,banner_ai_generated,date_format,time_format,same_as,home_intro,default_desc_ball,default_desc_workshop,default_desc_festival] updated by user=%d", callerID)
 
 		http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Settings saved"), http.StatusSeeOther)
 	}
+}
+
+func selectedLegalLanguage(lang string) string {
+	for _, candidate := range legalPageLangs {
+		if lang == candidate {
+			return lang
+		}
+	}
+	return "de"
+}
+
+func siteConfigLegalTextSaveHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if db == nil {
+			http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Error: web_db_path not configured in webmin.yaml"), http.StatusSeeOther)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+
+		page := r.FormValue("page")
+		if page != "impressum" && page != "privacy" && page != "terms" {
+			http.Error(w, "invalid legal page", http.StatusBadRequest)
+			return
+		}
+		lang := selectedLegalLanguage(r.FormValue("lang"))
+		if lang != r.FormValue("lang") {
+			http.Error(w, "invalid language", http.StatusBadRequest)
+			return
+		}
+
+		setSiteSetting(db, page+"_"+lang, strings.TrimSpace(r.FormValue("text")))
+		var callerID int
+		if u := getSessionUser(r); u != nil {
+			callerID = u.ID
+		}
+		log.Printf("audit: site_settings legal_page=%s language=%s updated by user=%d", page, lang, callerID)
+
+		q := url.Values{"legal_lang": {lang}, "flash": {"Legal text saved"}}
+		http.Redirect(w, r, "/site-config?"+q.Encode(), http.StatusSeeOther)
+	}
+}
+
+func siteConfigLegalTextExportHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		page := r.URL.Query().Get("page")
+		if !validLegalDocument(page) {
+			http.Error(w, "invalid legal document", http.StatusBadRequest)
+			return
+		}
+		if db == nil {
+			http.Error(w, "web database is not configured", http.StatusServiceUnavailable)
+			return
+		}
+
+		export := legalTextJSON{
+			Format:    legalTextJSONFormat,
+			Version:   1,
+			Document:  page,
+			Languages: make(map[string]string, len(legalPageLangs)),
+		}
+		for _, lang := range legalPageLangs {
+			var text string
+			err := db.QueryRow("SELECT value FROM site_settings WHERE key = ?", page+"_"+lang).Scan(&text)
+			if err != nil && err != sql.ErrNoRows {
+				log.Printf("export legal text %s/%s: %v", page, lang, err)
+				http.Error(w, "could not read legal document", http.StatusInternalServerError)
+				return
+			}
+			export.Languages[lang] = text
+		}
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Content-Disposition", `attachment; filename="`+page+`.json"`)
+		if err := json.NewEncoder(w).Encode(export); err != nil {
+			log.Printf("encode legal text export %s: %v", page, err)
+		}
+	}
+}
+
+func siteConfigLegalTextImportHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		page := r.URL.Query().Get("page")
+		if !validLegalDocument(page) {
+			http.Error(w, "invalid legal document", http.StatusBadRequest)
+			return
+		}
+		if db == nil {
+			http.Error(w, "web database is not configured", http.StatusServiceUnavailable)
+			return
+		}
+
+		r.Body = http.MaxBytesReader(w, r.Body, legalTextImportMaxBytes)
+		if err := r.ParseMultipartForm(legalTextImportMaxBytes); err != nil {
+			redirectLegalTextImport(w, r, page, "Error: could not read JSON upload")
+			return
+		}
+		defer r.MultipartForm.RemoveAll()
+
+		file, _, err := r.FormFile("file")
+		if err != nil {
+			redirectLegalTextImport(w, r, page, "Error: choose a JSON file to import")
+			return
+		}
+		defer file.Close()
+
+		var imported legalTextJSON
+		decoder := json.NewDecoder(io.LimitReader(file, legalTextImportMaxBytes+1))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&imported); err != nil {
+			redirectLegalTextImport(w, r, page, "Error: invalid legal text JSON")
+			return
+		}
+		if err := decoder.Decode(&struct{}{}); err != io.EOF {
+			redirectLegalTextImport(w, r, page, "Error: JSON file must contain one object")
+			return
+		}
+		if imported.Format != legalTextJSONFormat || imported.Version != 1 || imported.Document != page || len(imported.Languages) == 0 {
+			redirectLegalTextImport(w, r, page, "Error: JSON format or document does not match")
+			return
+		}
+		for lang := range imported.Languages {
+			if !isLegalLanguage(lang) {
+				redirectLegalTextImport(w, r, page, "Error: JSON contains an unsupported language")
+				return
+			}
+		}
+
+		tx, err := db.Begin()
+		if err != nil {
+			log.Printf("begin legal text import %s: %v", page, err)
+			redirectLegalTextImport(w, r, page, "Error: could not import legal text")
+			return
+		}
+		for lang, text := range imported.Languages {
+			if _, err := tx.Exec(
+				"INSERT INTO site_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+				page+"_"+lang, text,
+			); err != nil {
+				_ = tx.Rollback()
+				log.Printf("save imported legal text %s/%s: %v", page, lang, err)
+				redirectLegalTextImport(w, r, page, "Error: could not import legal text")
+				return
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			log.Printf("commit legal text import %s: %v", page, err)
+			redirectLegalTextImport(w, r, page, "Error: could not import legal text")
+			return
+		}
+
+		var callerID int
+		if u := getSessionUser(r); u != nil {
+			callerID = u.ID
+		}
+		log.Printf("audit: site_settings legal_page=%s imported_languages=%d by user=%d", page, len(imported.Languages), callerID)
+		redirectLegalTextImport(w, r, page, "Legal text translations imported")
+	}
+}
+
+func validLegalDocument(page string) bool {
+	return page == "impressum" || page == "privacy" || page == "terms"
+}
+
+func isLegalLanguage(lang string) bool {
+	for _, candidate := range legalPageLangs {
+		if lang == candidate {
+			return true
+		}
+	}
+	return false
+}
+
+func redirectLegalTextImport(w http.ResponseWriter, r *http.Request, page, flash string) {
+	q := url.Values{
+		"legal_lang": {selectedLegalLanguage(r.FormValue("legal_lang"))},
+		"flash":      {flash},
+	}
+	http.Redirect(w, r, "/site-config?"+q.Encode(), http.StatusSeeOther)
 }
 
 // POST /site-config/relay/assets — uploads relay actor avatar and/or banner.

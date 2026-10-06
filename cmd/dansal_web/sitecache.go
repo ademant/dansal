@@ -15,8 +15,8 @@ import (
 	"github.com/ademant/dansal/internal/places"
 )
 
-// siteSettingsCache reads contact, site_name and impressum_* from web.db at
-// most once per ttl. Changes saved via webmin are visible within one window
+// siteSettingsCache reads runtime-editable web settings from web.db at most
+// once per ttl. Changes saved via webmin are visible within one window
 // without any process signal or restart.
 type siteSettingsCache struct {
 	db  *sql.DB
@@ -27,6 +27,7 @@ type siteSettingsCache struct {
 	contact              string
 	siteName             string
 	impressum            map[string]string
+	legalPages           map[string]map[string]string
 	indexNowKey          string
 	holidayCountry       string
 	placeCountries       []string // #1429: countries whose GeoNames places feed the city type-ahead
@@ -66,6 +67,16 @@ func (c *siteSettingsCache) load() {
 			imp[lang] = v
 		}
 	}
+	legalPages := make(map[string]map[string]string, 2)
+	for _, page := range []string{"privacy", "terms"} {
+		texts := make(map[string]string)
+		for _, lang := range legalPageLangs {
+			if v := getSiteSetting(c.db, page+"_"+lang); v != "" {
+				texts[lang] = v
+			}
+		}
+		legalPages[page] = texts
+	}
 	bannerAIGenerated := getSiteSetting(c.db, "banner_ai_generated") == "1"
 	logoAIGenerated := getSiteSetting(c.db, "logo_ai_generated") == "1"
 	defaultDanceIDs := parseDanceIDs(getSiteSetting(c.db, "default_dance_ids"))
@@ -78,11 +89,11 @@ func (c *siteSettingsCache) load() {
 	descWorkshop := parseLangYAML(getSiteSetting(c.db, "default_desc_workshop"), webcommon.DefaultDescWorkshopYAML, "default_desc_workshop")
 	descFestival := parseLangYAML(getSiteSetting(c.db, "default_desc_festival"), webcommon.DefaultDescFestivalYAML, "default_desc_festival")
 	c.mu.Lock()
-	c.contact, c.siteName, c.impressum, c.indexNowKey, c.holidayCountry, c.rescheduledBadgeDays,
+	c.contact, c.siteName, c.impressum, c.legalPages, c.indexNowKey, c.holidayCountry, c.rescheduledBadgeDays,
 		c.defaultDanceIDs, c.bannerAIGenerated, c.logoAIGenerated,
 		c.dateFormat, c.timeFormatSite, c.tileToken, c.sameAs, c.homeIntro,
 		c.descBall, c.descWorkshop, c.descFestival, c.at =
-		contact, siteName, imp, indexNowKey, holidayCountry, rescheduledBadgeDays,
+		contact, siteName, imp, legalPages, indexNowKey, holidayCountry, rescheduledBadgeDays,
 		defaultDanceIDs, bannerAIGenerated, logoAIGenerated,
 		dateFormat, timeFormatSite, tileToken, sameAs, homeIntro,
 		descBall, descWorkshop, descFestival, time.Now()
@@ -288,6 +299,62 @@ func (c *siteSettingsCache) Impressum() map[string]string {
 		cp[k] = v
 	}
 	return cp
+}
+
+func (c *siteSettingsCache) ImpressumText(lang string) string {
+	c.ensure()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if v := c.impressum[lang]; v != "" {
+		return v
+	}
+	for _, fallback := range []string{"en", "de"} {
+		if v := c.impressum[fallback]; v != "" {
+			return v
+		}
+	}
+	for _, fallback := range impressumLangs {
+		if v := c.impressum[fallback]; v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// LegalPageText returns the webmin-managed Markdown for a privacy or terms
+// page, preferring the requested language and falling back to English,
+// German, then the first configured language.
+func (c *siteSettingsCache) LegalPageText(page, lang string) string {
+	c.ensure()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	texts := c.legalPages[page]
+	if v := texts[lang]; v != "" {
+		return v
+	}
+	for _, fallback := range []string{"en", "de"} {
+		if v := texts[fallback]; v != "" {
+			return v
+		}
+	}
+	for _, fallback := range legalPageLangs {
+		if v := texts[fallback]; v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func (c *siteSettingsCache) HasLegalPage(page string) bool {
+	c.ensure()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	for _, text := range c.legalPages[page] {
+		if text != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *siteSettingsCache) BannerAIGenerated() bool {

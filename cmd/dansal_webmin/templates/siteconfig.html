@@ -2,6 +2,13 @@
 {{define "content"}}
 <h1>Site configuration</h1>
 {{with .Data}}
+<style nonce="{{$.Nonce}}">
+.legal-editors{display:flex;flex-direction:column;gap:1rem;max-width:680px;margin-top:1rem}
+.legal-textarea{width:100%;resize:vertical;font-family:monospace;padding:.4rem .6rem;border:1px solid var(--border);border-radius:4px;background:var(--bg-card);color:var(--fg);font-size:.88rem}
+.legal-editor-hint{margin-bottom:.75rem}
+.legal-transfer{display:flex;flex-wrap:wrap;align-items:end;gap:.5rem;margin-top:.75rem}
+.legal-transfer .form-group{margin:0}
+</style>
 {{if .Flash}}<div class="alert alert-ok">{{.Flash}}</div>{{end}}
 
 <!-- Event timezone (#1394) is authoritative in the API's own config.yaml via
@@ -235,17 +242,6 @@
   </div>
 </div>
 
-<div class="card">
-  <div class="card-title">Impressum / Legal notice</div>
-  <div class="hint" style="margin-bottom:.75rem">One text per language. Shown at <code>/impressum</code>. Leave blank to use the default from <code>pages_file</code> (web.yaml).</div>
-  {{range .ImpressumLangs}}
-  <div class="form-group">
-    <label style="font-size:.88rem;color:var(--fg-muted)">{{.}}</label>
-    <textarea name="impressum_{{.}}" rows="5" style="width:100%;resize:vertical;font-family:inherit;padding:.4rem .6rem;border:1px solid var(--border);border-radius:4px;background:var(--bg-card);color:var(--fg);font-size:.88rem">{{index $.Data.ImpressumTexts .}}</textarea>
-  </div>
-  {{end}}
-</div>
-
 <div>
   <button type="submit" class="btn">Save</button>
 </div>
@@ -253,7 +249,97 @@
 </div>
 </form>
 
-<div style="display:flex;flex-direction:column;gap:1rem;max-width:680px;margin-top:1rem">
+<div class="legal-editors">
+<div class="card legal-text-editor">
+  <div class="card-title">Impressum / Legal notice</div>
+  <div class="hint legal-editor-hint">Shown at <code>/impressum</code>. Select a language to edit only that translation. Leave it blank to use the default from <code>legal_dir</code> or <code>pages_file</code> (web.yaml).</div>
+  <form method="POST" action="/site-config/legal-text">
+    <input type="hidden" name="page" value="impressum">
+    <input type="hidden" name="lang" value="{{.LegalLang}}">
+    <div class="form-group">
+      <label for="impressum-language">Language</label>
+      <select id="impressum-language" data-legal-language>
+        {{range .LegalPageLangs}}<option value="{{.Code}}"{{if eq .Code $.Data.LegalLang}} selected{{end}}>{{.Name}}</option>{{end}}
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="impressum-text">Legal notice text</label>
+      <textarea id="impressum-text" name="text" rows="8" class="legal-textarea">{{.ImpressumText}}</textarea>
+    </div>
+    <button type="submit" class="btn">Save this translation</button>
+  </form>
+  <div class="legal-transfer">
+    <a class="btn btn-secondary" href="/site-config/legal-text/export?page=impressum">Download all languages (JSON)</a>
+    <form method="POST" action="/site-config/legal-text/import?page=impressum&amp;legal_lang={{.LegalLang}}" enctype="multipart/form-data">
+      <label class="form-group">Import translations (JSON)
+        <input type="file" name="file" accept=".json,application/json" required>
+      </label>
+      <button type="submit" class="btn btn-secondary">Import</button>
+    </form>
+    <div class="hint">Imports update only languages included in the file; an empty string clears that translation. Invalid files are rejected without saving changes.</div>
+  </div>
+</div>
+
+<div class="card legal-text-editor">
+  <div class="card-title">Privacy notice</div>
+  <div class="hint legal-editor-hint">Operator-provided Markdown at <code>/privacy</code>. Include controller/contact details, enabled services, purposes, retention, cookies, transfers, and data-subject rights. This editor does not provide legal advice. Blank translations use another configured language; with no webmin text, <code>privacy.md</code> in <code>legal_dir</code> is used.</div>
+  <form method="POST" action="/site-config/legal-text">
+    <input type="hidden" name="page" value="privacy">
+    <input type="hidden" name="lang" value="{{.LegalLang}}">
+    <div class="form-group">
+      <label for="privacy-language">Language</label>
+      <select id="privacy-language" data-legal-language>
+        {{range .LegalPageLangs}}<option value="{{.Code}}"{{if eq .Code $.Data.LegalLang}} selected{{end}}>{{.Name}}</option>{{end}}
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="privacy-text">Privacy notice Markdown</label>
+      <textarea id="privacy-text" name="text" rows="8" class="legal-textarea">{{.PrivacyText}}</textarea>
+    </div>
+    <button type="submit" class="btn">Save this translation</button>
+  </form>
+  <div class="legal-transfer">
+    <a class="btn btn-secondary" href="/site-config/legal-text/export?page=privacy">Download all languages (JSON)</a>
+    <form method="POST" action="/site-config/legal-text/import?page=privacy&amp;legal_lang={{.LegalLang}}" enctype="multipart/form-data">
+      <label class="form-group">Import translations (JSON)
+        <input type="file" name="file" accept=".json,application/json" required>
+      </label>
+      <button type="submit" class="btn btn-secondary">Import</button>
+    </form>
+    <div class="hint">Imports update only languages included in the file; an empty string clears that translation. Invalid files are rejected without saving changes.</div>
+  </div>
+</div>
+
+<div class="card legal-text-editor">
+  <div class="card-title">Terms of use</div>
+  <div class="hint legal-editor-hint">Operator-provided Markdown at <code>/terms</code>. Define acceptable use and instance-specific rules. This editor does not provide legal advice. Blank translations use another configured language; with no webmin text, <code>terms.md</code> in <code>legal_dir</code> is used.</div>
+  <form method="POST" action="/site-config/legal-text">
+    <input type="hidden" name="page" value="terms">
+    <input type="hidden" name="lang" value="{{.LegalLang}}">
+    <div class="form-group">
+      <label for="terms-language">Language</label>
+      <select id="terms-language" data-legal-language>
+        {{range .LegalPageLangs}}<option value="{{.Code}}"{{if eq .Code $.Data.LegalLang}} selected{{end}}>{{.Name}}</option>{{end}}
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="terms-text">Terms Markdown</label>
+      <textarea id="terms-text" name="text" rows="8" class="legal-textarea">{{.TermsText}}</textarea>
+    </div>
+    <button type="submit" class="btn">Save this translation</button>
+  </form>
+  <div class="legal-transfer">
+    <a class="btn btn-secondary" href="/site-config/legal-text/export?page=terms">Download all languages (JSON)</a>
+    <form method="POST" action="/site-config/legal-text/import?page=terms&amp;legal_lang={{.LegalLang}}" enctype="multipart/form-data">
+      <label class="form-group">Import translations (JSON)
+        <input type="file" name="file" accept=".json,application/json" required>
+      </label>
+      <button type="submit" class="btn btn-secondary">Import</button>
+    </form>
+    <div class="hint">Imports update only languages included in the file; an empty string clears that translation. Invalid files are rejected without saving changes.</div>
+  </div>
+</div>
+
 <div class="card">
   <div class="card-title">Fediverse / Relay actor</div>
   <div class="hint" style="margin-bottom:.75rem">

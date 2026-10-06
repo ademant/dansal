@@ -84,7 +84,15 @@
      on the map/markers (below) keep a non-operable widget out of the
      accessibility tree and out of the Tab order; sighted/mouse users see no
      change at all. */}}
-<div id="map-container" aria-hidden="true"></div>
+<div class="map-wrap">
+  <div id="map-container" aria-hidden="true"></div>
+  {{/* #1465 ext: a sibling of the aria-hidden map, not a child of it — an
+       actionable button must stay in the accessibility tree even though the
+       decorative map itself doesn't. Shown only while a radius filter is
+       active and the visitor has just moved the map themselves (see
+       initMap()'s moveend handler); hidden again once clicked. */}}
+  <button type="button" id="sf-search-area-btn" class="sf-search-area-btn" hidden>{{$.Strings.T "search_this_area"}}</button>
+</div>
 <div class="map-toolbar">
   <span id="sf-info" class="filter-info" aria-live="polite"></span>
 </div>
@@ -144,7 +152,10 @@
 .geo-hint{color:var(--badge-danger-fg);font-size:.85rem}
 .geo-denied{opacity:.55;border-color:var(--fg-faint)!important;color:var(--fg-faint)!important}
 .geo-denied:hover{background:none!important;color:var(--fg-faint)!important}
-#map-container{height:400px;border-radius:6px;overflow:hidden;border:1px solid var(--border);margin-bottom:.5rem}
+.map-wrap{position:relative;margin-bottom:.5rem}
+#map-container{height:400px;border-radius:6px;overflow:hidden;border:1px solid var(--border);margin-bottom:0}
+.sf-search-area-btn{position:absolute;top:.6rem;left:50%;transform:translateX(-50%);z-index:1000;padding:.4rem 1rem;border:1px solid var(--border-mid);border-radius:20px;background:var(--bg-card);color:var(--fg);box-shadow:0 2px 8px rgba(0,0,0,.25);cursor:pointer;font-size:.88rem}
+.sf-search-area-btn:hover{background:var(--bg-hover)}
 .map-toolbar{display:flex;align-items:center;gap:1rem;margin-bottom:.75rem}
 .filter-info{font-size:.85rem;color:var(--fg-muted)}
 .table-wrap{overflow-x:auto}
@@ -195,6 +206,17 @@
   var geoById = {};
   var map = null, clusterGroup = null, allMarkers = {};
   var mapBoundsActive = false;
+  // #1465: fetchResults() can resolve before initMap() runs (deferred
+  // leaflet.js + DOMContentLoaded) — true once a fetch has populated
+  // rows/eventsGeo at least once, so initMap() knows to catch up.
+  var resultsReady = false;
+  // #1465 ext ("Search this area"): true for the duration of a page-driven
+  // map move (initMap()'s deep-link centering, "Locate me", picking a
+  // geocoded suggestion, the post-fetch fitBounds) — set immediately before
+  // the setView/fitBounds call, consumed (and cleared) by the moveend
+  // handler, so those don't get mistaken for a visitor dragging/zooming the
+  // map themselves, which is the only thing that should surface the button.
+  var programmaticMove = false;
 
   // ── Country → Region cascading filter ────────────────────────────────────
   // Built client-side from the already-fetched locs array (same as allTowns).
@@ -245,6 +267,7 @@
         // geo-radius filters (mirrors the existing town-text vs. geo convention).
         townFilter = ''; geoFilter = null;
         document.getElementById('sf-town').value = '';
+        document.getElementById('sf-search-area-btn').hidden = true;
       } else {
         rField.hidden = true;
       }
@@ -311,10 +334,12 @@
     detabifyHiddenMap(map);
     clusterGroup = L.markerClusterGroup({maxClusterRadius:40});
     map.addLayer(clusterGroup);
+    var searchAreaBtn = document.getElementById('sf-search-area-btn');
     // #1436: deep-linked geo filter — recenter on it and reflect it in the
     // radius select / location field. render() picks it up on its own once
     // fetchResults() returns; nothing else to trigger here.
     if (geoFilter) {
+      programmaticMove = true;
       map.setView([geoFilter.lat, geoFilter.lng], 9);
       document.getElementById('sf-radius').value = initRadius;
       if (initLabel) document.getElementById('sf-town').value = initLabel;
@@ -328,6 +353,8 @@
       document.getElementById('sf-country').value = '';
       document.getElementById('sf-region').value = '';
       document.getElementById('sf-region-field').hidden = true;
+      searchAreaBtn.hidden = true; // a fresh geo search starts over
+      programmaticMove = true;
       map.setView([geoFilter.lat, geoFilter.lng], 9);
       render();
     });
@@ -336,10 +363,48 @@
       render();
     });
     // List follows the map viewport: re-render whenever the user pans/zooms.
-    map.on('moveend', function(){ mapBoundsActive = true; render(); });
+    // #1465 ext: only a move the visitor made themselves (programmaticMove
+    // still false here) while a radius filter is active offers "Search this
+    // area" — the page's own setView/fitBounds calls set programmaticMove
+    // first specifically so they don't trigger it.
+    map.on('moveend', function(){
+      mapBoundsActive = true;
+      if(geoFilter && !programmaticMove) searchAreaBtn.hidden = false;
+      programmaticMove = false;
+      render();
+    });
+    searchAreaBtn.addEventListener('click', function(){
+      // Drop the radius filter and switch to the normal viewport-follows-map
+      // mode (mapBoundsActive is already true from the move that revealed
+      // this button) — the list then follows the map like any other search.
+      geoFilter = null;
+      document.getElementById('sf-town').value = '';
+      searchAreaBtn.hidden = true;
+      // #1465 ext: strip the deep-link params so a reload or a shared link
+      // reflects what's on screen now, not the original radius search.
+      var url = new URL(window.location.href);
+      ['lat','lng','radius','label'].forEach(function(p){ url.searchParams.delete(p); });
+      history.replaceState(null, '', url.toString());
+      render();
+    });
+    // #1465: fetchResults() may have already resolved before this ran (its
+    // own rebuildMarkers() call was then a safe no-op, see there) — catch up
+    // now instead of leaving an empty map until the user pans/zooms.
+    if(resultsReady){
+      programmaticMove = true; // render(true) below may fitBounds()
+      rebuildMarkers();
+      render(true);
+    }
   }
 
   function rebuildMarkers(){
+    // #1465: leaflet.js loads deferred, so fetchResults() can finish before
+    // initMap() has created clusterGroup — a no-op here is safe, initMap()
+    // calls this again (with real data already in eventsGeo) once it's
+    // ready, instead of letting clearLayers() throw and silently abort the
+    // rest of fetchResults()'s promise chain (which used to skip render()
+    // entirely, leaving no markers until the user panned/zoomed).
+    if(!clusterGroup) return;
     clusterGroup.clearLayers();
     allMarkers = {};
     eventsGeo.forEach(function(e){
@@ -351,9 +416,10 @@
       allMarkers[e.id] = m;
       clusterGroup.addLayer(m);
     });
-    if(eventsGeo.length){
-      try{ map.fitBounds(clusterGroup.getBounds(),{padding:[30,30],maxZoom:9}); mapBoundsActive=false; }catch(_){}
-    }
+    // #1465: bounds are fit in render(fitBounds=true) against the FILTERED
+    // (visible) set, not the raw unfiltered eventsGeo here — fitting here
+    // first zoomed out to the whole date-range batch (e.g. all of Europe)
+    // before a geo-radius filter got a chance to narrow it down.
   }
 
   // ── Geolocation button helper (mirrors index.html's setupGeoButton) ─────────
@@ -511,6 +577,7 @@
     input.addEventListener('input', function(){
       townFilter = this.value.trim();
       geoFilter = null;
+      document.getElementById('sf-search-area-btn').hidden = true;
       // Town text is mutually exclusive with the country/region cascade.
       if(townFilter){ countryFilter = ''; regionFilter = ''; document.getElementById('sf-country').value = ''; document.getElementById('sf-region').value = ''; document.getElementById('sf-region-field').hidden = true; }
       clearTimeout(geocodeTimer);
@@ -550,7 +617,8 @@
         document.getElementById('sf-region').value = '';
         document.getElementById('sf-region-field').hidden = true;
         box.hidden = true;
-        if(map) map.setView([res.lat,res.lng], 9);
+        document.getElementById('sf-search-area-btn').hidden = true; // a fresh geo search starts over
+        if(map){ programmaticMove = true; map.setView([res.lat,res.lng], 9); }
         render();
       } else {
         input.value = div.textContent;
@@ -577,6 +645,7 @@
     document.getElementById('sf-country').value = '';
     document.getElementById('sf-region').value = '';
     document.getElementById('sf-region-field').hidden = true;
+    document.getElementById('sf-search-area-btn').hidden = true;
     townFilter = ''; geoFilter = null; countryFilter = ''; regionFilter = ''; mapBoundsActive = false;
     render();
   });
@@ -649,7 +718,11 @@
     });
   }
 
-  function render(){
+  // fitBounds (#1465): only true right after a fresh fetch (fetchResults()'s
+  // own call, or initMap()'s catch-up call) — every other caller (filter
+  // checkboxes, radius change, the map's own moveend) renders without it,
+  // so panning/filtering never fights the user by snapping the view back.
+  function render(fitBounds){
     var visible = rows.filter(matchesFilters);
     rows.forEach(function(r){ r.hidden = true; });
     visible.forEach(function(r){ r.hidden = false; });
@@ -658,6 +731,19 @@
     document.getElementById('sf-event-table').hidden = visible.length===0;
     insertDateSeparators();
     syncMarkers(visible);
+    // #1465: fit to what's actually visible after filtering, not the raw
+    // unfiltered batch. With a geo filter and zero matches, leave the view
+    // where it is (already centred on the search point) rather than fitting
+    // an empty/undefined bounds.
+    if(fitBounds && map && visible.length){
+      var latLngs = visible.map(function(r){
+        var m = allMarkers[r.dataset.id];
+        return m ? m.getLatLng() : null;
+      }).filter(Boolean);
+      if(latLngs.length){
+        try{ map.fitBounds(L.latLngBounds(latLngs),{padding:[30,30],maxZoom:9}); mapBoundsActive=false; }catch(_){}
+      }
+    }
   }
 
   function fetchResults(){
@@ -686,8 +772,9 @@
         geoById = {};
         eventsGeo.forEach(function(e){ geoById[e.id] = {lat:e.lat, lng:e.lng}; });
         mapBoundsActive = false;
+        resultsReady = true;
         rebuildMarkers();
-        render();
+        render(true);
       });
   }
 

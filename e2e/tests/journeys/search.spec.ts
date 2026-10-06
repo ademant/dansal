@@ -394,3 +394,157 @@ test("capped results still render rows, map and a counted banner [#1373]", async
   await setSearchDates(page, addDays(200), addDays(210));
   await expect(banner).toBeHidden();
 });
+
+// ── F: radius deep link — markers appear without panning (#1465) ────────────
+
+// A venue page's "no upcoming events here, but N within X km" link (#1436)
+// opens /search with ?lat&lng&radius&from&to already set. fetchResults() can
+// resolve before initMap() has created clusterGroup (leaflet.js is a
+// deferred <script>) — rebuildMarkers() used to throw on the null
+// clusterGroup, silently aborting the rest of the promise chain, so render()
+// never ran and the map stayed empty until the visitor panned or zoomed.
+// Stubbing /search/results (rather than relying on live seeded data at the
+// exact deep-link coordinates) keeps this deterministic regardless of which
+// order fetch vs. map-init actually wins in a given run — the fix makes
+// both orderings converge on the same correct end state, so this doesn't
+// need to force one ordering to be a meaningful regression test.
+test("radius deep link shows map markers without the visitor panning first [#1465]", async ({
+  page,
+}) => {
+  const stub = {
+    rows_html:
+      '<tr class="event-row" data-id="900002" data-title="Deep Link Stub Event"' +
+      ' data-date="2030-01-01" data-end-date="2030-01-01" data-town="Testville"' +
+      ' data-country="France" data-region="" data-organizer="Stub Org"' +
+      ' data-tags="bal-folk " data-dances=" " data-ball="1" data-workshop="0"' +
+      ' data-festival="0" data-start="2030-01-01T20:00:00+01:00">' +
+      '<td><a href="/events/900002">Deep Link Stub Event</a></td></tr>',
+    geo: [
+      {
+        id: 900002,
+        t: "Deep Link Stub Event",
+        s: "2030-01-01T20:00:00+01:00",
+        loc: "Stub Hall",
+        town: "Testville",
+        c: "France",
+        lat: 52.845,
+        lng: 10.409,
+        url: "/events/900002",
+      },
+    ],
+    total: 1,
+    shown: 1,
+    too_many: false,
+  };
+  await page.route("**/search/results*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(stub),
+    })
+  );
+
+  const from = isoDay(addDays(0));
+  const to = isoDay(addDays(90));
+  await page.goto(
+    `${WEB_BASE}/search?lat=52.844823&lng=10.408878&radius=100&from=${from}&to=${to}`
+  );
+  await waitForResults(page);
+
+  // The regression proper: a marker (or its cluster) is visible without any
+  // pan/zoom — the old code left the map empty until a moveend-triggered
+  // render() finally ran.
+  await expect(
+    page
+      .locator(
+        "#map-container .leaflet-marker-icon, #map-container .leaflet-marker-cluster"
+      )
+      .first()
+  ).toBeVisible({ timeout: 15_000 });
+
+  // The radius select reflects the deep link (#1436).
+  await expect(page.locator("#sf-radius")).toHaveValue("100");
+});
+
+// ── G: "Search this area" button (#1465 extension) ──────────────────────────
+
+// With a radius filter active, mapBoundsActive-driven viewport filtering was
+// bypassed entirely (geoFilter short-circuited past it in matchesFilters()),
+// so panning the map while a radius search was active did nothing — the list
+// stayed pinned to the original search point. The fix surfaces a button once
+// the visitor (not the page itself) moves the map, letting them explicitly
+// switch to "follow the map" mode instead of silently doing nothing.
+test("'Search this area' button appears after panning with a radius filter active, then clears it [#1465]", async ({
+  page,
+}) => {
+  const stub = {
+    rows_html:
+      '<tr class="event-row" data-id="900003" data-title="Pan Stub Event"' +
+      ' data-date="2030-01-01" data-end-date="2030-01-01" data-town="Testville"' +
+      ' data-country="France" data-region="" data-organizer="Stub Org"' +
+      ' data-tags="bal-folk " data-dances=" " data-ball="1" data-workshop="0"' +
+      ' data-festival="0" data-start="2030-01-01T20:00:00+01:00">' +
+      '<td><a href="/events/900003">Pan Stub Event</a></td></tr>',
+    geo: [
+      {
+        id: 900003,
+        t: "Pan Stub Event",
+        s: "2030-01-01T20:00:00+01:00",
+        loc: "Stub Hall",
+        town: "Testville",
+        c: "France",
+        lat: 52.845,
+        lng: 10.409,
+        url: "/events/900003",
+      },
+    ],
+    total: 1,
+    shown: 1,
+    too_many: false,
+  };
+  await page.route("**/search/results*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(stub),
+    })
+  );
+
+  const from = isoDay(addDays(0));
+  const to = isoDay(addDays(90));
+  await page.goto(
+    `${WEB_BASE}/search?lat=52.844823&lng=10.408878&radius=100&from=${from}&to=${to}`
+  );
+  await waitForResults(page);
+
+  const btn = page.locator("#sf-search-area-btn");
+  await expect(btn).toBeHidden();
+
+  // Pan the map by dragging it — the page's own setView/fitBounds calls
+  // (deep-link centering, the post-fetch fitBounds) set programmaticMove
+  // first specifically so they don't trigger this button; only a drag the
+  // visitor performs themselves should.
+  const box = await page.locator("#map-container").boundingBox();
+  if (!box) throw new Error("#map-container has no bounding box");
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.mouse.move(cx + 120, cy + 80, { steps: 10 });
+  await page.mouse.up();
+
+  await expect(btn).toBeVisible({ timeout: 15_000 });
+
+  await btn.click();
+
+  // Clicking drops the radius filter: the button hides again, the town
+  // field (which mirrored the deep-linked label) clears, and the deep-link
+  // params are stripped from the URL so a reload reflects the map view
+  // instead of restarting the original radius search.
+  await expect(btn).toBeHidden();
+  await expect(page.locator("#sf-town")).toHaveValue("");
+  const url = new URL(page.url());
+  for (const p of ["lat", "lng", "radius", "label"]) {
+    expect(url.searchParams.has(p)).toBe(false);
+  }
+});

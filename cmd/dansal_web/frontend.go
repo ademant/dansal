@@ -1232,6 +1232,15 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 				}
 			}
 			if actor == nil {
+				// #1462: no live org claims this slug — it may be a renamed
+				// or deleted org's old URL rather than one that never existed.
+				if target, gone := resolveOrgSlugRedirect(db, slug); gone {
+					http.Error(w, "this organization is gone", http.StatusGone)
+					return
+				} else if target != "" {
+					http.Redirect(w, r, "/org/"+target, http.StatusMovedPermanently)
+					return
+				}
 				http.NotFound(w, r)
 				return
 			}
@@ -1242,6 +1251,17 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 
 		org, err := client.GetOrganizationDetail(r.Context(), actor.OrgID)
 		if err != nil {
+			// #1462: the actor row survives an org delete (nothing currently
+			// cleans it up — a documented, accepted orphan, see db.go), so a
+			// deleted org's old slug reaches here rather than the actor==nil
+			// branch above.
+			if target, gone := resolveOrgSlugRedirect(db, actor.OrgSlug); gone {
+				http.Error(w, "this organization is gone", http.StatusGone)
+				return
+			} else if target != "" {
+				http.Redirect(w, r, "/org/"+target, http.StatusMovedPermanently)
+				return
+			}
 			http.NotFound(w, r)
 			return
 		}

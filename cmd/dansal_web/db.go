@@ -118,6 +118,17 @@ CREATE TABLE IF NOT EXISTS delivery_failures (
     UNIQUE(activity_id, org_id, inbox_url)
 );
 CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY);
+-- #1462: text-keyed forwarding table for org public URLs (/org/{slug}).
+-- entity_redirects (dansal API DB) is integer-ID-only and doesn't fit --
+-- slugs are a web-layer-only concept (effectiveSlug(), computed from this
+-- DB's own actors.org_slug), so this lives here instead of as a round-trip
+-- to the API. new_slug='' is the tombstone sentinel (410); non-empty is a
+-- 301 target, chain-walked by resolveOrgSlugRedirect.
+CREATE TABLE IF NOT EXISTS org_slug_redirects (
+    old_slug TEXT PRIMARY KEY,
+    new_slug TEXT NOT NULL DEFAULT '',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
 `); err != nil {
 		log.Fatalf("init db schema: %v", err)
 	}
@@ -471,6 +482,7 @@ func ensureActor(db *sql.DB, orgID int, orgSlug string) (*ActorRecord, error) {
 	if err == nil {
 		// Check if slug has changed - this indicates an actor rename
 		if a.OrgSlug != orgSlug {
+			oldSlug := a.OrgSlug
 			// Migrate to new slug while preserving cryptographic keys
 			_, err = db.Exec(
 				"UPDATE actors SET org_slug = ? WHERE org_id = ?",
@@ -479,6 +491,7 @@ func ensureActor(db *sql.DB, orgID int, orgSlug string) (*ActorRecord, error) {
 			if err != nil {
 				return nil, err
 			}
+			recordOrgSlugRename(db, oldSlug, orgSlug)
 			// Return updated actor record
 			return getActorByOrgID(db, orgID)
 		}
@@ -500,6 +513,7 @@ func ensureActor(db *sql.DB, orgID int, orgSlug string) (*ActorRecord, error) {
 	if err != nil {
 		return nil, err
 	}
+	releaseOrgSlugRedirect(db, orgSlug)
 	return getActorByOrgID(db, orgID)
 }
 
@@ -519,6 +533,7 @@ func ensureActorWithMove(cfg *Config, db *sql.DB, orgID int, orgSlug string) (*A
 			if err != nil {
 				return nil, err
 			}
+			recordOrgSlugRename(db, oldSlug, orgSlug)
 			// Send Move activities to inform followers about the rename
 			go deliverActorMove(cfg, db, oldSlug, orgSlug, orgID)
 			// Return updated actor record
@@ -542,7 +557,77 @@ func ensureActorWithMove(cfg *Config, db *sql.DB, orgID int, orgSlug string) (*A
 	if err != nil {
 		return nil, err
 	}
+	releaseOrgSlugRedirect(db, orgSlug)
 	return getActorByOrgID(db, orgID)
+}
+
+// recordOrgSlugRename writes a 301 forwarding record (#1462) when an org's
+// public slug changes, called from both ensureActor's and
+// ensureActorWithMove's rename branch so it's recorded regardless of which
+// path detected the change (an explicit admin ActorName edit via the latter,
+// or a lazy same-Name-slug catch-up via the former — see the orgFromForm
+// caller in admin_orgs.go, which only invokes ensureActorWithMove when
+// ActorName itself changed). ON CONFLICT so a slug renamed more than once
+// keeps only its latest mapping — resolveOrgSlugRedirect chain-walks through
+// any earlier hops.
+func recordOrgSlugRename(db *sql.DB, oldSlug, newSlug string) {
+	db.Exec(`INSERT INTO org_slug_redirects(old_slug, new_slug, created_at) VALUES(?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(old_slug) DO UPDATE SET new_slug=excluded.new_slug, created_at=excluded.created_at`,
+		oldSlug, newSlug)
+	releaseOrgSlugRedirect(db, newSlug)
+}
+
+// tombstoneOrgSlug records a 410 for a deleted org's slug (#1462).
+func tombstoneOrgSlug(db *sql.DB, slug string) {
+	db.Exec(`INSERT INTO org_slug_redirects(old_slug, new_slug, created_at) VALUES(?, '', CURRENT_TIMESTAMP)
+		ON CONFLICT(old_slug) DO UPDATE SET new_slug='', created_at=excluded.created_at`, slug)
+}
+
+// releaseOrgSlugRedirect drops any stale redirect/tombstone keyed by slug.
+// Called whenever an actor row newly claims slug (a brand new org, or an
+// existing org renaming into a slug a deleted/renamed-away org used to
+// hold) so the forwarding record doesn't linger pointing away from a slug
+// that's live again — matching #1462's "a tombstoned slug must be released
+// if a new org later takes the same slug". Not strictly required for
+// correctness (the direct actors-table lookup in orgFrontendHandler always
+// wins over org_slug_redirects, so a stale row would be unreachable anyway),
+// just hygiene against unbounded growth.
+func releaseOrgSlugRedirect(db *sql.DB, slug string) {
+	db.Exec("DELETE FROM org_slug_redirects WHERE old_slug = ?", slug)
+}
+
+// resolveOrgSlugRedirect walks the org_slug_redirects chain starting at
+// slug (#1462), for a visitor who hit a slug no live org currently answers
+// to. Returns the current live slug to 301 to, or gone=true for a chain
+// that ends in a tombstone (410). An empty target with gone=false means no
+// redirect record exists at all — caller falls back to a plain 404.
+func resolveOrgSlugRedirect(db *sql.DB, slug string) (target string, gone bool) {
+	seen := map[string]bool{slug: true}
+	current := slug
+	hadRecord := false
+	for range 16 {
+		var next string
+		err := db.QueryRow("SELECT new_slug FROM org_slug_redirects WHERE old_slug = ?", current).Scan(&next)
+		if err == sql.ErrNoRows {
+			break
+		}
+		if err != nil {
+			return "", false
+		}
+		hadRecord = true
+		if next == "" {
+			return "", true
+		}
+		if seen[next] {
+			return "", true // cycle guard — shouldn't happen, treat as gone
+		}
+		seen[next] = true
+		current = next
+	}
+	if !hadRecord {
+		return "", false
+	}
+	return current, false
 }
 
 func addFollower(db *sql.DB, orgID int, actorURI, inboxURL string) error {

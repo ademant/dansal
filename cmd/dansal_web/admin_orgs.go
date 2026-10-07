@@ -651,7 +651,7 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 	}
 }
 
-func adminOrgDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+func adminOrgDeleteHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := requireAdmin(w, r)
 		if !ok {
@@ -661,8 +661,20 @@ func adminOrgDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		if !ok {
 			return
 		}
+		// #1462: capture the slug before it's gone — prefer the actor row
+		// (no extra API round-trip), falling back to computing it from the
+		// org itself for the edge case of a delete before any actor row was
+		// ever created (e.g. an org deleted right after creation).
+		oldSlug := ""
+		if actor, aerr := getActorByOrgID(db, id); aerr == nil {
+			oldSlug = actor.OrgSlug
+		} else if org, oerr := client.GetOrganizationDetail(r.Context(), id); oerr == nil {
+			oldSlug = effectiveSlug(org)
+		}
 		if err := client.DeleteOrganization(r.Context(), id, getSessionToken(r)); err != nil {
 			log.Printf("delete organization %d: %v", id, err)
+		} else if oldSlug != "" {
+			tombstoneOrgSlug(db, oldSlug)
 		}
 		client.invalidateOrgs()
 		http.Redirect(w, r, "/admin/organizations", http.StatusSeeOther)

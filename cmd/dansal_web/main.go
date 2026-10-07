@@ -319,6 +319,9 @@ func main() {
 		r.HandleFunc("GET /collection/{name}", legacyGancioGone)
 		r.HandleFunc("GET /place/{id}/{slug...}", legacyGancioGone)
 		r.HandleFunc("GET /export", legacyGancioGone)
+		// Legacy Gancio event images (#1458): no mapping exists from Gancio's
+		// media hashes to current images, same reasoning as the identifiers above.
+		r.HandleFunc("GET /media/{file...}", legacyGancioGone)
 		// Gancio's RSS endpoints do have an unambiguous modern equivalent.
 		r.HandleFunc("GET /feed/rss", legacyGancioRedirect("/feed/events.rss"))
 		r.HandleFunc("GET /feed/rss/", legacyGancioRedirect("/feed/events.rss"))

@@ -1211,6 +1211,19 @@ func (c *DansalClient) GetNearbyCounts(ctx context.Context, lat, lon float64, fr
 	return out, err
 }
 
+// GetUpcomingEventCount reports how many published, not-yet-ended events
+// match filterQuery (already a raw, URL-encoded query string, e.g.
+// "organization_id=5" or "location_id=3,7") — the past-event page's "N
+// upcoming events by this organiser/venue" hint (#1469). limit=1 keeps the
+// response to a single event body; the count itself comes from
+// X-Total-Count, which the API computes via a separate COUNT(*) unaffected
+// by limit.
+func (c *DansalClient) GetUpcomingEventCount(ctx context.Context, filterQuery string) (int, error) {
+	var events []Event
+	total, err := c.getWithTotal(ctx, "/api/v1/events?"+filterQuery+"&is_published=true&limit=1", &events)
+	return total, err
+}
+
 func (c *DansalClient) GetEventsBySeries(ctx context.Context, seriesID int) ([]Event, error) {
 	var events []Event
 	return events, c.get(ctx, fmt.Sprintf("/api/v1/events?series_id=%d&include_past=true&include_cancelled=true", seriesID), &events)

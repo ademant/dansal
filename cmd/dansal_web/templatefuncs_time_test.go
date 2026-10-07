@@ -117,6 +117,51 @@ func TestIsPastDate(t *testing.T) {
 	}
 }
 
+// TestEventIsOver covers #1469: unlike isPastDate (which floors to "before
+// the start of today" — a UI convenience for the import preview), this
+// needs to be exact-instant, so an event that ended a few hours ago earlier
+// today is already over, while one still running right now (an ongoing
+// multi-day festival) is not.
+func TestEventIsOver(t *testing.T) {
+	now := time.Now()
+	twoHoursAgo := now.Add(-2 * time.Hour).Format(time.RFC3339)
+	inTwoHours := now.Add(2 * time.Hour).Format(time.RFC3339)
+	yesterday := now.AddDate(0, 0, -1).Format(time.RFC3339)
+
+	cases := []struct {
+		name string
+		s    string
+		want bool
+	}{
+		{"ended a couple hours ago, still today", twoHoursAgo, true},
+		{"ends in two hours — not over yet, even though isPastDate would floor today to not-past anyway", inTwoHours, false},
+		{"ended yesterday", yesterday, true},
+		{"unparseable", "not a date", false},
+		{"empty", "", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := eventIsOver(c.s); got != c.want {
+				t.Errorf("eventIsOver(%q) = %v, want %v", c.s, got, c.want)
+			}
+		})
+	}
+
+	// The actual divergence from isPastDate: an end time earlier TODAY is
+	// over right now, but isPastDate (floors to start-of-today) says it
+	// isn't "the past" yet.
+	earlierToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 1, 0, 0, now.Location())
+	if now.Sub(earlierToday) > 0 { // only meaningful once it's actually past 00:01 local time
+		s := earlierToday.Format(time.RFC3339)
+		if !eventIsOver(s) {
+			t.Errorf("eventIsOver(%q) = false, want true (it's in the past relative to now)", s)
+		}
+		if isPastDate(s) {
+			t.Errorf("isPastDate(%q) = true — test's premise (illustrating the divergence) no longer holds", s)
+		}
+	}
+}
+
 // formatDateRange (#festivals): one date for a single-day festival, a
 // "start – end" span when the festival crosses midnight, and the bare start
 // date when no end is given.

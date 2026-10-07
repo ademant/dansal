@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -26,6 +28,16 @@ type eventPageData struct {
 	seriesImageAIGenerated bool
 	timetableHistory       []TimetableHistoryEntry
 	danceDescByName        map[string]string // #1290: dance name -> its own admin-entered description, for the auto-composed default event description
+	// orgUpcomingCount/venueUpcomingCount (#1469): "N upcoming events by
+	// this organiser/venue" hints on a past event's page, only ever
+	// populated when the event is actually over (see loadEventPageData).
+	// showVenueUpcoming is false when the venue's upcoming events are
+	// exactly the organiser's (same set, not just the same count) — the org
+	// line alone then covers it, per #1469.
+	orgUpcomingCount   int
+	venueUpcomingCount int
+	showOrgUpcoming    bool
+	showVenueUpcoming  bool
 }
 
 // fetchEventWithFallback fetches event id, preferring the authed endpoint when
@@ -141,6 +153,51 @@ func loadEventPageData(r *http.Request, client *DansalClient, event Event, su *S
 			data.timetableHistory = h
 		}()
 	}
+	// #1469: "N upcoming events by this organiser/venue" hints, only ever
+	// fetched when the event has actually ended (no extra calls on
+	// upcoming event pages). venueLocationIDs combines a room with its
+	// parent building into one comma-joined filter, matching the API's
+	// existing location_id=a,b OR-list support, so the venue count is a
+	// single call either way.
+	var orgTotal, venueTotal, venueByOrgTotal int
+	eventOver := eventIsOver(event.EndTime)
+	venueLocationIDs := ""
+	if eventOver && event.LocationID != nil {
+		venueLocationIDs = strconv.Itoa(*event.LocationID)
+		if event.Location != nil && event.Location.ParentID != nil {
+			venueLocationIDs += "," + strconv.Itoa(*event.Location.ParentID)
+		}
+	}
+	if eventOver && event.OrganizationID != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			n, err := client.GetUpcomingEventCount(r.Context(), fmt.Sprintf("organization_id=%d", *event.OrganizationID))
+			addErr("GetUpcomingEventCount(org)", err)
+			orgTotal = n
+		}()
+	}
+	if eventOver && venueLocationIDs != "" {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			n, err := client.GetUpcomingEventCount(r.Context(), "location_id="+venueLocationIDs)
+			addErr("GetUpcomingEventCount(venue)", err)
+			venueTotal = n
+		}()
+		// Only needed to tell whether the venue's upcoming events are
+		// exactly the organiser's (same set, not just the same count) —
+		// see the dedup decision below.
+		if event.OrganizationID != nil {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				n, err := client.GetUpcomingEventCount(r.Context(), fmt.Sprintf("location_id=%s&organization_id=%d", venueLocationIDs, *event.OrganizationID))
+				addErr("GetUpcomingEventCount(venueByOrg)", err)
+				venueByOrgTotal = n
+			}()
+		}
+	}
 	// #1290: only needed to compose a default description, so skip the call
 	// entirely when the event already has its own (the common case once
 	// organizers have written real ones) or has no dances to describe.
@@ -191,6 +248,22 @@ func loadEventPageData(r *http.Request, client *DansalClient, event Event, su *S
 	wg.Wait()
 	for _, e := range errs {
 		log.Printf("event page: %s", e)
+	}
+	if eventOver {
+		data.orgUpcomingCount = orgTotal
+		data.venueUpcomingCount = venueTotal
+		// data.org != nil: the org-detail fetch and the org upcoming-count
+		// fetch are independent calls -- the template needs the org's name
+		// to render the hint, so don't show it if that call happened to fail
+		// while the count call succeeded.
+		data.showOrgUpcoming = orgTotal > 0 && data.org != nil
+		// Same set, not just the same count: every venue event is by this
+		// org (venueByOrgTotal == venueTotal) AND this org has no upcoming
+		// events anywhere else (venueByOrgTotal == orgTotal) — #1469 shows
+		// only the org line then.
+		sameSet := event.OrganizationID != nil && venueTotal > 0 &&
+			venueByOrgTotal == venueTotal && venueByOrgTotal == orgTotal
+		data.showVenueUpcoming = venueTotal > 0 && !sameSet
 	}
 	return data
 }

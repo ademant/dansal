@@ -106,6 +106,21 @@ func isPastDate(s string) bool {
 	return t.Before(startOfToday)
 }
 
+// eventIsOver reports whether endTime (an absolute RFC3339 instant) is
+// before the current moment — used to show visitors a "this event is over"
+// notice (#1469). Deliberately end_time, not start_time, and compared
+// against the exact instant rather than isPastDate's "before the start of
+// today": an event that ended at 2am today is over right now even though
+// 2am today isn't "before today", and an ongoing multi-day festival must
+// not be marked over on its first morning.
+func eventIsOver(endTime string) bool {
+	t, ok := parseTime(endTime)
+	if !ok {
+		return false
+	}
+	return t.Before(time.Now())
+}
+
 // unusualDate classifies an event start time for the #1413 "are you sure
 // about this date?" warnings: "past" (before today, same rule as
 // isPastDate), "far" (more than 2 years ahead — usually a year typo) or "".
@@ -476,6 +491,7 @@ var tmplFuncsTime = template.FuncMap{
 		return s
 	},
 	"isPastDate":  isPastDate,
+	"eventIsOver": eventIsOver,
 	"unusualDate": unusualDate,
 	// isoEndDate is like isoDate but treats 00:00–04:59 end times as
 	// belonging to the previous calendar day — but only when start and end

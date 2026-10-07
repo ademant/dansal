@@ -333,6 +333,16 @@ type EventData struct {
 	// JSON-LD description and the visible "Description" section, so a
 	// crawler and a human visitor always see identical text.
 	DefaultDescription string
+	// OrgUpcomingCount/VenueUpcomingCount/ShowOrgUpcoming/ShowVenueUpcoming
+	// (#1469): "N upcoming events by this organiser/venue" hints shown on a
+	// past event's page, visitors included. Only ever populated when the
+	// event has actually ended (loadEventPageData skips the fetch
+	// entirely otherwise). ShowVenueUpcoming is false when the venue's
+	// upcoming events are exactly the organiser's.
+	OrgUpcomingCount   int
+	VenueUpcomingCount int
+	ShowOrgUpcoming    bool
+	ShowVenueUpcoming  bool
 }
 
 type OrgData struct {
@@ -1156,6 +1166,10 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			SeriesImageURL:         epd.seriesImageURL,
 			SeriesImageAIGenerated: epd.seriesImageAIGenerated,
 			TimetableHistory:       epd.timetableHistory,
+			OrgUpcomingCount:       epd.orgUpcomingCount,
+			VenueUpcomingCount:     epd.venueUpcomingCount,
+			ShowOrgUpcoming:        epd.showOrgUpcoming,
+			ShowVenueUpcoming:      epd.showVenueUpcoming,
 		})
 		// OGImage fallback: event → generated series/org banner overlay
 		// (#1072, #1082, #1083). The generated banner is used whenever a

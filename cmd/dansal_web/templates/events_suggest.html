@@ -1347,6 +1347,10 @@ function applyWizardData(data) {
     var urlEl  = form.querySelector('[name="url"]');         if (urlEl)  urlEl.value  = data.url || '';
     var cn     = form.querySelector('[name="contact_name"]');  if (cn) cn.value = data.contact_name || '';
     var ce     = form.querySelector('[name="contact_email"]'); if (ce) ce.value = data.contact_email || '';
+    // #1467: the submitter's own email/name, preserved on a rejected
+    // submission -- the manage-link/import prefills never set these.
+    var em     = form.querySelector('[name="email"]');         if (em) em.value = data.email || '';
+    var sn     = form.querySelector('[name="suggester_name"]');if (sn) sn.value = data.suggester_name || '';
     (data.tags || []).forEach(function(t){
       var cb = form.querySelector('[name="dansal_tags"][value="' + t + '"]');
       if (cb) cb.checked = true;
@@ -1439,6 +1443,15 @@ function applyWizardData(data) {
 }
 // ── Manage-link auto-prefill (#928) ────────────────────────────────────────
 {{if .Data.ManageToken}}
+document.addEventListener('DOMContentLoaded', function(){
+  applyWizardData({{.Data.PrefillJSON}});
+});
+{{end}}
+// ── Rejected-submission auto-prefill (#1467) ───────────────────────────────
+// suggestError() re-renders the wizard with what was already submitted so a
+// pending-lock/captcha/links/rate-limit/API rejection only costs fixing the
+// one thing that was wrong, not retyping the whole event.
+{{if .Data.Error}}
 document.addEventListener('DOMContentLoaded', function(){
   applyWizardData({{.Data.PrefillJSON}});
 });

@@ -242,6 +242,22 @@ func ipUAKey(ip, ua string) string {
 
 func pendingKey(ip, ua, scope string) string { return ipUAKey(ip, ua) + "|" + scope }
 
+// suggestPendingScope returns an event-scoped pending-submission key (#1467):
+// resubmitting the SAME event (double-click, resend after a rejection) is
+// still caught, but a DIFFERENT event from the same visitor goes through
+// instead of being blocked for the whole form-token window. Deliberately
+// coarse — normalized title + start_time + location name, not the full
+// form — since this only needs to tell "same event" apart from "different
+// event", not detect near-duplicates (findExistingEvent's job, server-side,
+// against the real DB rather than this in-memory guard).
+func suggestPendingScope(title, startTime, location string) string {
+	norm := strings.ToLower(strings.TrimSpace(title)) + "|" +
+		strings.TrimSpace(startTime) + "|" +
+		strings.ToLower(strings.TrimSpace(location))
+	sum := sha256.Sum256([]byte(norm))
+	return "suggest|" + hex.EncodeToString(sum[:])
+}
+
 // setPendingSubmission marks this visitor as having an outstanding submission
 // for scope.
 func setPendingSubmission(ip, ua, scope string, ttl time.Duration) {

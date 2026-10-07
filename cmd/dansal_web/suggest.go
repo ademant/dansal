@@ -222,7 +222,32 @@ func trimmedNonEmpty(vals []string) []string {
 // suggestError re-renders the suggest form with an error message. Shared by
 // the throttle, pending, captcha, link, and submit-failure paths — each used
 // to repeat the same 8-line template block.
-func suggestError(w http.ResponseWriter, r *http.Request, cfg *Config, tmpls *Templates, i18n *I18n, errMsg, ip string) {
+// suggestError re-renders the wizard with the error message and (#1467)
+// everything the visitor already entered, read back from the just-rejected
+// POST's own r.Form — every suggestSubmitHandler rejection path (pending
+// lock, captcha, links, rate limit, the API call itself) calls this after
+// guardFormSubmit has parsed the form, so r.Form is always populated here.
+func suggestError(w http.ResponseWriter, r *http.Request, cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n, errMsg, ip string) {
+	dances, err := client.GetDances(r.Context())
+	if err != nil {
+		log.Printf("suggest: could not load dances: %v", err)
+	}
+	pf := wizPrefillFromForm(r)
+	prefillJSON := template.JS("{}")
+	if b, merr := json.Marshal(pf); merr == nil {
+		prefillJSON = template.JS(b)
+	} else {
+		log.Printf("could not marshal error-prefill JSON: %v", merr)
+	}
+	prefillTags := make(map[string]bool)
+	for _, t := range pf.Tags {
+		prefillTags[t] = true
+	}
+	prefillDanceIDs := make(map[int]bool)
+	for _, id := range pf.DanceIDs {
+		prefillDanceIDs[id] = true
+	}
+
 	title := i18n.T(r, "suggest_event_title")
 	renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
 		HintSMTP:          cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
@@ -230,6 +255,10 @@ func suggestError(w http.ResponseWriter, r *http.Request, cfg *Config, tmpls *Te
 		Error:             errMsg,
 		FormToken:         issueFormToken(ip),
 		GeoToken:          newFormToken(),
+		Dances:            dances,
+		PrefillJSON:       prefillJSON,
+		PrefillTags:       prefillTags,
+		PrefillDanceIDs:   prefillDanceIDs,
 	}))
 }
 
@@ -240,10 +269,20 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			return
 		}
 		ip := getClientIP(r)
+		// #1467: parsed before the rate-limit check (rather than leaving it
+		// to guardFormSubmit, below) so every rejection path -- including
+		// this one -- has r.Form available for suggestError's prefill.
+		// Calling ParseForm again inside guardFormSubmit is a harmless no-op
+		// once it has already succeeded once.
+		if err := r.ParseForm(); err != nil {
+			logFormReject(r, "PARSE_ERROR", ip, err)
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
 		key := ip + "|" + r.UserAgent()
 		if publicThrottle.isBlocked(key) {
 			log.Printf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
-			suggestError(w, r, cfg, tmpls, i18n, i18n.T(r, "suggest_error_rate_limit"), ip)
+			suggestError(w, r, cfg, tmpls, client, i18n, i18n.T(r, "suggest_error_rate_limit"), ip)
 			return
 		}
 
@@ -256,121 +295,56 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			return
 		}
 
-		if hasPendingSubmission(ip, r.UserAgent(), "suggest") {
+		title := r.FormValue("dansal_title")
+		startTime := r.FormValue("start_time")
+		location := r.FormValue("location")
+		// #1467: scoped to this specific event (normalized title + start
+		// time + location) rather than a bare "suggest" literal -- the old
+		// scope blocked ANY further suggestion from the same visitor for the
+		// whole form-token window, not just a resend of the same one.
+		pendingScope := suggestPendingScope(title, startTime, location)
+
+		if hasPendingSubmission(ip, r.UserAgent(), pendingScope) {
 			logFormReject(r, "PENDING_SUBMISSION", ip, nil)
-			suggestError(w, r, cfg, tmpls, i18n, i18n.T(r, "form_error_pending"), ip)
+			suggestError(w, r, cfg, tmpls, client, i18n, i18n.T(r, "suggest_error_pending"), ip)
 			return
 		}
 
 		// Captcha check.
 		if cfg.CaptchaSiteKey != "" {
 			if err := verifyTurnstile(cfg, r.FormValue("cf-turnstile-response")); err != nil {
-				suggestError(w, r, cfg, tmpls, i18n, i18n.T(r, "suggest_error_captcha"), ip)
+				suggestError(w, r, cfg, tmpls, client, i18n, i18n.T(r, "suggest_error_captcha"), ip)
 				return
 			}
 		}
 
-		title := r.FormValue("dansal_title")
 		description := r.FormValue("description")
 
 		if strings.Contains(title, "http://") || strings.Contains(title, "https://") ||
 			strings.Contains(description, "http://") || strings.Contains(description, "https://") {
-			suggestError(w, r, cfg, tmpls, i18n, i18n.T(r, "suggest_error_links"), ip)
+			suggestError(w, r, cfg, tmpls, client, i18n, i18n.T(r, "suggest_error_links"), ip)
 			return
 		}
 
 		tags := r.Form["dansal_tags"]
-		var danceIDs []int
-		for _, s := range r.Form["dance_ids"] {
-			if id, err := strconv.Atoi(s); err == nil {
-				danceIDs = append(danceIDs, id)
-			}
-		}
-
-		var pricing *Pricing
-		if pt := r.FormValue("pricing_type"); pt != "" && pt != "none" {
-			p := &Pricing{Type: pt}
-			switch pt {
-			case "single", "donation":
-				if amt := r.FormValue("pricing_amount"); amt != "" {
-					if f, err := strconv.ParseFloat(amt, 64); err == nil {
-						p.Amount = f
-					}
-				}
-				p.Currency = strings.TrimSpace(r.FormValue("pricing_currency"))
-			case "multiple":
-				labels := r.Form["pl_label"]
-				amounts := r.Form["pl_amount"]
-				for i, lbl := range labels {
-					lbl = strings.TrimSpace(lbl)
-					if lbl == "" {
-						continue
-					}
-					var amt float64
-					if i < len(amounts) {
-						if f, err := strconv.ParseFloat(strings.TrimSpace(amounts[i]), 64); err == nil {
-							amt = f
-						}
-					}
-					p.Prices = append(p.Prices, Price{Label: lbl, Amount: amt})
-				}
-				if len(p.Prices) == 0 {
-					p = nil
-				}
-			}
-			pricing = p
-		}
-
 		musicians := peopleFromForm(r, "dansal_musicians")
 		instructors := peopleFromForm(r, "dansal_instructors")
-
-		starts := r.Form["tt_start"]
-		ends := r.Form["tt_end"]
-		titles := r.Form["tt_title"]
-		descs := r.Form["tt_desc"]
-		rooms := r.Form["tt_room"]
-		ttTypes := r.Form["tt_type"]
-		var timetable []TimetableEntryReq
-		for i, s := range starts {
-			s = strings.TrimSpace(s)
-			if i >= len(titles) {
-				break
-			}
-			t := strings.TrimSpace(titles[i])
-			if s == "" && t == "" {
-				continue
-			}
-			entry := TimetableEntryReq{StartTime: s, Title: t}
-			if i < len(ends) {
-				entry.EndTime = strings.TrimSpace(ends[i])
-			}
-			if i < len(descs) {
-				entry.Description = strings.TrimSpace(descs[i])
-			}
-			if i < len(rooms) {
-				entry.Room = strings.TrimSpace(rooms[i])
-			}
-			if i < len(ttTypes) {
-				entry.EntryType = ttTypes[i]
-			}
-			timetable = append(timetable, entry)
-		}
 
 		req := SuggestEventReq{
 			Title:       title,
 			Description: description,
-			StartTime:   r.FormValue("start_time"),
+			StartTime:   startTime,
 			EndTime:     r.FormValue("end_time"),
 			HasBall:     sliceContains(tags, "bal-folk"),
 			HasWorkshop: sliceContains(tags, "dance-workshop") || sliceContains(tags, "musician-workshop"),
 			HasFestival: sliceContains(tags, "festival"),
 			Tags:        tags,
-			DanceIDs:    danceIDs,
+			DanceIDs:    danceIDsFromForm(r),
 			URL:         r.FormValue("url"),
 			Food:        r.FormValue("food"),
 			Drink:       r.FormValue("drink"),
 			Location: PreviewLoc{
-				Location:  r.FormValue("location"),
+				Location:  location,
 				Town:      r.FormValue("town"),
 				Country:   r.FormValue("country"),
 				Address:   r.FormValue("address"),
@@ -383,23 +357,23 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			Email:         r.FormValue("email"),
 			SuggesterName: strings.TrimSpace(r.FormValue("suggester_name")),
 			Phone2:        r.FormValue("dansal_phone2"),
-			Pricing:       pricing,
+			Pricing:       pricingFromForm(r),
 			ContactName:   strings.TrimSpace(r.FormValue("contact_name")),
 			ContactEmail:  strings.TrimSpace(r.FormValue("contact_email")),
 			Musicians:     musicians,
 			Instructors:   instructors,
-			Timetable:     timetable,
+			Timetable:     timetableFromForm(r),
 		}
 
 		publicThrottle.record(key)
-		setPendingSubmission(ip, r.UserAgent(), "suggest", stdFormMaxAge(cfg))
+		setPendingSubmission(ip, r.UserAgent(), pendingScope, stdFormMaxAge(cfg))
 		globalEmailSendRate.record()
 
 		token, err := client.SuggestEvent(r.Context(), req, cfg.publicBaseURL(), getBoardSessionToken(r))
 		if err != nil {
-			clearPendingSubmission(ip, r.UserAgent(), "suggest")
+			clearPendingSubmission(ip, r.UserAgent(), pendingScope)
 			log.Printf("dansal-web: suggest submit failed ip_hash=%s err=%v", hashIP(ip), err)
-			suggestError(w, r, cfg, tmpls, i18n, i18n.T(r, "suggest_error_submit"), ip)
+			suggestError(w, r, cfg, tmpls, client, i18n, i18n.T(r, "suggest_error_submit"), ip)
 			return
 		}
 
@@ -464,6 +438,136 @@ type wizPrefill struct {
 	Musicians    []string            `json:"musicians"`
 	Instructors  []string            `json:"instructors"`
 	Timetable    []TimetableEntryReq `json:"timetable,omitempty"`
+	// Email/SuggesterName (#1467) are only populated by wizPrefillFromForm,
+	// for re-rendering a rejected submission with what the visitor already
+	// entered — the manage-link/import prefills above never need these,
+	// since neither edits someone else's own submitter identity.
+	Email         string `json:"email,omitempty"`
+	SuggesterName string `json:"suggester_name,omitempty"`
+}
+
+// danceIDsFromForm parses the wizard's dance_ids[] checkboxes.
+func danceIDsFromForm(r *http.Request) []int {
+	var danceIDs []int
+	for _, s := range r.Form["dance_ids"] {
+		if id, err := strconv.Atoi(s); err == nil {
+			danceIDs = append(danceIDs, id)
+		}
+	}
+	return danceIDs
+}
+
+// pricingFromForm parses the wizard's pricing_type/pricing_amount/
+// pricing_currency/pl_label/pl_amount fields. Shared by suggestSubmitHandler
+// (building the API request) and wizPrefillFromForm (#1467, re-rendering a
+// rejected submission).
+func pricingFromForm(r *http.Request) *Pricing {
+	pt := r.FormValue("pricing_type")
+	if pt == "" || pt == "none" {
+		return nil
+	}
+	p := &Pricing{Type: pt}
+	switch pt {
+	case "single", "donation":
+		if amt := r.FormValue("pricing_amount"); amt != "" {
+			if f, err := strconv.ParseFloat(amt, 64); err == nil {
+				p.Amount = f
+			}
+		}
+		p.Currency = strings.TrimSpace(r.FormValue("pricing_currency"))
+	case "multiple":
+		labels := r.Form["pl_label"]
+		amounts := r.Form["pl_amount"]
+		for i, lbl := range labels {
+			lbl = strings.TrimSpace(lbl)
+			if lbl == "" {
+				continue
+			}
+			var amt float64
+			if i < len(amounts) {
+				if f, err := strconv.ParseFloat(strings.TrimSpace(amounts[i]), 64); err == nil {
+					amt = f
+				}
+			}
+			p.Prices = append(p.Prices, Price{Label: lbl, Amount: amt})
+		}
+		if len(p.Prices) == 0 {
+			return nil
+		}
+	}
+	return p
+}
+
+// timetableFromForm parses the wizard's tt_start/tt_end/tt_title/tt_desc/
+// tt_room/tt_type row fields. Shared by suggestSubmitHandler (building the
+// API request) and wizPrefillFromForm (#1467, re-rendering a rejected
+// submission).
+func timetableFromForm(r *http.Request) []TimetableEntryReq {
+	starts := r.Form["tt_start"]
+	ends := r.Form["tt_end"]
+	titles := r.Form["tt_title"]
+	descs := r.Form["tt_desc"]
+	rooms := r.Form["tt_room"]
+	ttTypes := r.Form["tt_type"]
+	var timetable []TimetableEntryReq
+	for i, s := range starts {
+		s = strings.TrimSpace(s)
+		if i >= len(titles) {
+			break
+		}
+		t := strings.TrimSpace(titles[i])
+		if s == "" && t == "" {
+			continue
+		}
+		entry := TimetableEntryReq{StartTime: s, Title: t}
+		if i < len(ends) {
+			entry.EndTime = strings.TrimSpace(ends[i])
+		}
+		if i < len(descs) {
+			entry.Description = strings.TrimSpace(descs[i])
+		}
+		if i < len(rooms) {
+			entry.Room = strings.TrimSpace(rooms[i])
+		}
+		if i < len(ttTypes) {
+			entry.EntryType = ttTypes[i]
+		}
+		timetable = append(timetable, entry)
+	}
+	return timetable
+}
+
+// wizPrefillFromForm rebuilds a wizPrefill from the submitted form (#1467):
+// used by suggestError so a rejected submission (pending lock, captcha,
+// links, rate limit, or the API itself) re-renders with everything the
+// visitor already entered, instead of a blank wizard.
+func wizPrefillFromForm(r *http.Request) wizPrefill {
+	return wizPrefill{
+		Title:         r.FormValue("dansal_title"),
+		Description:   r.FormValue("description"),
+		URL:           r.FormValue("url"),
+		StartTime:     r.FormValue("start_time"),
+		EndTime:       r.FormValue("end_time"),
+		Tags:          r.Form["dansal_tags"],
+		DanceIDs:      danceIDsFromForm(r),
+		Location:      r.FormValue("location"),
+		Town:          r.FormValue("town"),
+		Country:       r.FormValue("country"),
+		Address:       r.FormValue("address"),
+		Zipcode:       r.FormValue("zipcode"),
+		Lat:           r.FormValue("lat"),
+		Lon:           r.FormValue("lon"),
+		Food:          r.FormValue("food"),
+		Drink:         r.FormValue("drink"),
+		Pricing:       pricingFromForm(r),
+		ContactName:   strings.TrimSpace(r.FormValue("contact_name")),
+		ContactEmail:  strings.TrimSpace(r.FormValue("contact_email")),
+		Musicians:     peopleFromForm(r, "dansal_musicians"),
+		Instructors:   peopleFromForm(r, "dansal_instructors"),
+		Timetable:     timetableFromForm(r),
+		Email:         r.FormValue("email"),
+		SuggesterName: strings.TrimSpace(r.FormValue("suggester_name")),
+	}
 }
 
 func suggestManagePageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {

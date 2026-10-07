@@ -7,12 +7,31 @@ description: Run the dansal discuss → issue → implement → commit workflow 
 
 CONSENT GATES — each needs its own explicit yes
 1. Discuss: read the real code first; give approach + tradeoffs + a recommendation; real design choices → AskUserQuestion. Skip only for typos/one-liners.
-2. "ok"/"create issue" → `gh issue create` ONLY. Not implementation. Body = problem (with evidence), solution (files/functions), impact, tests. Use `--body-file` for long bodies.
+2. "ok"/"create issue" → `gh issue create` ONLY (format: ISSUE FORMAT below). Not implementation.
 3. Implement only on "implement #N" / "implement phase-N" (= all issues with label `phase-N`, one commit, one `Closes #N` line each).
 4. Push only when asked (or already told to push in this conversation). Push sends everything unpushed.
 5. Build/deploy only when asked (deploy skill).
 - A multi-part proposal: approval of one part ≠ approval of the others. Unclear → ask.
 - Ambiguous reference ("the other recommendation") → pick the most recent pending proposal, state the interpretation, offer the alternative.
+
+ISSUE FORMAT (readable by humans, written for the AI that implements it later: condensed, no prose padding)
+- Before: `gh issue list --search "<keywords>" --state all` → no duplicate; note related issues.
+- Title: `<area>: <concrete change>` (e.g. `Postcode search: create schema at startup, import for pre-#1459 countries`).
+- Body ≤ ~40 lines, bullets/fragments, no intro/outro, no restating CLAUDE.md:
+```
+## Problem
+- <observed fact + evidence: numbers, prod state, repro, file:symbol>
+## Solution
+1. <change> — `file.go` `func` (constraints, edge cases)
+## Tests
+- <what to assert>
+## Notes
+- related #N / depends on #M / out of scope / open question
+```
+- Name real symbols and paths (grepped), not descriptions of them. One sentence of why per design choice.
+- Drop the Notes section if there's nothing to say. Long evidence → summarise to the numbers that matter.
+- Create with `--body-file <scratchpad>/issue.md`; cross-link related issues (comment on the older one if needed).
+- Reply to the user: link + 2–5 bullet summary, not the body.
 
 IMPLEMENT
 - Grep actual names; don't trust memory or CLAUDE.md names (migration fn is `migrateDB`).

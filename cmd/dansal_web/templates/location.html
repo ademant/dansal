@@ -88,7 +88,7 @@
   {{end}}
   {{if and .Latitude .Longitude}}
   <div class="loc-map-links">
-    <a href="geo:{{.Latitude}},{{.Longitude}}?q={{.Latitude}},{{.Longitude}}" class="loc-map-link loc-map-link-nav" title="{{$.Strings.T "loc_navigate_hint"}}">🧭 {{$.Strings.T "loc_navigate"}}</a>
+    <a href="geo:{{.Latitude}},{{.Longitude}}?q={{.Latitude}},{{.Longitude}}" rel="nofollow" class="loc-map-link loc-map-link-nav" title="{{$.Strings.T "loc_navigate_hint"}}">🧭 {{$.Strings.T "loc_navigate"}}</a>
     <a href="https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&to={{.Latitude}},{{.Longitude}}" target="_blank" rel="noopener" class="loc-map-link loc-osm-link">🗺 OpenStreetMap</a>
   </div>
   {{end}}

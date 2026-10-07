@@ -1022,6 +1022,13 @@ func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClien
 func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idStr := r.PathValue("id")
+		// #1457: some crawlers resolve the geo: navigation link (event.html)
+		// as if it were relative, requesting /events/geo:lat,lon -- a 410
+		// drains their retry queue faster than a plain 404 would.
+		if strings.HasPrefix(idStr, "geo:") {
+			http.Error(w, "not a navigable URL", http.StatusGone)
+			return
+		}
 		id, err := strconv.Atoi(idStr)
 		if err != nil {
 			http.NotFound(w, r)
@@ -1306,6 +1313,14 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 
 func locationPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// #1457: some crawlers resolve the geo: navigation link
+		// (location.html) as if it were relative, requesting
+		// /location/geo:lat,lon -- a 410 drains their retry queue faster
+		// than a plain 404 would.
+		if strings.HasPrefix(r.PathValue("id"), "geo:") {
+			http.Error(w, "not a navigable URL", http.StatusGone)
+			return
+		}
 		id, ok := intPathValueOr404(w, r, "id")
 		if !ok {
 			return

@@ -582,7 +582,7 @@
       {{if and .Latitude .Longitude}}
       <div id="evt-map" data-lat="{{.Latitude}}" data-lng="{{.Longitude}}" class="evt-map"></div>
       <div class="map-links">
-        <a href="geo:{{.Latitude}},{{.Longitude}}?q={{.Latitude}},{{.Longitude}}" class="map-link map-link-nav" title="{{$.Strings.T "loc_navigate_hint"}}">🧭 {{$.Strings.T "loc_navigate"}}</a>
+        <a href="geo:{{.Latitude}},{{.Longitude}}?q={{.Latitude}},{{.Longitude}}" rel="nofollow" class="map-link map-link-nav" title="{{$.Strings.T "loc_navigate_hint"}}">🧭 {{$.Strings.T "loc_navigate"}}</a>
         <a href="https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&to={{.Latitude}},{{.Longitude}}" target="_blank" rel="noopener" class="map-link osm-directions">🗺 OpenStreetMap</a>
       </div>
       {{end}}

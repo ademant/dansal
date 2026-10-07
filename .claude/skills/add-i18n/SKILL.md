@@ -1,103 +1,36 @@
 ---
 name: add-i18n
-description: Add or change a user-visible string (button label, heading, error message, admin form field) in the dansal web UI. Use when touching i18n.yaml, adding new translation keys, or referencing strings from templates or Go handlers. Encodes the 12-language document order, the anchor-key insertion script, and YAML validation.
+description: Add/change a user-visible string in dansal web UI (cmd/dansal_web/i18n.yaml, $.Strings.T/TF in templates, I18nStrings in Go). Use for any new label/heading/error/admin field text or translation key. Gives section order, anchor-insert script, validation.
 ---
 
-# Add a translation to dansal-web
+# i18n (cmd/dansal_web/i18n.yaml)
 
-All UI strings for `cmd/dansal_web` live in `cmd/dansal_web/i18n.yaml`, embedded into the binary via `//go:embed` (`cmd/dansal_web/i18n.go:15`). The file is the single source of truth for **12 languages**; there is no per-language fallback chain — a missing key renders as the bare key name.
+FACTS
+- Embedded via `//go:embed i18n.yaml` (`i18n.go`). Optional runtime override: `web.yaml: i18n_file` (`Config.I18nFile`) — still edit the embedded file.
+- 12 sections, file order (NOT alphabetical): `de br en es fr it nl uk ca pt pl cs`. Shape: `languages.<lc>.{flag,name,strings.<key>}`; top-level `default: de`.
+- Missing key renders as the bare key name (no per-language fallback).
+- Use: template `{{$.Strings.T "key"}}` / `{{$.Strings.TF "key" arg}}` (TF = fmt.Sprintf); Go `I18nStrings.T(key)`.
 
-## The 12 languages, in document order
-
-Sections appear in this exact order in the YAML (do not reorder, do not append a section elsewhere):
-
-```
-de, br, en, es, fr, it, nl, uk, ca, pt, pl, cs
-```
-
-`CLAUDE.md`/`AGENTS.md` say "7 languages" — that is stale. The real count is **12**, and the order is the file's line order, not alphabetical (`br` comes right after `de`, `cs` last). When in doubt, trust the file.
-
-## File shape
-
-```yaml
-languages:
-  de:
-    flag: "🇩🇪"
-    name: "Deutsch"
-    strings:
-      nav_events: "Veranstaltungen"
-      ...
-  br:
-    ...
-```
-
-- Top-level `default: de` is the fallback language.
-- Each language has `flag`, `name`, and a `strings:` map.
-- Values are plain strings; `%s`-style placeholders are filled via `TF` (see below).
-
-## How keys are used
-
-- **Templates**: `{{$.Strings.T "key"}}` or `{{$.Strings.TF "key" "arg"}}` — every page template gets `$.Strings`.
-- **Go handlers**: lookup via the `I18n` type in `cmd/dansal_web/i18n.go`; `I18nStrings.T(key)` returns the key itself when missing (so a missing key degrades to the key name, not a crash).
-- Sites can override strings at runtime via an external file at `/etc/dansal/i18n.yaml` (`config.yaml: i18n_file`, `cmd/dansal_web/i18n.go:57`) — always update the embedded YAML too.
-
-## Procedure
-
-1. **Pick a unique key** following existing naming (`nav_`, `evt_`, `admin_`, `loc_`, `org_`, `musician_`, `btn_go_back`, …). **Grep for a reusable existing key first** — a generic word/phrase you need (e.g. "Name", "Delete", "Close") may already exist under a differently-scoped key name (`col_name` for a generic table-column "Name" header, `admin_delete` for a generic "Delete" action, `admin_magic_link_close` happens to hold the generic "Close" translation despite its feature-specific name). Search by the *English value*, not just the key name, since the existing key's prefix won't necessarily hint at your new use case. Only add a new key when nothing already carries the exact phrase you need.
-2. **Insert the key into all 12 sections, in document order.** Hand-editing 12 places is error-prone; use an anchor-key approach. Pick an existing key known to exist in all 12 sections (e.g. `evt_description`), and run a small Python script that inserts your new key after that anchor in each section — anchored on indentation so it lands inside the right `strings:` map:
-
+PROCEDURE
+1. Reuse first: grep the ENGLISH VALUE (not key name) — generic words exist under odd keys (`col_name`="Name", `admin_delete`="Delete", `admin_magic_link_close`="Close").
+2. Key prefix convention: `nav_ evt_ admin_ loc_ org_ musician_ btn_ col_`.
+3. Insert into all 12 sections with anchor script (anchor must exist 12×; `evt_description` does):
 ```python
-import re, io
-
-path = "cmd/dansal_web/i18n.yaml"
-new = [("my_new_key", "translation")] * 12  # one per language, in document order
-anchor = "evt_description"
-
-src = open(path, encoding="utf-8").read()
-lines = src.splitlines(keepends=True)
-anchor_re = re.compile(r"^(\s*)%s: " % anchor)
-
-count = 0
-out = []
-for i, ln in enumerate(lines):
-    m = anchor_re.match(ln)
-    if m:
-        indent = m.group(1)
-        key, val = new[count]
-        count += 1
-        out.append("%s%s: \"%s\"\n" % (indent, key, val))
+import re
+path="cmd/dansal_web/i18n.yaml"; anchor="evt_description"
+new=[("my_key","de…"),("my_key","br…"),("my_key","en…"),("my_key","es…"),("my_key","fr…"),("my_key","it…"),
+     ("my_key","nl…"),("my_key","uk…"),("my_key","ca…"),("my_key","pt…"),("my_key","pl…"),("my_key","cs…")]  # file order
+rx=re.compile(r"^(\s*)%s: "%anchor); out=[]; c=0
+for ln in open(path,encoding="utf-8").read().splitlines(True):
+    m=rx.match(ln)
+    if m: k,v=new[c]; c+=1; out.append('%s%s: "%s"\n'%(m.group(1),k,v.replace('"','\\"')))
     out.append(ln)
-assert count == 12, "anchor not found in all 12 sections (%d/12)" % count
-open(path, "w", encoding="utf-8").write("".join(out))
+assert c==12,c; open(path,"w",encoding="utf-8").write("".join(out))
 ```
+4. Validate: `python3 -c "import yaml;yaml.safe_load(open('cmd/dansal_web/i18n.yaml',encoding='utf-8'))"`
+5. `go build ./... && go vet ./... && go test ./...` (`hreflang_smoke_test.go` covers per-language pages).
 
-3. **Validate** the YAML is still parseable:
-
-```bash
-python3 -c "import yaml; yaml.safe_load(open('cmd/dansal_web/i18n.yaml', encoding='utf-8'))"
-```
-
-4. **Reference the key** in the template/Go code as shown above. Add/extend a test only when the change touches template logic (`hreflang_smoke_test.go` covers language-parameterized pages — keep it green).
-
-## Deliberately English-only strings
-
-When the user decides a string doesn't need translating (e.g. #1422's "you've just sent a request" message, mostly seen by bots), still add the key to **all 12 sections** with the same English text and a YAML comment above the first one saying why — a missing key would render as the bare key name in the other languages.
-
-## Placeholders filled in JavaScript
-
-`TF` runs `fmt.Sprintf`; for a message whose `%s`/`%d` is filled client-side, render it with `T` (placeholder kept literally, e.g. into a `data-msg-…` attribute) and `.replace('%s', …)` in JS. Put dates/counts into translated messages this way rather than concatenating fragments.
-
-## Non-translation changes to i18n.yaml
-
-- **Language metadata** (`flag`, `name`): same file, edit once per language.
-- **Adding a new language**: new top-level key under `languages` with `flag`, `name`, `strings`, inserted at the end. Note `default: de` is the fallback, not a language section.
-
-## Final checks
-
-```bash
-go build ./...
-go vet ./...
-go test ./...
-```
-
-Then `make build` and `sudo make deploy INSTANCE=dev` (see the `deploy` skill).
+RULES
+- English-only by decision (e.g. #1422 bot-facing text): still add to all 12 with the English value + a YAML comment above the first explaining why.
+- Placeholder filled in JS: render with `T` (keeps literal `%s`, e.g. into `data-msg-*`), then `.replace('%s',…)` client-side. Never concatenate translated fragments.
+- New language: append a new `languages.<lc>` block (flag, name, strings) at the end; update CLAUDE.md's language list.

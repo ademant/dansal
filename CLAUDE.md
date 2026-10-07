@@ -31,10 +31,10 @@ Skip the discussion step only for obvious typos or single-line fixes, which may 
 
 ## Go version
 
-This project requires **Go 1.26+** (`go.mod` currently declares `go 1.26.3`). Before running `make build`, verify:
+This project requires **Go 1.27+** (`go.mod` currently declares `go 1.27.1`; check it rather than trusting this line). Before running `make build`, verify:
 
 ```bash
-go version  # must print go1.26 or higher
+go version  # must print go1.27 or higher
 ```
 
 Do not downgrade `go.mod`. If a new language or stdlib feature from 1.24+ is available and fits the problem, prefer it over a manual workaround.
@@ -102,14 +102,14 @@ Do **not** run `go build ./cmd/...` and install manually — always use `make bu
 
 - **DB**: SQLite at `/var/lib/dansal/<instance>/calendar.db`; config at `/etc/dansal/<instance>/config.yaml` (API), `/etc/dansal/<instance>/web.yaml` (web), `/etc/dansal/<instance>/webmin.yaml` (webmin)
 - **Services**: `dansal` (API, port 8000), `dansal-web` (frontend, port 8080 behind nginx), `dansal-webmin` (admin UI)
-- **DB migrations**: append idempotent `db.Exec(...)` calls at the end of `runMigrations()` in `cmd/dansal/main.go`; also update `createTables()` for fresh installs
-- **Maps**: always use `attachTileLayer(map)` from `base.html` — never call `L.tileLayer` directly
+- **DB migrations**: append a versioned `if !applied(N) {…; mark(N)}` block plus safety net at the end of `migrateDB()` in `cmd/dansal/main.go`; also update `createTables()` for fresh installs (see the `db-migration` skill)
+- **Maps**: always use `attachTileLayer(map)` from `static/base.js` — never call `L.tileLayer` directly
 - **Email, Telegram, Matrix**: always send in a goroutine — never block the HTTP handler
 - **New i18n strings**: add to all 12 language sections in `i18n.yaml` (`br`, `ca`, `cs`, `de`, `en`, `es`, `fr`, `it`, `nl`, `pl`, `pt`, `uk`)
 
 ## DB migration safety-net pattern
 
-`createTables()` is designed for fresh installs — it creates all tables including `schema_migrations` and marks **all** versions applied via `INSERT OR IGNORE`. On existing DBs that lacked `schema_migrations`, this incorrectly skips migrations. After each migration block in `runMigrations()`, add an unconditional structural check that self-heals at zero cost once correct:
+`createTables()` is designed for fresh installs — it creates all tables including `schema_migrations` and marks **all** versions applied via `INSERT OR IGNORE`. On existing DBs that lacked `schema_migrations`, this incorrectly skips migrations. After each migration block in `migrateDB()`, add an unconditional structural check that self-heals at zero cost once correct:
 
 ```go
 // Safety net: ensure column exists even if migration was pre-marked
@@ -140,7 +140,7 @@ For table population (e.g. seed data), use a COUNT-based check:
 The hierarchy (`DuplicateTier` enum: `TierNone`, `TierUID`, `TierURL`, `TierLocation`, `TierTitle`, `TierFuzzyReview`):
 
 1. **UID** — exact match on feed UID
-2. **URL** — exact match on event URL
+2. **URL** — exact match on event URL **and** start_time ±3h (#702: feeds reusing one generic URL, e.g. their homepage, must not absorb unrelated later events)
 3. **location_id + start_time ±3h** — when `locationID > 0`, no title check. Titles get rewritten over an event's lifetime (placeholder → confirmed lineup → cancellation notice → backup act), so a feed re-sending its own event still matches. Since #1424 it only **auto-merges** (`TierLocation`) when that's clearly the same event: the **same feed source** (`fetch_source_id` equal, > 0 — the candidate query prefers such a row), or **another feed** with an identical / fuzzy-overlapping title. A **manual creation** (`fetchSourceID == 0`) or another feed with an unrelated title returns `TierLocationReview`: inserted as new, both flagged for review like tier 5 — venues with several rooms/halls host different events at the same time, and silently overwriting one with the other was the bug. `DuplicateTier.IsReview()` covers both review tiers; `previewDuplicate` reports such rows as "new" plus `duplicate_hint_id`, shown in the admin import preview as "possible duplicate of #N".
 4. **title + start_time ±3h** (no location) — when `locationID == 0` (feed location name didn't resolve to a DB location). Title is still required here since, without a location signal, time-only matching would be far too promiscuous.
 5. **(insertEvent only) fetch_source_id + start_time ±3h + fuzzy title overlap** — when tiers 1–4 all miss (e.g. the venue *also* changed and the feed regenerated the UID). Too low-confidence to auto-merge, so instead of guessing it inserts as new and flags both rows via `needs_duplicate_review`/`duplicate_of_id`, notifying admins to resolve on the comparison page `/admin/duplicates/{id}` (#1427: merge with a chosen survivor, accept both, fix date/room/venue, delete). `previewDuplicateStatus` treats this tier as a hint only, not a match — it still reports "new".
@@ -168,7 +168,7 @@ Tier 4 fires as a fallback when tiers 1–3 all miss. This catches: (a) feeds us
 
 ## Location aliases
 
-`locations.aliases` (JSON array column) stores alternate names a location is known by in external feeds. Used in:
+The `location_aliases` table (`location_id`, `alias`; replaced the old `locations.aliases` JSON column in #740) stores alternate names a location is known by in external feeds. Used in:
 - **Auto-matching** during import (`adminImportEventsHandler` in `admin_import.go`): feed location name is looked up against DB location names and all their aliases
 - **Persisting manual overrides** (`adminImportConfirmHandler`): when admin manually maps a feed location to a DB location, the feed name is automatically appended as a new alias so future imports auto-match
 - **Merge** (`admin_locations.go`): dropped location names are preserved as aliases on the surviving location

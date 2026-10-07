@@ -1,82 +1,37 @@
 ---
 name: event-import
-description: Work on the event import pipeline — feed fetching, parsing, location resolution, and duplicate detection. Use when touching findExistingEvent, previewDuplicateStatus, insertEvent, ensureLocation, fetchurl*.go, location aliases, or anything that imports events from external feeds (ical, rss, json/folkdance, gancio, kufer, jcal). Encodes the 5-tier dedup hierarchy, the shared preview/insert logic, and the location resolution + alias rules that must not be broken.
+description: Change the dansal event import pipeline: feed fetch/detection/parsing (fetchurl*.go, preview.go parseBodyToRequests, importFromSource), new feed type, dedup (findExistingEvent tiers, insertEvent, previewDuplicateStatus), location resolution (ensureLocation, location_aliases), suggest-preview/JSON-LD. Use for any import/dedup/location-matching bug or feature.
 ---
 
-# Event import & deduplication
+# Import & dedup (cmd/dansal)
 
-Two code paths ingest external events: **preview** (dry-run, shows new/exists/updated before an admin confirms) and **insert** (the real write). They must agree on what counts as a duplicate — do not change one without the other.
+FILES
+- `dedup.go` `findExistingEvent` — ONLY implementation of tier logic (#1005). `dedup_test.go` asserts preview+insert agree per tier; extend it for any tier change.
+- `preview.go` `previewDuplicateStatus` (read-only), `parseBodyToRequests` (preview/suggest dispatcher).
+- `events.go` `insertEvent(q, EventInput{…})` (write path; build named EventInput literals).
+- `fetchurl.go` `importFromSource` (scheduled fetch dispatcher), `ensureLocation`, `safeClient` (SSRF-blocks private IPs), `detectFetchType`, `fetchTypeHeaders`, `extractVCalendarBody`, `importICalBody`.
+- `fetchurl_folkdance.go` `validFetchType`; `fetchurl_rss.go` `rssMismatchHint`; `duplicates.go` `pairCollision` (resolve flagged pairs).
 
-Key files (all in `cmd/dansal/`):
-- `dedup.go` — `findExistingEvent()`: the **single shared implementation** of the dedup hierarchy. Added to end the drift where preview and insert each ran hand-copied versions (#1005).
-- `preview.go` — `previewDuplicateStatus()`: read-only duplicate classification for the UI.
-- `events.go` — `insertEvent()`: the write path.
-- `fetchurl.go` + `fetchurl_*.go` — fetching and parsing feed formats.
-- `dedup_test.go` — regression tests for the tier hierarchy and insert outcomes.
+TIERS (first match wins; constant `threeHours`; details also in CLAUDE.md)
+1 UID exact (works with nil startTime). 2 URL exact AND |Δstart|<3h (window is deliberate, #702: feeds reuse one homepage URL — CLAUDE.md omits the window). 3 location_id + 3h: auto-merge only same feed source or fuzzy/identical title from another feed; manual create / unrelated title → `TierLocationReview` (#1424). 4 title + 3h (when locationID==0). 5 same fetch_source_id + 3h + `titlesFuzzyOverlap` → `TierFuzzyReview`.
+- Review tiers (`IsReview()`): insert as new, flag both (`needs_duplicate_review`, `duplicate_of_id`); preview reports "new" + `duplicate_hint_id`.
+- Dedup runs on EVERY create incl. admin form/API — affects tests/fixtures.
 
-## The 5-tier dedup hierarchy (do not change the order)
+PREVIEW vs INSERT INVARIANTS
+- Preview never writes: location lookup is plain SELECT; insert path uses `ensureLocation` (may create).
+- Preview "updated" also when feed coords differ >0.0001° from stored (`previewLocationUpdated`).
 
-`findExistingEvent` (`dedup.go:63`) returns the first tier that matches, as `DuplicateTier`:
+FEED TYPES: `ical json folkdance-json gancio-json rss kufer jcal jsonld`.
+- New type MUST be added to `validFetchType` + `importFromSource` switch + `parseBodyToRequests` switch (#1377). parseBodyToRequests has no rss/kufer case: default = iCal parse (ok for kufer pages, wrong for real RSS).
+- jcal: converted with `jcalToICalText` then the iCal path (`importICalBody`); needs `Accept: application/calendar+json` from `fetchTypeHeaders` (static per-type map — never store credentials there).
+- Content type lies (#1387): generic xml → check URL for ics/ical, then `bodyLooksLikeICal`, else rss; rss+xml/atom+xml → rss. `extractVCalendarBody` cuts the VCALENDAR out of HTML wrappers before `ics.ParseCalendar`. Misrouted body → `rssMismatchHint` names what it really is.
+- Suggest: `POST /api/v1/events/suggest-preview` (anonymous, own rate limit) parses an untyped HTML body as JSON-LD (`looksLikeHTML`, #1417). `GET /events/suggest/url-dates?url=` (dansal-web) returns distinct start dates for the wizard's advisory date warning.
 
-1. **UID** — exact `events.uid` match. The only tier that works when start time is unavailable (`startTime` is a `*int64`, nil when the date failed to parse).
-2. **URL** — exact `events.url` match **within ±3h of start_time**. The ±3h window is deliberate: a feed that reuses one generic URL (e.g. its homepage) must not lock this tier onto the first event ever imported with that URL and silently absorb unrelated later events (#702). Do not drop the window.
-3. **`location_id` + start_time ±3h** — same venue + slot. No title check: titles get rewritten over an event's lifetime. **Auto-merges only for the same feed source, or another feed with an identical/fuzzy title (#1424)**; a manual creation or an unrelated title from another feed returns `TierLocationReview` — insert + flag both, exactly like tier 5 (`DuplicateTier.IsReview()`).
-4. **`title` + start_time ±3h** — fallback when location is unresolved (feed gave no resolvable name) or tier 3 missed (e.g. after entity-decoding or a rename).
-5. **`fetch_source_id` + start_time ±3h + fuzzy title overlap** (`titlesFuzzyOverlap`) — **low-confidence review hint, NOT an auto-merge match**. Returns `TierFuzzyReview` with the *candidate* row; the caller must insert as new and flag both rows for an admin to resolve via the merge UI. `previewDuplicateStatus` treats both review tiers the same as no match ("new"), since preview has no review state; `previewDuplicate` additionally returns the candidate id (`duplicate_hint_id`, shown as "possible duplicate of #N" in the admin import preview).
+LOCATION RESOLUTION (`ensureLocation`, in order)
+1 OSM type+id (backfilled onto name matches) 2 exact name 3 `"name - address"` (Gancio LOCATION) 4 alias in `location_aliases` table (the `locations.aliases` JSON column was migrated away, #740 — CLAUDE.md is stale here).
+- Manual mapping in import confirm appends the feed name as alias (`syncLocationAliases`). Location merge keeps dropped names as aliases.
+- On match: coords overwrite when the feed supplies them; text fields (short_name,address,town,zipcode,country,region) backfill-only `COALESCE(NULLIF(col,''),?)`; OSM id backfill only when NULL.
 
-Constants: `threeHours = 3 * 60 * 60` (seconds), `titlesFuzzyOverlap` in the same package.
-
-## Preview vs insert — what must stay true
-
-- `previewDuplicateStatus` is **read-only**: it must never create rows. Its location lookup (preview.go:129-135) is a plain `SELECT`, whereas `insertEvent`'s caller resolves locations via `ensureLocation` (which *may create* a location row). Keep that split.
-- Preview also checks `previewLocationUpdated()` — feed coordinates differing by more than `0.0001°` (~11 m) from the stored location mean the preview reports "updated", even when the event itself didn't change.
-- Both decide update-vs-insert and which fields to preserve via the `ExistingEvent` struct (`dedup.go:24`).
-
-## Anonymous suggest preview (`suggest-preview`) and the wizard's date check
-
-- `POST /api/v1/events/suggest-preview` (anonymous; `safeClient`, own rate limit) treats an **untyped HTML body as JSON-LD** (`looksLikeHTML`, #1417) — an event page (pretix & co.) pasted into the suggest import tab parses instead of failing as broken iCal. Explicit `type` still wins.
-- `GET /events/suggest/url-dates?url=` (dansal-web) reuses that pipeline for the wizard's website field and returns only the distinct start dates; the wizard warns when the typed date matches none (advisory, never blocks).
-- Testing JSON-LD offline: upload an HTML file with an `application/ld+json` Event through the import tab — same parse path as a URL, no network (`suggest-source-date.spec.ts`).
-
-## Location resolution & aliases
-
-`ensureLocation` resolves a feed location name to a `location_id` in this order (`fetchurl.go:220-242`):
-
-1. **OSM identity** — `osm_type`+`osm_id` exact match (preferred; backfilled onto name-matched rows so future lookups hit this tier).
-2. **Exact name** — `location = ?`.
-3. **Composite name-address** — `"name - address"` (Gancio's iCal export stores `LOCATION` that way).
-4. **Alias** — `location_aliases.alias` lookup (`SELECT location_id FROM location_aliases WHERE alias=?`).
-
-**Alias rule (preserve it):** when an admin manually maps a feed location to a DB location, the feed's name is appended as an alias (`syncLocationAliases`, `locations.go:208`) so future imports auto-match. The alias store is the `location_aliases` junction table (columns live there, not in `locations.aliases` — a legacy JSON column that was migrated to the junction table in v6, `main.go:1382`).
-
-**Update policy when a location matches (`fetchurl.go:244-268`):**
-- **Coordinates**: overwrite whenever the feed supplies them (corrected geodata must flow in from the source).
-- **Text fields** (short_name, address, town, zipcode, country, region): **backfill-only** via `COALESCE(NULLIF(col,''), ?)` — preserve manual admin edits.
-- **OSM identity**: backfill only when NULL.
-
-## Feed formats
-
-`parseBodyToRequests` dispatches on `src.Type` (`preview.go`): `json` (probed — may be gancio or TEC JSON), `folkdance-json`, `gancio-json`, `jcal`, otherwise iCal (`ics.ParseCalendar`). Accepted types: `ical, json, folkdance-json, gancio-json, rss, kufer, jcal` (`validFetchType`, `fetchurl_folkdance.go`).
-
-**A new type must be wired into *both* dispatchers, or it silently misbehaves in one path** (#1377). `parseBodyToRequests` (`preview.go`) drives the admin/suggest *preview* step; `importFromSource` (`fetchurl.go`) drives the real scheduled fetch. Neither falls back to the other, and `parseBodyToRequests` has no case at all for `rss` or `kufer` today — its `default` branch runs `ics.ParseCalendar` directly on the body, which happens to still work for `kufer` (each course page it fetches really is a plain iCal document) but would misparse an actual RSS/XML body. Don't assume a type "just works" in preview because it works live — check both switch statements explicitly when adding one.
-
-`jcal` (RFC 7265, `application/calendar+json`) is the one format dansal also *emits* (`GET /api/v1/events`, `jcal.go`'s `icalTextToJCal`/`jcalToICalText`) — importing it is just feeding `jcalToICalText`'s output through the same iCal path (`importICalBody` in `fetchurl.go`, shared by `importFromICalSource` and `importFromJcalSource`), so RRULE/TZID/dedup all come for free rather than needing a second implementation. Content negotiation means a `jcal` source needs an explicit `Accept: application/calendar+json` header to get jCal back rather than a server's default representation — `fetchTypeHeaders(src.Type)` (`fetchurl.go`) supplies this to every `getWithRetry` call site. It's deliberately a small static map keyed by type, not a general per-source header store — dansal never stores feed credentials, and this must not become a place to stash one.
-
-**Don't trust a feed's declared content type, and don't assume a well-formed body** (#1387). A real-world CMS export was seen serving a valid `BEGIN:VCALENDAR`...`END:VCALENDAR` document wrapped inside its own HTML page, labelled `text/xml`. Two independent tolerances handle this, both in `fetchurl.go`/`fetchurl_folkdance.go`:
-- `detectFetchType`'s `application/xml`/`text/xml` case doesn't assume RSS outright — it checks the URL for an `ics`/`ical` hint first (cheap, no network call), then falls back to `bodyLooksLikeICal` (a bounded GET looking for an embedded `BEGIN:VCALENDAR`) before defaulting to `rss`. `application/rss+xml`/`application/atom+xml` are unambiguous and skip straight to `rss` — only the generic XML types are sniffed.
-- `extractVCalendarBody` (used by `parseICalBody` and `parseBodyToRequests`'s default/iCal branch) slices out the `BEGIN:VCALENDAR`...`END:VCALENDAR` block before handing it to `ics.ParseCalendar`, which otherwise requires the calendar to start at byte 0. A body with no such block is returned unchanged, so a genuinely malformed calendar still fails with its real parse error rather than a confusing one.
-
-When a body ends up in the wrong parser anyway (explicit admin override, or a source that still slips past detection), `rssMismatchHint` (`fetchurl_rss.go`) makes `parseRSSBody`'s error name what the body actually looks like (an embedded VCALENDAR, or an HTML page) instead of just repeating "not a valid RSS 2.0 or Atom feed" — that message used to actively mislead when the real problem was misrouting, not a syntax error.
-
-## Testing & final checks
-
-- `dedup_test.go` exercises `findExistingEvent` against seeded rows — extend it whenever you touch tier semantics.
-- A change here can silently corrupt imported data, so prefer adding a regression test over relying on manual testing.
-
-```bash
-go build ./...
-go vet ./...
-go test ./...
-```
-
-Then `make build` and `sudo make deploy INSTANCE=dev` (see the `deploy` skill).
+TESTING
+- Offline import: admin import file upload (`#file`) or suggest import tab with an HTML file containing `application/ld+json` — same parse path, no network (fetch path can't reach localhost by design).
+- `go build ./... && go vet ./... && go test ./...`; prefer a regression test over manual checks (silent data corruption risk).

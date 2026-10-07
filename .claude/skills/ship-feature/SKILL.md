@@ -1,103 +1,46 @@
 ---
 name: ship-feature
-description: Discuss a topic/idea for the dansal project, turn it into a GitHub issue once agreed, implement it, close the issue on commit, build, and deploy to dev. Use when the user brings up a new feature, bug, or change to discuss before any code gets written.
+description: Run the dansal discuss → issue → implement → commit workflow for a new feature/bug/change the user brings up. Use when a topic needs discussion before code, when asked to "create an issue", "implement #N", or "implement phase-N".
 ---
 
-# Ship a dansal feature/fix
+# Feature workflow (extends CLAUDE.md "Workflow"; don't repeat it, apply it)
 
-Argument: the topic or idea to discuss (e.g. "widen the description field and add a markdown cheatsheet").
+CONSENT GATES — each needs its own explicit yes
+1. Discuss: read the real code first; give approach + tradeoffs + a recommendation; real design choices → AskUserQuestion. Skip only for typos/one-liners.
+2. "ok"/"create issue" → `gh issue create` ONLY. Not implementation. Body = problem (with evidence), solution (files/functions), impact, tests. Use `--body-file` for long bodies.
+3. Implement only on "implement #N" / "implement phase-N" (= all issues with label `phase-N`, one commit, one `Closes #N` line each).
+4. Push only when asked (or already told to push in this conversation). Push sends everything unpushed.
+5. Build/deploy only when asked (deploy skill).
+- A multi-part proposal: approval of one part ≠ approval of the others. Unclear → ask.
+- Ambiguous reference ("the other recommendation") → pick the most recent pending proposal, state the interpretation, offer the alternative.
 
-This skill encodes the standing dansal workflow from `CLAUDE.md`. Follow it in order — do not skip the discuss step for anything non-trivial.
+IMPLEMENT
+- Grep actual names; don't trust memory or CLAUDE.md names (migration fn is `migrateDB`).
+- Logic needed in 3+ handlers → shared helper.
+- Relevant skills: add-i18n (12 langs), db-migration (smoke test), admin-ui, event-import, e2e-testing.
+- JSON-LD `"description"` from user markdown → `plainTextDesc` (meta.go; decodes entities before stripping md). Postal addresses in JSON-LD → also `<address>` in body (CSS reset `font-style:normal;display:block`).
+- Template/form/API-contract change → verify on a scratch instance with Playwright desktop+mobile (e2e-testing skill); add/extend a spec.
+- Done = `go build ./... && go vet ./... && go test ./...` + `gofmt -l <touched files>` clean (pre-existing offenders: `actor_test.go`, `event_decline_test.go`, `social_links_test.go` — ignore).
 
-## 1. Discuss first
-
-- Explore the relevant code before proposing anything (read the actual files involved — don't guess at current behavior).
-- Lay out the approach and tradeoffs in plain terms. If there's a real design choice (e.g. layout numbers, i18n scope, which files to touch), ask via `AskUserQuestion` rather than picking silently.
-- **Wait for explicit confirmation** ("seems valid", "go ahead", etc.) before creating the issue or touching code. Skip this step only for obvious typos or single-line fixes.
-- A "yes" to a proposal authorises the **issue only**. Implementation starts when the user says so ("implement #N"); several issues are often opened first and implemented later, in any order. When a batch of issues is grouped into phases, they carry `phase-N` labels and "implement phase-N" means one commit closing every issue with that label.
-- **When a proposal bundles multiple distinct actions** (e.g. "I'll open issues for these bugs, *and* apply this other batch of safe fixes directly"), a reply confirming one part is not consent for the rest — confirm each part gets its own explicit go-ahead, even within the same message. Concretely: after a review surfaces a mix of findings, the user saying "create issues for all of them" authorizes exactly that (the issue-creation half of a two-part plan), not a follow-on implementation step you also described — don't infer the second half from silence or from the conversation's general direction. If it's unclear which parts were actually approved, ask.
-
-## 2. Create the issue
-
-Once the approach is agreed:
-
+COMMIT
 ```bash
-gh issue create --title "short description" --body "problem, solution, impact"
-```
-
-The body should capture the *why* and the concrete plan from step 1, not just a one-line restatement — it's the durable record of what was agreed.
-
-## 3. Implement
-
-- Follow established project patterns (see `CLAUDE.md`: migration safety-net pattern, dedup tiers, `attachTileLayer` for maps, goroutines for email, etc.). Confirm actual function/field names by grepping rather than relying on memory — e.g. the migration runner is `migrateDB()`, not `runMigrations()`.
-- If the same non-trivial logic (e.g. resolving a display name from a caller ID) would otherwise be duplicated across 3+ handlers, extract a shared helper instead of copy-pasting it again.
-- **i18n**: `cmd/dansal_web/i18n.yaml` actually carries **12** language sections in document order — `de, br, en, es, fr, it, nl, uk, ca, pt, pl, cs` — not just the 7 named in `CLAUDE.md`. When adding new keys, insert into all 12. A small Python script anchored on a key known to exist in all 12 sections (e.g. one you just added, or `evt_description`) is more reliable than hand-editing 12 places — insert in document order, then validate with `python3 -c "import yaml; yaml.safe_load(open('cmd/dansal_web/i18n.yaml', encoding='utf-8'))"`.
-- **Schema changes**: after adding an `ALTER TABLE`/safety-net block, smoke-test it before committing (see the `db-migration` skill; for a new table keep the smoke test) — write a throwaway `_test.go` in `cmd/dansal` that opens a fresh `:memory:` DB, swaps the package-level `db` var, calls `createTables()` then `migrateDB()` **twice** (to confirm idempotency), and queries the new columns. Delete the test file afterward; it's a one-off verification, not a permanent regression test, unless the change is risky enough to warrant keeping it.
-- **GEO-friendly public pages** (schema.org JSON-LD + semantic HTML, #1280/#1281): any user-supplied free-text field (markdown bio/description) that ends up inside a JSON-LD `"description"` value must go through `plainTextDesc` (`cmd/dansal_web/meta.go`), not raw `{{.Field | js}}` — it decodes stray HTML entities (e.g. a pasted `&nbsp;`) *before* stripping markdown syntax (order matters: `reMetaMD`'s bare `#` would otherwise mangle a numeric entity like `&#8211;`). Postal addresses already present in JSON-LD should also be wrapped in a semantic `<address>` element in the rendered body (with a `font-style:normal;display:block` CSS reset, since browsers italicize `<address>` by default) so crawlers/AI engines can extract them without parsing JSON-LD. Not every page type needs both: skip `<address>` where there's no physical address (e.g. an org with no venue), skip `plainTextDesc` where there's no JSON-LD description field at all.
-- Add/update permanent tests where it's cheap to do so, especially for template or handler changes.
-- Run before considering it done:
-  ```bash
-  go build ./...
-  go vet ./...
-  go test ./...
-  ```
-
-## 4. Verify UI changes for real
-
-`go test` doesn't render templates against a live API. For anything touching a template, form or web/API contract, run the built binaries on a scratch instance and drive it with the Playwright specs on **both** projects (`desktop` and `mobile`) — see the `e2e-testing` skill's "scratch instance" section. Add or extend a spec for the new behaviour. Things only this catches: list-vs-single-endpoint fields missing from a page, a section that toggles shut when clicked, `application/json` sent where `merge-patch+json` is required.
-
-## 5. Commit with `Closes #N`
-
-```bash
+git add <files by name>   # never -A: tree has untracked WIP (gancio_move/, scripts/__pycache__/, .claude/skills/log-analysis/ — never commit the latter)
 git commit -m "$(cat <<'EOF'
-<type>: <description>
+<type>: <summary>
 
-Closes #NNN
-Closes #MMM
+<why>
 
-<optional body explaining why>
+Closes #N
+Closes #M
 
-Co-Authored-By: <current model, per the session's attribution instructions> <noreply@anthropic.com>
+<attribution line from the session's system instructions>
 EOF
 )"
 ```
+- After push, spot-check non-first issues: `gh issue view M --json state -q .state` (flips a few seconds after push).
+- Follow-up to a shipped feature: small → `Refines #N`; issue's Closes-commit not yet pushed → `Refs #N`.
+- Dependencies: state "depends on #M" in the dependent issue; implement in order. New scope found → separate issue (after ok), referenced from the original.
+- Pure ops/config changes (e.g. nginx template one-liners) may skip the issue like typos; still commit with a why.
 
-(Don't hardcode a model name/version here — it goes stale. Use whatever attribution block the active session's own instructions specify.)
-
-**One `Closes #N` line per issue.** `Closes #1, #2` on one line closes only #1 on GitHub, silently. Spot-check with `gh issue view <N> --json state -q .state` after pushing (the state flips a few seconds after the push, not instantly). Run `gofmt -l` on the files you touched too; a few pre-existing files are always listed (`actor_test.go`, `config.go`), ignore those. Stage only your own files by name — the working tree often carries someone else's untracked WIP.
-
-Note: the issue only actually auto-closes once this commit is **pushed**. Don't push proactively — confirm with the user first, per the standing rule on actions visible to others. If the user has already told you to push in this conversation, you don't need to ask again for the same change. "Push it" pushes whatever is currently unpushed on the branch, not just the most recent commit — multiple shipped features commonly stack up before a push.
-
-Small follow-up tweaks to a feature you just shipped (e.g. a one-line display fix) don't need a fresh discuss → issue cycle — implement, test, and commit referencing `Refines #NNN` (not a new `Closes`) instead of restarting the workflow.
-
-### Follow-up fixes and dependencies
-
-- A fix for an issue whose `Closes #N` commit is already made but not yet pushed uses **`Refs #N`** (the issue closes on push with the first commit anyway).
-- When one issue must land before another, say so in the dependent issue's title/body ("depends on #M") and implement in that order.
-- When a discussion spawns separate work, open it as its own issue (after the user's ok) and reference it from the original instead of growing the original's scope.
-
-## 6. Build and deploy — only when asked
-
-`CLAUDE.md`: `make build` and `sudo make deploy` are **not** run automatically after a change. Implement, run `go build`/`go vet`/`gofmt -l`/`go test`, commit, and stop; several commits commonly stack up before the user asks for a build. Build/deploy only when that message asks for it:
-
-```bash
-make build   # builds all five binaries, as the regular user
-sudo make deploy INSTANCE=dev
-```
-
-- Always rebuild **all** binaries together (`make build`), never a selective `go build` of just the changed package — see issue #147.
-- When asked to deploy without an instance name, use **dev**. Only deploy to other instances (`test`, `prod`, etc.) when the user explicitly asks for it.
-- `sudo make deploy` requires an interactive terminal for `sudo` auth. If running non-interactively and `sudo` fails ("a terminal is required to authenticate"), tell the user to run `sudo make deploy INSTANCE=dev` themselves — don't treat this as a blocker on the rest of the workflow.
-
-### After the user deploys
-
-The user often deploys themselves and reports "deployed to localhost:dev". Then verify against the running instance: the journal (`journalctl -u dansal@dev -u dansal-web@dev --since …`) for migration/startup errors, the changed endpoints (curl, read-only DB checks on a copy), and the affected e2e specs (see the `e2e-testing` skill) — and, for UI changes, the browser.
-
-## Summary checklist
-
-1. Discuss → wait for confirmation
-2. `gh issue create` (once the user says ok to that proposal)
-3. Implement + test (when the user asks for it)
-4. Verify UI on a scratch instance, desktop + mobile
-5. Commit with one `Closes #N` line per issue
-6. Only if asked: `make build`, then `sudo make deploy INSTANCE=dev` (ask before deploying elsewhere; ask before pushing unless already told to)
+AFTER USER DEPLOYS
+Check journal (`journalctl -u dansal@dev -u dansal-web@dev --since …`), changed endpoints via curl, relevant e2e specs, and for UI the browser.

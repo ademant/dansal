@@ -1,151 +1,59 @@
 ---
 name: admin-ui
-description: Build or modify dansal admin forms and frontend UI — webmin pages, admin_*.html templates, maps, and form scripts. Use when adding a new admin edit form, wiring unsaved-changes protection, adding a Leaflet map, or making a frontend layout choice. Encodes the _formDirty/_markDirty/safeGoBack guard, attachTileLayer for maps, and the CSS-media-query-not-UA-detection rule.
+description: Build/modify dansal web UI — admin_*.html forms, webmin pages, public templates, inline/base.js scripts, Leaflet maps, dialogs, drag-reorder, section-nav edit forms, save-error display, A/B comparison layouts. Use for any template/JS/CSS change in cmd/dansal_web or cmd/dansal_webmin.
 ---
 
-# dansal admin & frontend UI conventions
+# Web UI conventions (cmd/dansal_web/templates, static/base.js)
 
-Frontend lives in `cmd/dansal_web/templates/` (Go HTML templates, server-side rendered, plus inline JS). Admin edit forms follow a small set of standing patterns that all new forms must copy.
+CSP — HARD RULES
+- script-src has no 'unsafe-inline' → NO `onclick=`/`onchange=`/`onsubmit=` attributes (dead). Use the base.js dispatcher: `data-fn="name"` + `data-args='[json]'` (`"@this"` = element) + `data-on="change|submit|input"` (default click). New helpers go in `static/base.js` as `window` functions, not per-template inline scripts.
+- `<script>`/`<style>` elements need `nonce="{{$.Nonce}}"`. Touching a `style="…"` attribute → move it to a class (see CLAUDE.md style-src section).
+- Never 304/conditional GET for HTML rendered via base.html (nonce mismatch breaks all scripts, #1367; see `conditional.go`).
 
-## Unsaved-changes guard — every admin form
-
-Each admin edit form (`admin_*.html`) carries three globals at the bottom of the page:
-
+UNSAVED-CHANGES GUARD (every admin edit form)
 ```js
 var _formDirty=false;
-function _markDirty(){
-  if(_formDirty) return;
-  _formDirty=true;
-  window.addEventListener('beforeunload',function(e){
-    if(!_formDirty) return;
-    e.preventDefault();
-    e.returnValue='';
-  });
-}
-function safeGoBack(){
-  if(_formDirty&&!confirm('{{$.Strings.T "admin_unsaved_confirm"}}')){return;}
-  _formDirty=false;
-  if(window.history.length>1){history.back();}
-  else{location.href='{{if .Data.From}}{{.Data.From | js}}{{else}}/admin/<section>{{end}}';}
-}
+function _markDirty(){ if(_formDirty)return; _formDirty=true;
+  window.addEventListener('beforeunload',function(e){ if(!_formDirty)return; e.preventDefault(); e.returnValue=''; }); }
+function safeGoBack(){ if(_formDirty&&!confirm('{{$.Strings.T "admin_unsaved_confirm"}}'))return; _formDirty=false;
+  if(window.history.length>1)history.back(); else location.href='{{if .Data.From}}{{.Data.From | js}}{{else}}/admin/<section>{{end}}'; }
+var form=document.getElementById('<form-id>'); form.addEventListener('input',_markDirty); form.addEventListener('change',_markDirty);
 ```
+- Back button: `class="btn-secondary" data-fn="safeGoBack" data-args="[]"` + i18n title/aria-label. Submit → `_formDirty=false` first. Save path without navigation → reset `_formDirty`.
+- Custom controls (add/remove/reorder rows) must dispatch `input` AND `change` themselves (`mediaEditorChanged`).
+- Reference: `admin_musician_edit.html` (also location/event_form/org/series/timetable/instructor/fetchurl edit).
 
-And the wiring:
+SECTION-NAV EDIT FORMS (org/location/musician/event)
+Adding a section = 3 edits in the same template: (1) nav button `.…-nav-item[data-target="sec-x"]` with `.…-nav-dot` + i18n label, (2) `<section class="form-section" id="sec-x">`, (3) `hasData['sec-x']=function(){…}` (fills dot AND opens section on load). Mobile: nav is a drawer (`#org-nav-toggle`/`#loc-nav-toggle`/`#mus-nav-toggle`).
 
-```js
-var form=document.getElementById('<form-id>');
-form.addEventListener('input',_markDirty);
-form.addEventListener('change',_markDirty);
-```
+SHARED BLOCKS
+- Reusable piece → `{{define}}` in base.html, call `{{template "name" (dict "S" $.Strings "Links" .Foo)}}` (block sees only its arg). Ref: `media-links-list`, `media-links-editor`+`media-row` (`<template>` clone, parallel arrays `media_kind/media_title/media_url` → `mediaLinksFromForm`).
+- Parallel-array forms: zero rows = clear → parser returns non-nil empty slice.
 
-Rules:
-- **Back button** uses `data-fn="safeGoBack" data-args="[]"` (never `history.back()` directly) — see the first button in `admin_musician_edit.html`.
-- **Every input/change fires `_markDirty`** — including select boxes and any custom controls; wire them explicitly.
-- **On successful save** the page reloads/re-navigates, so `_formDirty` reset happens naturally; if you add a save path that doesn't navigate, reset `_formDirty=false` after saving.
-- `_markDirty` attaches `beforeunload` only on the first change (idempotent).
-- Confirm strings come from i18n (`$.Strings.T "admin_unsaved_confirm"`) — add new ones via the `add-i18n` skill (all 12 languages).
-- Existing forms using the pattern (the `data-fn`/dispatcher rule above applies to all of them): `admin_musician_edit.html`, `admin_location_edit.html`, `admin_event_form.html`, `admin_org_edit.html`, `admin_series_edit.html`, `admin_timetable.html`, `admin_instructor_edit.html`, `admin_fetchurl_edit.html`.
+DansalClient READS/WRITES
+- Cached list getters omit heavy fields (`media`…): pages showing/editing those must use the single getter (`GetOrganizationDetail`; `GetLocation`/`GetMusician` already single). Symptom of wrong one: saved but renders empty.
+- Optional field needing "untouched vs clear": write wrapper with pointer (`orgWrite`/`locationWrite`/`musicianWrite` + `mediaPtr`): nil omitted, ptr-to-empty sends `[]`.
+- Event JSON-array fields: PUT (`EventWriteRequest`) overwrites only if `len>0`; PATCH (`EventMergePatchRequest`, `*[]T`) overwrites when non-nil (incl. `[]`).
 
-## No inline handlers — `data-fn` / `data-args` / `data-on`
+MAPS: always `attachTileLayer(map)` (static/base.js; dark/light switching). Never `L.tileLayer`.
 
-`script-src` carries no `'unsafe-inline'` (nonce + `'strict-dynamic'`), so `onclick=`/`onchange=`/`onsubmit=` attributes are dead. Buttons and inputs call a function on `window` through the dispatcher documented at the top of `static/base.js`: `data-fn="name"`, `data-args='[...]'` (JSON; the literal `"@this"` passes the element itself), and `data-on="change|submit|input|…"` for non-click events (click is the default). Put new helper functions in `static/base.js`, not in an inline `<script>` that other templates would need to copy.
+LAYOUT: CSS `@media` only. Never UA sniffing (server or JS).
 
-## Section-nav forms (org / location / musician / event edit)
+DRAG-TO-REORDER: pointer events, not HTML5 DnD. Reuse/generalize `setupDragReorder(handle, dragEl, item, itemMap, targetSel, axis, onDrop)` + `moveInArray` (`admin_timetable.html`): setPointerCapture, ~4px threshold, dim dragEl, WeakMap el→item rebuilt per render, before/after by target midpoint. Durable order → save from `onDrop` immediately (#1278).
 
-The long edit forms are a sidebar of sections (`.org-nav-item`, `.loc-nav-item`, `.evt-nav-item`, each with `data-target="sec-…"`) over `<section class="form-section" id="sec-…">` blocks that stay collapsed until opened. Adding a section takes **three** edits in the same template, and forgetting the third leaves a dot that never lights up:
+SAVE ERRORS (#1421): `adminSaveError(err)` (`save_error.go`) → `ErrorKey/ErrorDetail/ErrorRef` in page data; template `{{$.Strings.T .ErrorKey}}{{template "save-error-extra" (dict "D" .ErrorDetail "R" .ErrorRef "S" $.Strings)}}`. Never a bare "Save failed".
 
-1. a nav button with `<span class="…-nav-dot">` and an i18n label,
-2. the `<section id="sec-…">`,
-3. an entry in that template's `hasData` map (`'sec-…': function(){ return …; }`). It decides whether the dot is filled **and** whether the section starts open, so a section that already holds data is open on load.
+DIALOGS
+- Destructive: `<form data-on="submit" data-confirm="…">` (native confirm); buttons elsewhere via `form="id"`.
+- `<dialog>`+`showModal()`: resolve in button handlers + `oncancel`, NEVER on `close` (not fired in background tabs); add `margin:auto` (global `*{margin:0}` breaks centering). Refs: `confirmUnusualDate()` (#1413), duplicate-check dialog.
+- Unusual date check: `dateUnusual(iso)` JS / `unusualDate` template func; opt in with `data-date-check="YYYY-MM-DD"` / `data-date-check-bulk="<selector>"`.
+- Flash across redirect-to-referer: own token param read in `tmplData` (`?pubmsg=`).
 
-Consequences: custom controls that change data without a real input (add/remove/reorder rows) must dispatch `input` and `change` themselves, because the dots refresh on `input` and the dirty guard listens for both (see `mediaEditorChanged` in `base.js`). On narrow viewports the whole nav is a drawer behind a toggle button (`#org-nav-toggle`, `#loc-nav-toggle`, `#mus-nav-toggle`).
+A/B COMPARISON: `admin_duplicate.html` (#1427): rows=fields, cols A/B tinted `--dup-a`/`--dup-b` (+dark), <640px rows become blocks via CSS, sticky actions top, destructive bottom, `{{range (list .A .B)}}`.
 
-## Repeatable rows and other shared blocks
-
-Put a UI piece that several pages need in `base.html` as a named `{{define}}` block and call it with `{{template "name" (dict "S" $.Strings "Links" .Foo)}}` — a block only sees the one argument you pass, so `$.Strings` has to be handed in as `S`. The external-media-link list is the reference: `media-links-list` (public), `media-links-editor` + `media-row` (admin, rows cloned from a `<template>`, posted as parallel `media_kind`/`media_title`/`media_url` arrays and parsed by `mediaLinksFromForm`). A form that posts parallel arrays must treat "no rows" as "clear", so the parser returns a non-nil empty slice, and the API client sends the field only when non-nil (see next section).
-
-## Pages that read from `DansalClient`: list vs single endpoint
-
-Some `DansalClient` getters answer from a cached list (`GetOrganization` scans the ~1 min `GetOrganizations` cache first). List endpoints deliberately omit heavy per-owner fields such as `media`, so a page or form that shows or edits one of those fields must call the single-resource getter — `GetOrganizationDetail` for organizations; `GetLocation`/`GetMusician` already hit the single endpoint. Symptom of using the wrong one: the data is saved (API returns it) but the page renders as if it were empty.
-
-For writes, an optional field that must distinguish "leave untouched" from "clear" is sent through a wrapper struct that shadows it with a pointer (`orgWrite`/`locationWrite`/`musicianWrite` + `mediaPtr`): `nil` is omitted, a pointer to an empty slice sends `[]`.
-
-## Maps — always `attachTileLayer`
-
-Never call `L.tileLayer` directly in templates or JS. Use the shared helper from `base.html:452`:
-
-```js
-attachTileLayer(map);
-```
-
-`attachTileLayer` picks light/dark tiles from a single source (Carto dark for dark mode, OSM for light), and a `MutationObserver` + `matchMedia('(prefers-color-scheme:dark)')` listener re-attach the layer when the theme class on `<html>` changes — hand-rolled `L.tileLayer` calls bypass this and break dark mode.
-
-## Drag-to-reorder — pointer events, not native HTML5 DnD
-
-When an admin list/grid needs pick-up-and-drop reordering (room columns and track rows in `admin_timetable.html` are the reference implementation, #1237/#1238), use pointer events, matching this file's existing tile move/resize drag code — not native `dragstart`/`dragover`/`drop`, which has worse touch support and its own quirky styling model.
-
-The shape, generalized as `setupDragReorder(handle, dragEl, item, itemMap, targetSel, axis, onDrop)` in `admin_timetable.html`:
-
-- **`pointerdown` on `handle`** starts the drag; `handle.setPointerCapture(ev.pointerId)` keeps `pointermove`/`pointerup` routed to it regardless of where the pointer physically is (`document.elementFromPoint` still resolves the real element underneath — capture doesn't affect hit-testing, only event `target`).
-- **A ~4px movement threshold** before a drag "counts", so a plain click doesn't misfire a reorder.
-- **`dragEl.style.opacity` dimmed** while dragging (`dragEl` can differ from `handle` — e.g. a table row's whole `<tr>` dims even though its grip cell is the handle).
-- **A `WeakMap<element, item>`** (rebuilt fresh on every re-render, e.g. `_rhRoomMap`/`_trRowMap`) maps whatever DOM element is currently under the pointer back to the domain object it represents — needed because `document.elementFromPoint` + `.closest(targetSel)` only gives you an element, and the same underlying array item can have multiple rendered instances (e.g. one room header per visible day).
-- **Drop side decided by the target's midpoint**: which half of the target's bounding rect (`left`/`width` for a horizontal axis, `top`/`height` for vertical) the pointer is over decides insert-before vs. insert-after — so a drag reads as landing where it visibly stopped, not always snapping to one fixed side.
-- **The actual reorder** is a generic `moveInArray(arr, src, dest, after)` splice helper, independent of the drag mechanics — keep these two concerns (pointer tracking vs. array mutation) separate so either can be reused without the other.
-
-Don't copy-paste this per new drag-to-reorder feature — factor a shared helper (as `admin_timetable.html` already does for its two consumers) rather than re-deriving the pointer-tracking logic each time.
-
-**Persist immediately on drop, don't wait for the page's Save button** (room-column order, #1278): if a reorder represents durable state (not just an in-memory render order), fire a small dedicated save call from `onDrop` itself (e.g. `saveRoomOrder()` PUTting the new order array right after `renderAll()`), separate from whatever the main form-level Save button submits. This mirrors the existing PUT-vs-PATCH pattern below and avoids losing a drag if the user navigates away before hitting Save.
-
-## PUT vs PATCH for array/JSON fields — "carried vs. omitted"
-
-When an event field is a JSON array (e.g. `timetable_tracks`, `timetable_room_order`), `updateEvent` (PUT) and `patchEvent` (PATCH) must treat "not sent" differently from "explicitly sent empty":
-
-- **PUT** (`EventWriteRequest`, plain `[]int`/`[]string`): only overwrite the column when the incoming slice is non-empty (`len(x) > 0`) — an omitted/empty field in a full-resource PUT means "leave as-is", not "clear it".
-- **PATCH** (`EventMergePatchRequest`, pointer `*[]int`/`*[]string`): use pointer-presence (`req.Field != nil`) to distinguish "field omitted from the merge patch" (leave untouched) from "field explicitly sent, possibly as `[]`" (overwrite, including clearing).
-
-Copy this shape for any new JSON-array event field rather than inventing new null-vs-empty semantics per field.
-
-## Layout — CSS `@media`, never User-Agent detection
-
-**Never use User-Agent detection** (`navigator.userAgent`, etc.) to decide layout. Use CSS `@media` queries. A few responsive helpers live in `base.html`; follow them instead of adding UA sniffing.
-
-## Everything else admin forms share
-
-- Template data flows as `$.Strings` (translations) and `.Data` (handler payload).
-- Buttons that navigate back use `class="btn-secondary"` with `safeGoBack()` and an i18n `title`/`aria-label`.
-- Form fields mirror the API input types (see `API.md`); keep field names consistent between the Go `EventInput`/location structs and the template `name=` attributes.
-- Maps in admin forms are created the same way as public pages: initialize the Leaflet `map` var, then `attachTileLayer(map)`.
-
-## Save errors — `adminSaveError(err)`, never a bare "Save failed." (#1421)
-
-Every admin save path that re-renders the form after an API error classifies it with `adminSaveError(err)` (`save_error.go`) → `SaveError{Key, Detail, Ref}` and puts `ErrorKey`/`ErrorDetail`/`ErrorRef` into the page data; the template appends `{{template "save-error-extra" (dict "D" .ErrorDetail "R" .ErrorRef "S" $.Strings)}}` after `{{$.Strings.T .ErrorKey}}`. 429 and 403 get translated keys (the admin can act: wait / ask for access), 400/409/422 show the API's English validation message, everything else the reference (error_id). A new admin page data struct that shows save errors needs the two extra fields.
-
-## Dialogs and confirmations
-
-- **Destructive one-off actions** (delete, merge): a form with `data-on="submit" data-confirm="…"` — the base.js dispatcher shows the native `confirm()`. A button elsewhere on the page can submit it via `form="form-id"` (forms can't nest; this is how `admin_duplicate.html` puts Merge/Accept/Delete buttons inside the table).
-- **Richer confirmations**: a `<dialog>` + `showModal()`, like `confirmUnusualDate()` in base.js (#1413, rendered once in base.html for logged-in users) or the duplicate check dialog. Two rules learned the hard way:
-  - **Resolve from the button handlers (`onclick`) and `oncancel` (Esc), never from the `close` event.** Chrome dispatches `close` in its rendering steps, which don't run at all in a hidden/background tab — the dialog closed but the callback never ran.
-  - **Give the dialog `margin:auto`.** base.html's global `*{margin:0}` reset removes the UA margin that centres a modal `<dialog>`; without it the dialog sticks to the top-left corner.
-- Unusual dates: `dateUnusual(iso)` (base.js) and `unusualDate` (template func) are the shared "past / > 2 years ahead" check; a publish form opts into the confirm dialog with `data-date-check="YYYY-MM-DD"` (bulk: a submit button with `data-date-check-bulk="<checkbox selector>"`).
-- A flash that must survive a redirect to *whatever page the action came from* (publish → referer) uses its own token param read in `tmplData` (`?pubmsg=`, rendered by base.html) instead of plumbing a field through every page handler.
-
-## Two-item comparison layout (A/B), desktop table → mobile blocks
-
-`admin_duplicate.html` (#1427) is the reference: one `<table>`, rows = fields, columns = A/B (first row = both titles), both columns tinted (`--dup-a` light yellow / `--dup-b` light blue, dark variants under `prefers-color-scheme` / `.dark`); below 640px CSS turns every row into a block with the A value above the B value (`td.dup-a::before{content:"A  "}`), sticky action bar on top, destructive buttons at the very bottom. `{{range (list .A .B)}}` iterates the two sides (`list` template func). Same HTML for both layouts — no UA detection.
-
-## Other shared bits
-
-- **Button classes** (`.btn-primary`, `.btn-secondary`, `.btn-sm-secondary`, `.btn-danger`) are defined in each template's own `<style>`, not in base.html — copy them into a new page.
-- **Theme tokens** for status colours: `--badge-warn-bg/fg`, `--badge-danger-bg/fg`, `--badge-ok-*` exist in light and dark; `--badge-info-*` only in dark — always give it a fallback (`var(--badge-info-bg,#e0f0ff)`). Keep text ≥ 4.5:1 and never fade content with `opacity` (#1426 failed WCAG that way).
-- **Venue pickers outside the admin form** can use the public `GET /search/locations?q=` (known venues, name/short name/aliases/town) and `POST /admin/api/location/{id}/room/quick-create` for "+ room".
-
-## Final checks
-
-```bash
-go build ./...
-go vet ./...
-go test ./...
-```
-
-For i18n keys used here, see the `add-i18n` skill. Then `make build` and `sudo make deploy INSTANCE=dev` (see the `deploy` skill).
+MISC
+- Button classes `.btn-primary/.btn-secondary/.btn-sm-secondary/.btn-danger` live in each template's `<style>` — copy them.
+- Status tokens `--badge-{warn,danger,ok}-{bg,fg}` light+dark; `--badge-info-*` dark only → `var(--badge-info-bg,#e0f0ff)`. Contrast ≥4.5:1; never fade with `opacity` (#1426).
+- Venue picker outside admin form: `GET /search/locations?q=`; quick room: `POST /admin/api/location/{id}/room/quick-create`.
+- Field names: template `name=` must match API/Go struct field names (see API.md).
+- Verify: go build/vet/test + e2e desktop+mobile for behaviour changes.

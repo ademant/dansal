@@ -1,168 +1,77 @@
 ---
 name: db-migration
-description: Add or modify the dansal SQLite schema (new columns, tables, indexes, CHECK constraints) safely. Use when touching the events/locations/organizations/timetable_entries schema, adding an ALTER TABLE, widening a CHECK(col IN (...)) enum, changing createTables(), or when a change needs to run on existing production databases. Encodes the migrateDB() version-block pattern, the pragma_table_info safety-net, the CHECK-widening table-rebuild shape, createTables() sync for fresh installs, and the throwaway :memory: smoke test.
+description: Change the dansal API SQLite schema (cmd/dansal/main.go migrateDB/createTables): new column, table, index, widening a CHECK(col IN (...)) enum via table rebuild, data backfill. Use for any ALTER TABLE/CREATE TABLE/index or anything that must run on existing prod DBs. Not for dansal_web's web.db (see bottom).
 ---
 
-# Safe DB migrations in dansal
+# Schema changes (calendar.db)
 
-All schema for the dansal calendar DB lives in `cmd/dansal/main.go`. Two functions must stay in sync:
+FILES: `cmd/dansal/main.go` — `migrateDB()` (upgrades existing DBs; CLAUDE.md calls it runMigrations — wrong name) and `createTables()` (fresh installs; ends with a catch-all that pre-marks every version). Tests: `smoke_migration_test.go`, `smoke_migration_orphan_chk_test.go`. Package var `db *sql.DB` is swapped in tests.
 
-- **`createTables()`** (`cmd/dansal/main.go:2889`) — full `CREATE TABLE IF NOT EXISTS` schema, used for **fresh installs** only.
-- **`migrateDB()`** (`cmd/dansal/main.go:857`) — idempotent versioned blocks that upgrade **existing** databases.
-
-SQLite is single-file; every instance (`dev`, `prod`, …) has its own DB at `/var/lib/dansal/<instance>/calendar.db`. A migration that fails on an existing instance bricks the deployment, so the "always safe on a re-run" rule is non-negotiable.
-
-## The version-block pattern
-
-`migrateDB()` tracks applied versions in the `schema_migrations` table via two local closures:
-
+## Shape A — new column (versioned block + safety net)
 ```go
-applied := func(v int) bool { /* SELECT COUNT(*) FROM schema_migrations WHERE version=? */ }
-mark := func(v int) { /* INSERT OR IGNORE INTO schema_migrations(version) VALUES(?) */ }
-```
-
-Find the current highest version, then append the next `N`:
-
-```go
-// v25: <what it adds and why, with the issue number in the style "#NNN">.
-if !applied(25) {
-    db.Exec("ALTER TABLE events ADD COLUMN foo TEXT DEFAULT ''")
-    mark(25)
+// vN: <what/why> (#issue)
+if !applied(N) {
+    db.Exec("ALTER TABLE t ADD COLUMN c TYPE DEFAULT v")
+    mark(N)
 }
-```
-
-Rules for the block body:
-- **Bump the version** — never edit an existing `applied(N)` block to change its meaning; a version that's already in `schema_migrations` on prod will never re-run. Append a new block.
-- **`ALTER TABLE` silently fails** when the column already exists, but a duplicate `CREATE INDEX` errors — use `CREATE INDEX IF NOT EXISTS`.
-- **Never create an index unconditionally on a column added in the same block** — on an existing DB the column doesn't exist yet at that point in the script, and `createTables()`'s catch-all pre-marks the version (see below). Put the index creation in the safety-net block instead.
-
-## The safety-net block — ALWAYS, after every migration
-
-After each version block, add a structural check so the column/table exists even when the version was pre-marked:
-
-```go
-{
+{ // safety net: runs even when createTables pre-marked N on an old DB
     var n int
-    db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('table') WHERE name='column'").Scan(&n)
-    if n == 0 {
-        db.Exec("ALTER TABLE table ADD COLUMN column TYPE DEFAULT value")
-    }
-    db.Exec("CREATE INDEX IF NOT EXISTS idx_... ON table(column)") // indexes go here, not in the version block
+    db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('t') WHERE name='c'").Scan(&n)
+    if n == 0 { db.Exec("ALTER TABLE t ADD COLUMN c TYPE DEFAULT v") }
+    db.Exec("CREATE INDEX IF NOT EXISTS idx_t_c ON t(c)") // indexes HERE, never in the version block
 }
 ```
++ add column to `createTables()` CREATE TABLE + `INSERT OR IGNORE INTO schema_migrations(version) VALUES(N)` in its catch-all.
 
-- One `pragma_table_info` check per new column; the index creation goes in this block too (see real example: v18, `timetable_entries.instructor_id`, `cmd/dansal/main.go:1611-1628`).
-- This is the rule AGENTS.md calls the "safety-net structural check" — **never skip it**, even if the version block looks complete.
+RULES
+- Next N = current max `applied(…)` + 1. NEVER edit an existing block (already applied on prod → never reruns).
+- Duplicate ALTER ADD COLUMN fails harmlessly; duplicate CREATE INDEX errors → always `IF NOT EXISTS`.
+- Index on an existing column only: own version block with `CREATE INDEX IF NOT EXISTS`, no pragma check; also in createTables.
 
-**Retrofitting an index onto an existing column** (no new column involved — e.g. a column that's had no index since it was first added) is simpler: just `CREATE INDEX IF NOT EXISTS idx_... ON table(column)` in its own new version block, no `pragma_table_info` check needed since there's no column existence to verify, and no `ALTER TABLE`. Still needs the version bump + `createTables()` catch-all mark, same as any other migration — `createTables()`'s own `CREATE TABLE` for that table should already define the index going forward too, for fresh installs.
+## Shape B — new table
+Version block `db.Exec(xSchema)` + safety net checking `sqlite_master WHERE type='table' AND name='x'` → `db.Exec(xSchema)`, indexes in the safety net. Keep DDL in one const (`ownerMediaSchema` pattern); createTables carries its own copy — change both. Keep a permanent test modelled on `TestSmokeMigrationOwnerMedia` (fresh → drop table+version row → remigrate → drop table, version kept → remigrate → idempotent).
+- Polymorphic owner tables (`owner_type`,`owner_id`, e.g. owner_media) have NO FK: every owner delete path must delete rows explicitly (collect child ids, e.g. rooms, BEFORE deleting), every merge path must fold/drop them; test each.
 
-## New tables (not columns)
-
-Same two-part shape, but the safety net checks `sqlite_master` instead of `pragma_table_info`, and the index goes in the safety net too:
-
+## Shape C — widen CHECK(col IN (...)) (table rebuild, no version number)
+Copy the NEWEST reference (`migrateFetchSourcesJcalType`), not older ones.
 ```go
-if !applied(43) {
-    db.Exec(ownerMediaSchema) // CREATE TABLE IF NOT EXISTS ...
-    mark(43)
-}
-{
-    var n int
-    db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='owner_media'").Scan(&n)
-    if n == 0 {
-        db.Exec(ownerMediaSchema)
-    }
-    db.Exec("CREATE INDEX IF NOT EXISTS idx_owner_media_owner ON owner_media(owner_type, owner_id, sort_order)")
-}
-```
-
-Keep the migration's DDL in one local const (`ownerMediaSchema`) so the version block and its safety net can't drift from each other; `createTables()` carries its own copy for fresh installs, so change both when the schema changes. `TestSmokeMigrationOwnerMedia` (`smoke_migration_test.go`) is the template for a permanent test worth keeping for a table: fresh install → drop table + delete the version row and re-migrate (upgrade path) → drop table with the version still marked (pre-marked path) → migrate again (idempotent).
-
-**Polymorphic owner tables (`owner_type` + `owner_id`, e.g. `owner_media`) have no foreign key**, so nothing cascades. Every delete path for an owner must clear its rows explicitly (collect child ids *before* the delete — a location's rooms — and clear after it succeeds), and every merge path must fold or drop them. Add a test for each; a forgotten one leaves orphans that silently reappear when an id is reused.
-
-## Widening an enum-like CHECK constraint (SQLite can't ALTER one)
-
-A third shape, for a `CHECK(col IN (...))` that needs a new value added — e.g. `fetch_sources.type` gaining `'kufer'`, then later `'jcal'` (#1377). SQLite has no `ALTER TABLE ... ALTER CONSTRAINT`, so the whole table is rebuilt: create a shadow table with the wider `CHECK`, copy every row across, drop the original, rename the shadow into place. `migrateFetchSourcesKuferType`/`migrateFetchSourcesJcalType` (`cmd/dansal/main.go`) are the reference pair — copy the newer one exactly (it already carries every column the older one didn't have yet) rather than the original `migrateFetchSourcesTypeCheck`.
-
-This shape does **not** use `applied()`/`mark()` at all — it self-guards by reading the live schema and checking for the new value as a substring:
-
-```go
-func migrateFetchSourcesJcalType() {
+func migrateXNewValue() {
     var schema string
-    db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='fetch_sources'").Scan(&schema)
-    if strings.Contains(schema, "'jcal'") {
-        return // already widened — including on a fresh install, since createTables() already has it
-    }
-    if err := rebuildTable("fetch_sources_chk", []string{
-        `CREATE TABLE fetch_sources_chk (... CHECK(type IN (..., 'jcal')) ...)`,
-        `INSERT INTO fetch_sources_chk (...) SELECT ... FROM fetch_sources`,
-        `DROP TABLE fetch_sources`,
-        `ALTER TABLE fetch_sources_chk RENAME TO fetch_sources`,
-    }); err != nil {
-        log.Printf("migrateFetchSourcesJcalType: %v", err)
-        return
-    }
-    // re-create any index the table carried (DROP TABLE loses it).
+    db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name='x'").Scan(&schema)
+    if strings.Contains(schema, "'newval'") { return }
+    if err := rebuildTable("x_chk", []string{
+        `CREATE TABLE x_chk (... CHECK(col IN (..., 'newval')) ...)`,
+        `INSERT INTO x_chk (<every current column>) SELECT <same> FROM x`,
+        `DROP TABLE x`,
+        `ALTER TABLE x_chk RENAME TO x`,
+    }); err != nil { log.Printf("migrateXNewValue: %v", err); return }
+    // recreate indexes (DROP TABLE loses them)
 }
 ```
+- MUST use `rebuildTable` (#1419): drops leftover shadow, one tx on a dedicated conn, foreign_keys toggled outside the tx. Loose statements → leftover `x_chk` → every startup fails "x_chk already exists".
+- Call unconditionally from migrateDB; widen the CHECK in createTables too (fresh install then returns early).
+- INSERT…SELECT must list every column existing at that point (incl. ones added by earlier widenings/ALTERs) or data is silently dropped.
+- If the rebuild adds a column: add a pragma safety net after the call; carry existing values (`COALESCE(col,0)`).
+- Test: hand-create the table with the OLD check and ALL real columns; assert new value rejected before, accepted after `migrateDB()` (`TestSmokeMigrationFetchSourcesJcalType`). Orphan/rollback refs: `TestSmokeMigrationOrphanedChkTable`, `TestRebuildTableRollsBack`.
+- Known: prod/dev/test carry orphan `fetch_sources_chk`/`locations_chk` from before #1419 (journal noise on start).
 
-**Always go through `rebuildTable(shadow, stmts)` (#1419)** — never run the four statements as loose `conn.ExecContext` calls. A rebuild that failed mid-sequence used to leave `x_chk` behind, and from then on *every* startup failed that rebuild with "table x_chk already exists" (visible only in the journal; on dev it silently kept `imported_once` from ever being added → `/api/v1/fetchurl` 500s). `rebuildTable` drops a leftover shadow first and runs the sequence in one transaction on a dedicated connection (`PRAGMA foreign_keys` toggled *outside* the transaction — it's a no-op inside one), so a failure rolls back cleanly and the next startup retries.
-
-If a rebuild is what *adds* a column (like `imported_once` in the jsonld widening), also add a `pragma_table_info` safety net for that column right after the call — and have the rebuild carry an already-existing value over (`COALESCE(col, 0)` when present, `0` otherwise) instead of resetting it, since the safety net may have added it while the rebuild was still failing.
-
-Check an instance's journal for `_chk already exists` / `migrate…:` errors after a deploy; `TestSmokeMigrationOrphanedChkTable` and `TestRebuildTableRollsBack` (`smoke_migration_orphan_chk_test.go`) are the references. To verify against real data, run `migrateDB()` from a throwaway test on a **copy** of the instance DB (`cp /var/lib/dansal/dev/calendar.db` into the scratchpad), never on the live file.
-
-Consequences of no version number:
-- The function is called **unconditionally** every `migrateDB()` run (no `if !applied(N)` guard around the call) — the schema-string check is what makes repeated calls a no-op.
-- `createTables()` needs the widened `CHECK` list too, so a fresh install's `migrateFetchSourcesJcalType()` call sees `'jcal'` already present and returns immediately — there's no separate catch-all mark to add for this shape.
-- Order matters when two widenings compose: a later one's `INSERT ... SELECT` must list every column the table has *by the time it runs*, including ones an earlier widening or a plain `ALTER TABLE ADD COLUMN` introduced (e.g. `jcal`'s rebuild carries `kufer_config` in its `SELECT`, since the `kufer` widening plus its own safety-net `ALTER TABLE` both run first in `migrateDB()`). Missing one silently drops that column's data for every existing row.
-- The smoke test doesn't fit `TestSmokeMigrationOwnerMedia`'s shape (there's no version to delete from `schema_migrations`) — instead rebuild a table with the *pre-widening* `CHECK` list by hand (every real column, not a trimmed-down stand-in — the migration's `INSERT ... SELECT` will fail on a missing column, silently no-op'ing the whole widening) and confirm a row using the new value is rejected before `migrateDB()` and accepted after (`TestSmokeMigrationFetchSourcesJcalType` in `smoke_migration_test.go` is the reference).
-
-## `createTables()` — keep fresh installs identical
-
-Fresh installs must end up with the same final schema as migrated instances, or the catch-all breaks:
-
-- Add the new column/table to the `CREATE TABLE` statements in `createTables()`.
-- Append `db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(N)")` for the new version in the **catch-all block** at the bottom of `createTables()` (`cmd/dansal/main.go:3409` onwards) — this pre-marks the version so the corresponding `migrateDB()` block is skipped on fresh installs. That is why the safety-net block is essential: it runs even when the version block is skipped.
-- v1 is special-cased: `createTables()` marks it applied, and a comment at `migrateDB()` (`main.go:867-870`) explains that re-running is harmless because every statement is idempotent.
-
-## Verify with the throwaway smoke test
-
-Before committing any schema change, write a one-off `_test.go` in `cmd/dansal`:
-
+## Verify (always before commit)
+Throwaway `cmd/dansal/zz_smoke_test.go` (delete after unless risky):
 ```go
 func TestSmokeMigration(t *testing.T) {
-    conn, err := sql.Open("sqlite3", ":memory:")
-    if err != nil { t.Fatal(err) }
-    old := db
-    db = conn
-    t.Cleanup(func() { db = old })
+    conn, err := sql.Open("sqlite3", ":memory:"); if err != nil { t.Fatal(err) }
+    old := db; db = conn; t.Cleanup(func() { db = old })
     if err := createTables(); err != nil { t.Fatal(err) }
-    migrateDB() // must succeed on the fresh DB
-    migrateDB() // run TWICE to confirm idempotency on a second boot
+    migrateDB(); migrateDB() // twice = idempotent
     var n int
-    conn.QueryRow("SELECT COUNT(*) FROM pragma_table_info('table') WHERE name='column'").Scan(&n)
-    if n == 0 { t.Fatal("column missing after migration") }
+    conn.QueryRow("SELECT COUNT(*) FROM pragma_table_info('t') WHERE name='c'").Scan(&n)
+    if n == 0 { t.Fatal("missing") }
 }
 ```
+Real data: copy `/var/lib/dansal/<i>/calendar.db` (sudo cp) to scratchpad, point the test at the copy. Never write the live file.
 
-The package-level `var db *sql.DB` (`cmd/dansal/main.go:27`) is swapped directly; existing tests use the same pattern (`dedup_test.go:16`, `locations_scan_test.go:17`). Delete the throwaway file afterward unless the change is risky enough to keep permanently.
+## has_* columns
+Never add `has_*`; touching existing ones → switch that path to tags (mapping in CLAUDE.md). Backfill pattern: `INSERT OR IGNORE INTO event_tags (event_id, tag) SELECT id,'bal-folk' FROM events WHERE has_ball=1`.
 
-## The `has_*` trap
-
-`has_ball`, `has_workshop`, `has_festival` are **legacy columns** — do not add new `has_*` columns and do not touch them without switching the code path to tags:
-
-- `has_ball` → tag `bal-folk` or `fest-noz`
-- `has_workshop` → tag `workshop`, `dance-workshop`, `musician-workshop`, or `music-course`
-- `has_festival` → tag `festival`
-
-Existing tag backfill pattern: `INSERT OR IGNORE INTO event_tags (event_id, tag) SELECT id, 'bal-folk' FROM events WHERE has_ball = 1` (`main.go:1220-1221`).
-
-## Final checks
-
-```bash
-go build ./...
-go vet ./...
-go test ./...
-```
-
-Then build + deploy all binaries together: `make build` and `sudo make deploy INSTANCE=dev` (see the `deploy` skill).
+## web.db (dansal_web, /var/lib/dansal-web/<i>/web.db) is different
+No migrateDB there: each package ensures its own schema (e.g. `places.EnsureSchema`). Make sure it's called at dansal-web startup, not only from webmin/admin paths — otherwise the table is missing after deploy (#1476: `no such table: postcodes`).

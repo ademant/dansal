@@ -479,80 +479,18 @@ func outboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFu
 			return
 		}
 
-		base := actorURL(cfg, slug)
-		outboxURL := base + "/outbox"
-
-		// The outbox is the actor's full post history (all published events,
-		// past included) — new followers read it to back-fill. Without an
-		// explicit limit the API caps at 100, so without include_past=true it
-		// only held upcoming events: both truncated the history (#1055).
-		params := url.Values{}
-		params.Set("is_published", "true")
-		params.Set("include_past", "true")
-		if actor.OrgID != 0 {
-			params.Set("organization_id", strconv.Itoa(actor.OrgID))
-		}
-
-		if r.URL.Query().Get("page") != "true" {
-			// limit=1 is enough: X-Total-Count reflects the full count even
-			// when the page is truncated, so the collection root reports the
-			// real totalItems without downloading the history.
-			params.Set("limit", "1")
-			_, total, err := client.GetEventsFilteredWithTotal(r.Context(), params)
-			if err != nil {
-				logHTTPError(w, r, "could not load outbox events", http.StatusBadGateway)
-				return
-			}
-			col := OrderedCollection{
-				Context:    APContext,
-				Type:       "OrderedCollection",
-				ID:         outboxURL,
-				TotalItems: total,
-				First:      outboxURL + "?page=true",
-			}
-			writeJSON(w, http.StatusOK, col)
-			return
-		}
-
-		offset := 0
-		if v := r.URL.Query().Get("offset"); v != "" {
-			if n, err := strconv.Atoi(v); err == nil && n >= 0 {
-				offset = n
-			}
-		}
-
-		params.Set("limit", strconv.Itoa(outboxPageSize))
-		params.Set("offset", strconv.Itoa(offset))
-		events, total, err := client.GetEventsFilteredWithTotal(r.Context(), params)
-		if err != nil {
+		// #1471: coalesced + cached — see ap_cache.go. requireAPSignature
+		// (this route's own middleware, main.go) already ran before this
+		// handler body on every request regardless of cache hit/miss, so
+		// authorized-fetch verification is unaffected.
+		pageParam := r.URL.Query().Get("page")
+		offsetParam := r.URL.Query().Get("offset")
+		entry, ok := getAPOutboxResponse(cfg, client, actor, slug, pageParam, offsetParam)
+		if !ok {
 			logHTTPError(w, r, "could not load outbox events", http.StatusBadGateway)
 			return
 		}
-
-		items := make([]any, 0, len(events))
-		for _, e := range events {
-			items = append(items, buildCreateActivity(cfg, actor.OrgSlug, e))
-		}
-
-		pageURL := outboxURL + "?page=true"
-		if offset > 0 {
-			pageURL += "&offset=" + strconv.Itoa(offset)
-		}
-		page := OrderedCollectionPage{
-			Context:      APContext,
-			Type:         "OrderedCollectionPage",
-			ID:           pageURL,
-			PartOf:       outboxURL,
-			TotalItems:   total,
-			OrderedItems: items,
-		}
-		if offset+len(items) < total {
-			page.Next = outboxURL + "?page=true&offset=" + strconv.Itoa(offset+len(items))
-		}
-		if offset > 0 {
-			page.Prev = outboxURL + "?page=true&offset=" + strconv.Itoa(max(0, offset-outboxPageSize))
-		}
-		writeJSON(w, http.StatusOK, page)
+		serveAPEventEntry(w, r, entry)
 	}
 }
 

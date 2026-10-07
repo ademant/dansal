@@ -305,6 +305,7 @@ func adminEventDeleteHandler(cfg *Config, db *sql.DB, client *DansalClient) http
 		if err := client.DeleteEvent(r.Context(), id, getSessionToken(r)); err != nil {
 			log.Printf("delete event %d: %v", id, err)
 		}
+		invalidateAPEventCache(id) // #1471
 		if fetchErr == nil && event.OrganizationID != nil {
 			go deliverDeleteToFollowers(cfg, db, id, *event.OrganizationID)
 		}
@@ -430,6 +431,7 @@ func adminEventBulkDeleteHandler(cfg *Config, db *sql.DB, client *DansalClient) 
 				if err := client.DeleteEvent(r.Context(), id, token); err != nil {
 					log.Printf("bulk delete event %d: %v", id, err)
 				}
+				invalidateAPEventCache(id) // #1471
 				if fetchErr == nil && event.OrganizationID != nil {
 					go deliverDeleteToFollowers(cfg, db, id, *event.OrganizationID)
 				}
@@ -3231,6 +3233,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			}
 		}
 
+		invalidateAPEventCache(id) // #1471
 		if req.IsPublished {
 			go deliverUpdateToFollowers(cfg, db, client, id)
 			go notifyIndexNow(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []int{id})

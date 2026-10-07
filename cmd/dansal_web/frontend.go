@@ -1044,6 +1044,24 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			http.NotFound(w, r)
 			return
 		}
+
+		// #1471: the common case of a fan-out burst (~1000 fediverse
+		// instances fetching the same just-federated object within 1-2
+		// minutes) is served from the coalesced+cached fast path before
+		// ever touching fetchEventWithFallback below — concurrent misses
+		// for the same id share one GetEvent/GetOrganization/Note-build via
+		// singleflight. "Not cacheable" covers only the rare edge cases
+		// (an ID that was never allocated, possibly redirected elsewhere;
+		// a genuine upstream error) — those fall through to the unchanged
+		// logic below, which also now populates the cache so a repeat of
+		// the same edge case within the TTL is cheap too.
+		if isAPRequest(r) {
+			if entry, cacheable := getAPEventResponse(cfg, client, id); cacheable {
+				serveAPEventEntry(w, r, entry)
+				return
+			}
+		}
+
 		event, err := fetchEventWithFallback(r, client, id)
 		if err != nil {
 			if errors.Is(err, errNotFound) || errors.Is(err, errExpired) {
@@ -1051,11 +1069,9 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 				// 410 + Tombstone for confirmed-gone events; 404 for IDs that
 				// were never allocated (above the high-water mark).
 				if isAPRequest(r) && errors.Is(err, errExpired) {
-					writeJSON(w, http.StatusGone, APTombstone{
-						Context: APContext,
-						Type:    "Tombstone",
-						ID:      fmt.Sprintf("https://%s/events/%d", cfg.Domain, id),
-					})
+					entry := buildAPTombstoneEntry(cfg, id)
+					apEventCache.Store(id, entry)
+					serveAPEventEntry(w, r, entry)
 					return
 				}
 				if redir, rerr := client.GetEntityRedirect(r.Context(), "event", id); rerr == nil {
@@ -1076,30 +1092,9 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		// ActivityPub: serve the event as a Note when requested by an AP client.
 		// Conditional GET is safe here — AP JSON carries no CSP nonce.
 		if isAPRequest(r) {
-			apETag := fmt.Sprintf(`"%d-%s"`, event.ID, event.ChangedAt)
-			w.Header().Set("ETag", apETag)
-			if ct, cerr := parseUnixOrRFC3339(event.ChangedAt); cerr == nil && !ct.IsZero() {
-				w.Header().Set("Last-Modified", ct.UTC().Truncate(time.Second).Format(http.TimeFormat))
-				if ims := r.Header.Get("If-Modified-Since"); ims != "" {
-					if since, perr := http.ParseTime(ims); perr == nil && !ct.UTC().Truncate(time.Second).After(since) {
-						w.WriteHeader(http.StatusNotModified)
-						return
-					}
-				}
-			}
-			if r.Header.Get("If-None-Match") == apETag {
-				w.WriteHeader(http.StatusNotModified)
-				return
-			}
-			slug := cfg.RelayActorName
-			if event.OrganizationID != nil {
-				if org, oerr := client.GetOrganization(r.Context(), *event.OrganizationID); oerr == nil {
-					slug = effectiveSlug(org)
-				}
-			}
-			note := buildNoteFromEvent(cfg, slug, event)
-			note.Context = APContext
-			writeJSON(w, http.StatusOK, note)
+			entry := buildAPNoteEntry(r.Context(), cfg, client, event)
+			apEventCache.Store(id, entry)
+			serveAPEventEntry(w, r, entry)
 			return
 		}
 

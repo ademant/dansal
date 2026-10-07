@@ -147,6 +147,23 @@ func TestSearchCapInvariants(t *testing.T) {
 	}
 }
 
+// TestDefaultSearchDateRange covers #1470: the search page's default range
+// used to be the current Monday-Sunday week, which is mostly or entirely in
+// the past by Friday-Sunday — nearly always empty exactly when most
+// visitors show up. It's now today through today+6, regardless of which
+// day of the week "today" is.
+func TestDefaultSearchDateRange(t *testing.T) {
+	from, to := defaultSearchDateRange()
+	wantFrom := time.Now().Format("2006-01-02")
+	wantTo := time.Now().AddDate(0, 0, 6).Format("2006-01-02")
+	if from != wantFrom {
+		t.Errorf("from = %q, want %q (today)", from, wantFrom)
+	}
+	if to != wantTo {
+		t.Errorf("to = %q, want %q (today+6)", to, wantTo)
+	}
+}
+
 // TestSearchPageHandlerDeepLink covers #1436: a deep link (e.g. a venue
 // page's nearby-radius fallback) pre-fills the geo filter and date range,
 // but an invalid/unrecognized lat or radius is dropped rather than passed
@@ -205,13 +222,17 @@ func TestSearchPageHandlerDeepLink(t *testing.T) {
 		}
 	})
 
-	t.Run("an inverted date range falls back to the current week", func(t *testing.T) {
+	t.Run("an inverted date range falls back to the next-7-days default", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/search?from=2026-10-06&to=2026-10-01", nil)
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
 		body := rec.Body.String()
 		if strings.Contains(body, `var dateFrom = "2026-10-06"`) {
-			t.Error("an inverted (to < from) range must not override the current-week default")
+			t.Error("an inverted (to < from) range must not override the next-7-days default (#1470)")
+		}
+		wantFrom, _ := defaultSearchDateRange()
+		if !strings.Contains(body, `var dateFrom = "`+wantFrom+`"`) {
+			t.Errorf("fell back to something other than today, body should contain dateFrom = %q", wantFrom)
 		}
 	})
 }

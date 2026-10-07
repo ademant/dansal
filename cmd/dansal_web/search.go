@@ -66,15 +66,16 @@ func validRadiusParam(s string) string {
 	return ""
 }
 
-func currentWeekRange() (string, string) {
+// defaultSearchDateRange is the search page's default date range on a
+// fresh load (#1470): today through today+6 days (the next 7 days,
+// including today), in the server process's local time. Deliberately not
+// the current Monday-Sunday week (the previous behavior) -- that range is
+// mostly or entirely in the past by Friday through Sunday, so the default
+// result was nearly empty exactly on the days most visitors show up.
+func defaultSearchDateRange() (string, string) {
 	now := time.Now()
-	weekday := int(now.Weekday())
-	if weekday == 0 {
-		weekday = 7 // Monday-based week
-	}
-	monday := now.AddDate(0, 0, -(weekday - 1))
-	sunday := monday.AddDate(0, 0, 6)
-	return monday.Format("2006-01-02"), sunday.Format("2006-01-02")
+	to := now.AddDate(0, 0, 6)
+	return now.Format("2006-01-02"), to.Format("2006-01-02")
 }
 
 func searchPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -104,7 +105,7 @@ func searchPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 			return
 		}
 
-		dateFrom, dateTo := currentWeekRange()
+		dateFrom, dateTo := defaultSearchDateRange()
 		q := r.URL.Query()
 		// #1436: a deep link (e.g. the venue-page nearby fallback) can carry
 		// its own date range — only override the current-week default when

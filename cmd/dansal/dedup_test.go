@@ -16,7 +16,12 @@ func setupDedupTestDB(t *testing.T) *sql.DB {
 	old := db
 	t.Cleanup(func() { db = old })
 
-	conn, err := sql.Open("sqlite3", ":memory:")
+	// #1466: a plain ":memory:" DSN gives each physical connection the pool
+	// opens its own separate, empty in-memory database — a later Exec/Query
+	// that happens to land on a second connection then fails with "no such
+	// table", even for sequential, non-parallel test code. cache=shared
+	// makes every connection opened from this DSN share the same database.
+	conn, err := sql.Open("sqlite3", "file::memory:?cache=shared")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -51,6 +51,25 @@ func (e errActorGone) Error() string {
 	return fmt.Sprintf("actor key %q returned 410 Gone", e.keyID)
 }
 
+// doKeyFetchRequest issues one GET for the actor document at url, signed
+// with the relay actor key (#1432) unless signed is false -- the #1456
+// unsigned retry.
+func doKeyFetchRequest(ctx context.Context, httpClient *http.Client, url string, signed bool) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/activity+json")
+	if signed {
+		if s := keyFetchSigner.Load(); s != nil {
+			if err := SignGETRequest(req, s.keyID, s.privateKeyPEM); err != nil {
+				log.Printf("sign key fetch: %v", err)
+			}
+		}
+	}
+	return httpClient.Do(req)
+}
+
 // fetchActorPublicKey fetches the public key PEM and owner URL for the given
 // keyID. keyID may include a fragment (e.g. "https://host/actor#main-key");
 // the fragment is stripped for the actual HTTP GET, but used as a cache key.
@@ -84,21 +103,21 @@ func fetchActorPublicKey(ctx context.Context, httpClient *http.Client, keyID str
 	u.Fragment = ""
 	ctx, cancel := context.WithTimeout(ctx, keyFetchTimeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	resp, err := doKeyFetchRequest(ctx, httpClient, u.String(), true)
 	if err != nil {
 		return "", "", err
 	}
-	req.Header.Set("Accept", "application/activity+json")
-	// Sign the fetch with the instance's relay actor key (#1432): servers
-	// with authorized fetch (secure mode) refuse unsigned GETs with 401.
-	if s := keyFetchSigner.Load(); s != nil {
-		if err := SignGETRequest(req, s.keyID, s.privateKeyPEM); err != nil {
-			log.Printf("sign key fetch: %v", err)
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		resp.Body.Close()
+		// #1456: some servers (e.g. Mastodon's authorized-fetch/secure mode)
+		// refuse our signed fetch with 401/403 even for an actor that's
+		// actually gone, rather than answering with 410 -- a signed fetch
+		// for a deleted account's self-Delete would otherwise always look
+		// like a generic refusal instead of the gone-actor case below.
+		// Retry once unsigned before giving up.
+		if resp2, err2 := doKeyFetchRequest(ctx, httpClient, u.String(), false); err2 == nil {
+			resp = resp2
 		}
-	}
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return "", "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusGone || resp.StatusCode == http.StatusNotFound {

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -78,8 +79,35 @@ func TestFetchActorPublicKeyCachesRefusal(t *testing.T) {
 			t.Fatal("expected an error for a refused fetch")
 		}
 	}
-	if n := hits.Load(); n != 1 {
-		t.Errorf("remote fetched %d times, want 1 (403 cached)", n)
+	// #1456: the first (uncached) call makes 2 requests -- signed, then the
+	// unsigned retry on 401/403 -- before the refusal gets cached; the next
+	// 2 calls hit the cache and make none.
+	if n := hits.Load(); n != 2 {
+		t.Errorf("remote fetched %d times, want 2 (signed + unsigned retry, then 403 cached)", n)
+	}
+}
+
+// #1456: Mastodon's authorized-fetch mode can refuse a signed key fetch with
+// 401/403 even for an actor that's actually gone, rather than answering with
+// 410 -- the self-Delete cases in readInboxActivity never fired because
+// fetchActorPublicKey gave up after the signed 401/403 without ever seeing
+// the 410 an unsigned fetch would have gotten. Retrying once unsigned
+// surfaces errActorGone so that path can accept the self-Delete.
+func TestFetchActorPublicKeyRetriesUnsignedOn401ThenGone(t *testing.T) {
+	withKeyFetchSigner(t)
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Signature") != "" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(http.StatusGone)
+	}))
+	defer srv.Close()
+
+	_, _, err := fetchActorPublicKey(context.Background(), srv.Client(), srv.URL+"/users/deleted#main-key")
+	var gone errActorGone
+	if !errors.As(err, &gone) {
+		t.Fatalf("fetchActorPublicKey error = %v, want errActorGone", err)
 	}
 }
 

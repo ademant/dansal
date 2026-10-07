@@ -16,7 +16,13 @@
 .type-btn:hover{background:var(--btn-bg-h)}
 .type-btn.type-active{background:var(--heading);color:#fff;border-color:var(--heading)}
 .type-selector select{padding:.3rem .5rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.88rem;background:var(--bg-card);color:var(--fg)}
-#map-container{height:400px;border-radius:6px;overflow:hidden;border:1px solid var(--border)}
+/* min(400px, 60svh) rather than a fixed 400px: a landscape phone's viewport
+   is only ~375-410px tall, so a 400px map fills the whole screen and Leaflet's
+   touch handler then swallows every swipe — the page can't be scrolled past
+   the map at all. Capping it at 60svh means the map can never occupy the whole
+   viewport, so there is always non-map area visible to scroll from. Taller
+   screens (>=667px) keep the full 400px, unchanged. */
+#map-container{height:min(400px,60svh);border-radius:6px;overflow:hidden;border:1px solid var(--border)}
 .map-toolbar{display:flex;align-items:center;gap:1rem;margin-top:.4rem}
 .map-toolbar button{padding:.3rem .9rem;border:1px solid var(--link);border-radius:4px;background:var(--bg-card);color:var(--link);cursor:pointer;font-size:.85rem}
 .map-toolbar button:hover{background:var(--link);color:#fff}
@@ -173,7 +179,9 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 .wp-actions button{flex:1;padding:.55rem 0;border-radius:6px;font-size:.92rem;border:1px solid var(--border-mid);background:var(--btn-bg);color:var(--fg);cursor:pointer}
 .wp-actions .wp-select{background:var(--link);border-color:var(--link);color:#fff;font-weight:600}
 @media(max-width:640px){
-  #map-container{height:280px}
+  /* same 60svh cap as above: a short landscape viewport (width <=640 but
+     height ~320) would otherwise let the 280px map take 87% of the screen. */
+  #map-container{height:min(280px,60svh)}
   .home-mapweek{display:flex;flex-direction:column}
   .home-mapweek #week-outer{order:1}
   .home-mapweek .mobile-mode-bar{order:2}

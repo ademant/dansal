@@ -49,6 +49,15 @@ type SuggestRequest struct {
 	Timetable          []TimetableEntryRequest `json:"timetable,omitempty"`
 }
 
+// SuggestResponse is the POST /api/v1/events/suggest response. Remaining/
+// Limit (#1468) are pointers so they're omitted entirely (rather than sent
+// as 0) when the per-address cap doesn't apply to this submission.
+type SuggestResponse struct {
+	Token     string `json:"token"`
+	Remaining *int   `json:"remaining,omitempty"`
+	Limit     *int   `json:"limit,omitempty"`
+}
+
 // findOrCreateMusicianID resolves a musician by name (case-insensitive),
 // creating a new unreviewed record if no match exists. Used by the anonymous
 // suggestion flow, which has no authenticated caller to attribute creation to.
@@ -205,7 +214,12 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "email is required", http.StatusBadRequest)
 		return
 	}
-	if smtpConfigured && req.Email != "" {
+	// #1468: hoisted out of the if-block below so the final response can
+	// report how many more suggestions this address has left, including
+	// the one this request is about to create.
+	capApplies := smtpConfigured && req.Email != ""
+	var openBeforeInsert int
+	if capApplies {
 		if !isValidEmail(req.Email) {
 			writeError(w, "invalid email address", http.StatusBadRequest)
 			return
@@ -220,12 +234,11 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 		// protection this was guarding — someone repeatedly attributing
 		// garbage suggestions to a third party's address — is expressed as
 		// "how many of this address's suggestions are still unpublished".
-		var open int
 		db.QueryRow(
 			"SELECT COUNT(*) FROM events WHERE LOWER(suggester_email)=LOWER(?) AND is_published = 0",
 			req.Email,
-		).Scan(&open)
-		if open >= config.Server.MaxOpenTokensPerAddress {
+		).Scan(&openBeforeInsert)
+		if openBeforeInsert >= config.Server.MaxOpenTokensPerAddress {
 			writeError(w, "Too many pending suggestions for this address. Please wait for existing ones to be reviewed first.", http.StatusTooManyRequests)
 			return
 		}
@@ -429,7 +442,18 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 	// Return the standing manage token so an authenticated submitter can
 	// attach an event image right away (#1050); the anonymous web flow ignores
 	// it and only receives the token via the edit-link email.
-	writeJSONStatus(w, http.StatusAccepted, map[string]string{"token": suggestionToken})
+	resp := SuggestResponse{Token: suggestionToken}
+	// #1468: "remaining" (and the cap itself, "limit") are only meaningful
+	// when the per-address cap actually applies -- omitted otherwise (no
+	// email, or SMTP not configured) so the done page shows no hint at all
+	// rather than a nonsensical one.
+	if capApplies {
+		limit := config.Server.MaxOpenTokensPerAddress
+		remaining := limit - (openBeforeInsert + 1)
+		resp.Remaining = &remaining
+		resp.Limit = &limit
+	}
+	writeJSONStatus(w, http.StatusAccepted, resp)
 }
 
 // GET /api/v1/events/suggest/verify/{token} — legacy confirmation endpoint.

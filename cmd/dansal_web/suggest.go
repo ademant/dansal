@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"html/template"
 	"io"
 	"log"
@@ -43,6 +44,15 @@ type SuggestPageData struct {
 	// image can be attached on the initial submit via the standing manage token
 	// instead of only after email verification.
 	CanUploadImageNow bool
+	// IsNextSuggestion/HasLeftInfo/Left/Cap (#1468): set when the visitor
+	// arrived via the done page's "suggest another event" button
+	// (?next=1[&left=&cap=]). IsNextSuggestion triggers the sessionStorage
+	// restore script (events_suggest.html); HasLeftInfo/Left/Cap show the
+	// same remaining-count hint the done page showed, when it applied.
+	IsNextSuggestion bool
+	HasLeftInfo      bool
+	Left             int
+	Cap              int
 }
 
 type SuggestDoneData struct {
@@ -52,6 +62,16 @@ type SuggestDoneData struct {
 	// fine but the attached image could not be uploaded — the submission is
 	// not in error, this is just a heads-up.
 	ImageUploadError string
+
+	// HasLeftInfo/Left/Cap (#1468): the per-address remaining-suggestion
+	// count, carried from the API's SuggestEvent response through the
+	// ?left=&cap= redirect params. HasLeftInfo is false when the API
+	// omitted them (no email, or SMTP not configured) -- the "suggest
+	// another event" button then shows with no hint, per #1468's spec for
+	// "no left param".
+	HasLeftInfo bool
+	Left        int
+	Cap         int
 }
 type SuggestVerifiedData struct {
 	Error string
@@ -92,15 +112,33 @@ func suggestPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		if err != nil {
 			log.Printf("suggest: could not load dances: %v", err)
 		}
-		title := i18n.T(r, "suggest_event_title")
-		renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
+		data := SuggestPageData{
 			HintSMTP:          cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
 			CaptchaSiteKey:    cfg.CaptchaSiteKey,
 			FormToken:         tok,
 			GeoToken:          newFormToken(),
 			Dances:            dances,
 			CanUploadImageNow: suggestCanUploadImage(r),
-		}))
+		}
+		// #1468: "suggest another event" lands here with ?next=1, optionally
+		// carrying the same remaining-count hint shown on the done page
+		// (left/cap — small, non-identifying integers, unlike the manage
+		// token, so passing them in the URL doesn't repeat that mistake).
+		// The actual form-field prefill comes from sessionStorage client-side
+		// (events_suggest.html), not from here — nothing else server-side
+		// needs to change for ?next=1 itself.
+		if r.URL.Query().Get("next") == "1" {
+			data.IsNextSuggestion = true
+			if left, err := strconv.Atoi(r.URL.Query().Get("left")); err == nil {
+				if cap, err2 := strconv.Atoi(r.URL.Query().Get("cap")); err2 == nil {
+					data.HasLeftInfo = true
+					data.Left = left
+					data.Cap = cap
+				}
+			}
+		}
+		title := i18n.T(r, "suggest_event_title")
+		renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, data))
 	}
 }
 
@@ -369,13 +407,14 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 		setPendingSubmission(ip, r.UserAgent(), pendingScope, stdFormMaxAge(cfg))
 		globalEmailSendRate.record()
 
-		token, err := client.SuggestEvent(r.Context(), req, cfg.publicBaseURL(), getBoardSessionToken(r))
+		result, err := client.SuggestEvent(r.Context(), req, cfg.publicBaseURL(), getBoardSessionToken(r))
 		if err != nil {
 			clearPendingSubmission(ip, r.UserAgent(), pendingScope)
 			log.Printf("dansal-web: suggest submit failed ip_hash=%s err=%v", hashIP(ip), err)
 			suggestError(w, r, cfg, tmpls, client, i18n, i18n.T(r, "suggest_error_submit"), ip)
 			return
 		}
+		token := result.Token
 
 		// #1050: an authenticated submitter attaches the image right away via
 		// the standing manage token returned by the suggest API. The
@@ -394,11 +433,20 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			}
 		}
 
+		// #1468: thread the per-address remaining count through so the done
+		// page can offer a sized "suggest another event" hint/button. Both
+		// are omitted together when the cap doesn't apply (no email, or
+		// SMTP not configured) -- the done page then shows no hint at all.
+		doneURL := "/events/suggest/done"
+		if result.Remaining != nil && result.Limit != nil {
+			doneURL += fmt.Sprintf("?left=%d&cap=%d", *result.Remaining, *result.Limit)
+		}
+
 		if flash.ImageUploadError != "" {
-			flashRedirect(w, r, "/events/suggest/done", newErrorID(), flash)
+			flashRedirect(w, r, doneURL, newErrorID(), flash)
 			return
 		}
-		http.Redirect(w, r, "/events/suggest/done", http.StatusSeeOther)
+		http.Redirect(w, r, doneURL, http.StatusSeeOther)
 	}
 }
 
@@ -406,10 +454,18 @@ func suggestDoneHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerF
 	return func(w http.ResponseWriter, r *http.Request) {
 		title := i18n.T(r, "suggest_done_title")
 		flash := flashTake(r.URL.Query().Get("msg"))
-		renderTemplate(w, tmpls.suggestDone, tmplData(r, cfg, i18n, title, SuggestDoneData{
+		data := SuggestDoneData{
 			NeedsReview:      r.URL.Query().Get("review") == "1",
 			ImageUploadError: flash.ImageUploadError,
-		}))
+		}
+		if left, err := strconv.Atoi(r.URL.Query().Get("left")); err == nil {
+			if cap, err2 := strconv.Atoi(r.URL.Query().Get("cap")); err2 == nil {
+				data.HasLeftInfo = true
+				data.Left = left
+				data.Cap = cap
+			}
+		}
+		renderTemplate(w, tmpls.suggestDone, tmplData(r, cfg, i18n, title, data))
 	}
 }
 

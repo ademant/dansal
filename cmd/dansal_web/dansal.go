@@ -3738,11 +3738,20 @@ func (c *DansalClient) SuggestEventPreview(ctx context.Context, body io.Reader, 
 }
 
 // SuggestEvent calls POST /api/v1/events/suggest.
-func (c *DansalClient) SuggestEvent(ctx context.Context, req SuggestEventReq, baseURL, bsToken string) (string, error) {
+// SuggestEventResult is SuggestEvent's decoded response. Remaining/Limit
+// are nil when the API omitted them (#1468: the per-address cap doesn't
+// apply — no email, or SMTP not configured).
+type SuggestEventResult struct {
+	Token     string
+	Remaining *int
+	Limit     *int
+}
+
+func (c *DansalClient) SuggestEvent(ctx context.Context, req SuggestEventReq, baseURL, bsToken string) (SuggestEventResult, error) {
 	body, _ := json.Marshal(req)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/events/suggest", bytes.NewReader(body))
 	if err != nil {
-		return "", err
+		return SuggestEventResult{}, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	if baseURL != "" {
@@ -3754,23 +3763,25 @@ func (c *DansalClient) SuggestEvent(ctx context.Context, req SuggestEventReq, ba
 	c.setInternalHeader(httpReq)
 	resp, err := c.HTTP.Do(httpReq)
 	if err != nil {
-		return "", err
+		return SuggestEventResult{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusAccepted {
-		return "", apiErr(resp)
+		return SuggestEventResult{}, apiErr(resp)
 	}
 	// The API returns the standing manage token for this suggestion (#1050) so
-	// an authenticated submitter can attach an event image right away. Older
-	// API versions send an empty body; a decode error is fine then.
-	token := ""
+	// an authenticated submitter can attach an event image right away, and
+	// (#1468) how many more suggestions this address has left. Older API
+	// versions send an empty body; a decode error is fine then.
 	var out struct {
-		Token string `json:"token"`
+		Token     string `json:"token"`
+		Remaining *int   `json:"remaining,omitempty"`
+		Limit     *int   `json:"limit,omitempty"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err == nil {
-		token = out.Token
+		return SuggestEventResult{Token: out.Token, Remaining: out.Remaining, Limit: out.Limit}, nil
 	}
-	return token, nil
+	return SuggestEventResult{}, nil
 }
 
 // FetchSuggestionLocationMapping mirrors cmd/dansal's identically-named type —

@@ -16,6 +16,11 @@
   <p class="suggest-hint {{if .HintSMTP}}hint-email{{else}}hint-review{{end}}">
     {{if .HintSMTP}}{{$.Strings.T "suggest_hint_email"}}{{else}}{{$.Strings.T "suggest_hint_review"}}{{end}}
   </p>
+  {{/* #1468: same remaining-count hint the done page showed, when the
+       visitor arrived here via its "suggest another event" button. */}}
+  {{if .HasLeftInfo}}
+  <p class="suggest-hint suggest-hint-left">{{if gt .Left 0}}{{$.Strings.TF "suggest_done_left_hint" .Left}}{{else}}{{$.Strings.TF "suggest_done_cap_hint" .Cap}}{{end}}</p>
+  {{end}}
 
   {{if not .ManageToken}}
   <!-- Progress arrows — visible above manual/import tabs, updated by JS -->
@@ -412,6 +417,7 @@
 .suggest-hint{padding:.75rem 1rem;border-radius:6px;margin-bottom:1.5rem;font-size:.95rem}
 .hint-email{background:#d1ecf1;color:#0c5460;border:1px solid #bee5eb}
 .hint-review{background:#fff3cd;color:#856404;border:1px solid #ffc107}
+.suggest-hint-left{background:#d4edda;color:#155724;border:1px solid #c3e6cb}
 .form-error{color:#721c24;background:#f8d7da;border:1px solid #f5c6cb;border-radius:4px;padding:.6rem 1rem;margin-bottom:1rem}
 .form-row{margin-bottom:1rem}
 .form-row label{display:block;font-weight:600;font-size:.9rem;margin-bottom:.3rem}
@@ -1456,6 +1462,44 @@ document.addEventListener('DOMContentLoaded', function(){
   applyWizardData({{.Data.PrefillJSON}});
 });
 {{end}}
+// ── "Suggest another event" prefill (#1468) ────────────────────────────────
+// The done page's button links here with ?next=1. The snapshot itself was
+// written to sessionStorage right before the PREVIOUS submission (below) --
+// not server state, nothing sensitive in the URL (unlike the manage token),
+// gone once the tab closes. Title/dates/description/tags/dances/musicians/
+// instructors/timetable deliberately start empty -- only the submitter's
+// own identity and the venue carry over.
+{{if .Data.IsNextSuggestion}}
+document.addEventListener('DOMContentLoaded', function(){
+  try {
+    var raw = sessionStorage.getItem('dansal_suggest_prefill');
+    if (raw) applyWizardData(JSON.parse(raw));
+  } catch (e) {}
+});
+{{end}}
+// ── Snapshot for "suggest another event" (#1468) ───────────────────────────
+// Stored right before every submit (not just a successful one -- harmless
+// either way, and simpler than only doing it on the one path that redirects
+// to the done page) so a visitor who suggests several events in a row never
+// has to retype their own email/name/contact/venue.
+(function(){
+  var form = document.getElementById('wiz-form');
+  if (!form) return;
+  form.addEventListener('submit', function(){
+    try {
+      function fv(name) { var el = form.querySelector('[name="' + name + '"]'); return el ? el.value : ''; }
+      function gv(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+      sessionStorage.setItem('dansal_suggest_prefill', JSON.stringify({
+        email: fv('email'), suggester_name: fv('suggester_name'),
+        contact_name: fv('contact_name'), contact_email: fv('contact_email'),
+        url: fv('url'),
+        location: gv('sg-location'), town: gv('sg-town'), country: gv('sg-country'),
+        address: gv('sg-address'), zipcode: gv('sg-zipcode'),
+        lat: gv('sg-lat'), lon: gv('sg-lon')
+      }));
+    } catch (e) {}
+  });
+})();
 // ── Import auto-prefill + picker ──────────────────────────────────────────
 {{if .Data.IsImportMode}}
 document.addEventListener('DOMContentLoaded', function(){

@@ -7,7 +7,20 @@
     <h2>{{$.Strings.T "suggest_done_title"}}</h2>
     <p>{{if .NeedsReview}}{{$.Strings.T "suggest_manage_done_review_body"}}{{else}}{{$.Strings.T "suggest_done_body"}}{{end}}</p>
     {{if .ImageUploadError}}<p class="suggest-done-image-error" role="alert">{{$.Strings.T .ImageUploadError}}</p>{{end}}
-    <a href="/">{{$.Strings.T "suggest_done_back"}}</a>
+    {{/* #1468: the remaining-suggestion hint, when the API told us the
+         per-address cap applies to this submission. No hint at all when it
+         doesn't (no email, or SMTP not configured). */}}
+    {{if .HasLeftInfo}}
+      <p class="suggest-done-left-hint">{{if gt .Left 0}}{{$.Strings.TF "suggest_done_left_hint" .Left}}{{else}}{{$.Strings.TF "suggest_done_cap_hint" .Cap}}{{end}}</p>
+    {{end}}
+    <div class="suggest-done-actions">
+      {{if and .HasLeftInfo (le .Left 0)}}
+        <span class="suggest-done-btn suggest-done-btn-disabled" aria-disabled="true">{{$.Strings.T "suggest_done_another"}}</span>
+      {{else}}
+        <a href="/events/suggest?next=1{{if .HasLeftInfo}}&left={{.Left}}&cap={{.Cap}}{{end}}" class="suggest-done-btn">{{$.Strings.T "suggest_done_another"}}</a>
+      {{end}}
+      <a href="/" class="suggest-done-back-link">{{$.Strings.T "suggest_done_back"}}</a>
+    </div>
   </div>
 </div>
 {{end}}
@@ -19,7 +32,13 @@
 .suggest-done-icon{font-size:3rem;margin-bottom:.5rem}
 .suggest-done-box h2{margin:0 0 .75rem}
 .suggest-done-box p{font-size:1rem;margin-bottom:1.25rem}
-.suggest-done-box a{color:inherit;font-weight:600}
 .suggest-done-image-error{font-size:.85rem;background:rgba(0,0,0,.06);border-radius:4px;padding:.5rem .75rem}
+.suggest-done-left-hint{font-size:.85rem;opacity:.85;margin-top:-.5rem}
+.suggest-done-actions{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:1rem}
+.suggest-done-btn{display:inline-block;background:#155724;color:#fff;padding:.6rem 1.4rem;border-radius:6px;font-weight:600;text-decoration:none}
+.suggest-done-review .suggest-done-btn{background:#856404}
+.suggest-done-btn:hover{opacity:.9}
+.suggest-done-btn-disabled{background:#999!important;color:#eee!important;cursor:not-allowed;opacity:.7}
+.suggest-done-back-link{color:inherit;font-weight:600}
 </style>
 {{end}}

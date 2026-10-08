@@ -11,11 +11,64 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ademant/dansal/internal/strutil"
 	ics "github.com/arran4/golang-ical"
 )
 
+// feedUpdateMarkerThreshold is how long after creation changed_at must be to
+// count as a genuine edit for the "Updated: <date>" iCal description marker
+// (#1475) — insertEvent sets changed_at to the same instant as created_at,
+// so a few seconds' difference is clock/rounding noise, not a real edit.
+const feedUpdateMarkerThreshold = 5 * time.Minute
+
+// feedCacheControl and feedRefreshInterval tune how calendar apps and HTTP
+// caches treat a subscribed iCal/RSS/JSON feed (#1475): Webcal is pull-only
+// (no push, no "calendar changed" notification), so freshness depends
+// entirely on how often the client re-polls and how cheaply a no-change poll
+// is answered.
+const (
+	feedCacheControl    = "public, max-age=300"
+	feedRefreshInterval = "PT6H"
+)
+
+// feedEventChangedAt returns the timestamp to use for an event's
+// DTSTAMP/LAST-MODIFIED/SEQUENCE and for conditional-GET freshness,
+// falling back to created_at or now when changed_at is empty or
+// unparseable (e.g. a legacy row from before changed_at existed).
+func feedEventChangedAt(e Event) time.Time {
+	if t, ok := strutil.ParseTime(e.ChangedAt); ok {
+		return t
+	}
+	if t, ok := strutil.ParseTime(e.CreatedAt); ok {
+		return t
+	}
+	return time.Now()
+}
+
+// feedCacheHeaders sets ETag/Last-Modified/Cache-Control for a feed response
+// derived from the already-fetched events (fingerprint: event count + newest
+// changed_at), and answers a matching If-None-Match/If-Modified-Since with
+// 304. Returns true when the request was satisfied with 304 and the caller
+// must not write anything else.
+func feedCacheHeaders(w http.ResponseWriter, r *http.Request, events []Event) bool {
+	w.Header().Set("Cache-Control", feedCacheControl)
+	var newest time.Time
+	for _, e := range events {
+		if t := feedEventChangedAt(e); t.After(newest) {
+			newest = t
+		}
+	}
+	etag := fmt.Sprintf(`"%d-%d"`, len(events), newest.Unix())
+	w.Header().Set("ETag", etag)
+	if r.Header.Get("If-None-Match") == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return true
+	}
+	return checkLastModified(w, r, newest)
+}
+
 // feedEventICSHandler serves a single event as an iCal download.
-func feedEventICSHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+func feedEventICSHandler(cfg *Config, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, ok := intPathValueOr404(w, r, "id")
 		if !ok {
@@ -34,9 +87,14 @@ func feedEventICSHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			}
 			return
 		}
+		if feedCacheHeaders(w, r, []Event{event}) {
+			return
+		}
+		strs := i18n.Strings(i18n.detectLang(r))
 		cal := ics.NewCalendar()
 		cal.SetMethod(ics.MethodPublish)
-		feedAddEventToCalendar(cal, cfg.Domain, event)
+		feedSetCalendarMeta(cal, strs, feedEventChangedAt(event))
+		feedAddEventToCalendar(cal, cfg.Domain, event, strs)
 		w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
 		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="event-%d.ics"`, id))
 		w.Write([]byte(cal.Serialize()))
@@ -46,7 +104,7 @@ func feedEventICSHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 // feedMainHandler serves all upcoming events. Uses GetAllFutureEvents rather
 // than GetEvents(ctx, "") so subscribers get every future event, not just the
 // index page's first 100 (see #650/#651).
-func feedMainHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
+func feedMainHandler(cfg *Config, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		events, err := client.GetAllFutureEvents(r.Context())
 		if err != nil {
@@ -60,7 +118,7 @@ func feedMainHandler(cfg *Config, db *sql.DB, client *DansalClient) http.Handler
 				}
 			}
 		}
-		serveEventFeed(w, r, cfg, cfg.Domain+" events", events)
+		serveEventFeed(w, r, cfg, cfg.Domain+" events", events, i18n)
 	}
 }
 
@@ -81,7 +139,7 @@ func federatedEventAsEvent(fe FederatedEvent) Event {
 }
 
 // feedOrgHandler serves events for one organisation, identified by its AP slug.
-func feedOrgHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
+func feedOrgHandler(cfg *Config, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		slug := r.PathValue("slug")
 		actor, err := getActorBySlug(db, slug)
@@ -102,12 +160,12 @@ func feedOrgHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerF
 			http.Error(w, "could not load events", http.StatusBadGateway)
 			return
 		}
-		serveEventFeed(w, r, cfg, org.Name, events)
+		serveEventFeed(w, r, cfg, org.Name, events, i18n)
 	}
 }
 
 // feedMusicianHandler serves events for one musician, identified by slug.
-func feedMusicianHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+func feedMusicianHandler(cfg *Config, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		slug := r.PathValue("slug")
 		musicians, err := client.GetMusicians(r.Context())
@@ -131,12 +189,12 @@ func feedMusicianHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			http.Error(w, "could not load events", http.StatusBadGateway)
 			return
 		}
-		serveEventFeed(w, r, cfg, found.Bandname, events)
+		serveEventFeed(w, r, cfg, found.Bandname, events, i18n)
 	}
 }
 
 // feedInstructorHandler serves events for one instructor, identified by numeric ID.
-func feedInstructorHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+func feedInstructorHandler(cfg *Config, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, ok := intPathValueOr404(w, r, "id")
 		if !ok {
@@ -152,12 +210,12 @@ func feedInstructorHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			http.Error(w, "could not load events", http.StatusBadGateway)
 			return
 		}
-		serveEventFeed(w, r, cfg, instructor.Name, events)
+		serveEventFeed(w, r, cfg, instructor.Name, events, i18n)
 	}
 }
 
 // feedLocationHandler serves events at one location, identified by slug.
-func feedLocationHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+func feedLocationHandler(cfg *Config, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		slug := r.PathValue("slug")
 		locs, err := client.GetLocations(r.Context())
@@ -191,12 +249,12 @@ func feedLocationHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		if found.Town != "" {
 			label += ", " + found.Town
 		}
-		serveEventFeed(w, r, cfg, label, events)
+		serveEventFeed(w, r, cfg, label, events, i18n)
 	}
 }
 
 // feedTypeHandler serves events filtered by tag slug via the API.
-func feedTypeHandler(cfg *Config, client *DansalClient, feedType string) http.HandlerFunc {
+func feedTypeHandler(cfg *Config, client *DansalClient, feedType string, i18n *I18n) http.HandlerFunc {
 	tagMap := map[string]string{
 		"ball":     "bal-folk",
 		"workshop": "workshop",
@@ -216,19 +274,22 @@ func feedTypeHandler(cfg *Config, client *DansalClient, feedType string) http.Ha
 		if events == nil {
 			events = []Event{}
 		}
-		serveEventFeed(w, r, cfg, feedType+" events", events)
+		serveEventFeed(w, r, cfg, feedType+" events", events, i18n)
 	}
 }
 
 // serveEventFeed dispatches to the right format renderer based on the {format} route variable.
-func serveEventFeed(w http.ResponseWriter, r *http.Request, cfg *Config, title string, events []Event) {
+func serveEventFeed(w http.ResponseWriter, r *http.Request, cfg *Config, title string, events []Event, i18n *I18n) {
 	if events == nil {
 		events = []Event{}
+	}
+	if feedCacheHeaders(w, r, events) {
+		return
 	}
 	selfURL := "https://" + cfg.Domain + r.URL.Path
 	switch r.PathValue("format") {
 	case "ical", "ics":
-		serveICalFeed(w, cfg, events)
+		serveICalFeed(w, cfg, events, i18n.Strings(i18n.detectLang(r)))
 	case "json":
 		serveJSONFeed(w, events)
 	case "rss":
@@ -239,23 +300,55 @@ func serveEventFeed(w http.ResponseWriter, r *http.Request, cfg *Config, title s
 }
 
 // serveICalFeed writes a text/calendar (iCal) response.
-func serveICalFeed(w http.ResponseWriter, cfg *Config, events []Event) {
+func serveICalFeed(w http.ResponseWriter, cfg *Config, events []Event, strs I18nStrings) {
 	cal := ics.NewCalendar()
 	cal.SetMethod(ics.MethodPublish)
 	cal.SetName(cfg.Domain)
+	var newest time.Time
 	for _, e := range events {
-		feedAddEventToCalendar(cal, cfg.Domain, e)
+		if t := feedEventChangedAt(e); t.After(newest) {
+			newest = t
+		}
+	}
+	feedSetCalendarMeta(cal, strs, newest)
+	for _, e := range events {
+		feedAddEventToCalendar(cal, cfg.Domain, e, strs)
 	}
 	w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
 	w.Header().Set("Content-Disposition", `attachment; filename="events.ics"`)
 	w.Write([]byte(cal.Serialize()))
 }
 
-func feedAddEventToCalendar(cal *ics.Calendar, domain string, e Event) {
+// feedSetCalendarMeta sets calendar-level metadata (#1475) so clients show a
+// description, know roughly how often to re-poll, and see our own product
+// rather than the ics library's default PRODID.
+func feedSetCalendarMeta(cal *ics.Calendar, strs I18nStrings, newest time.Time) {
+	cal.SetProductId("-//dansal//iCal Feed//EN")
+	cal.SetRefreshInterval(feedRefreshInterval)
+	cal.SetXPublishedTTL(feedRefreshInterval)
+	if !newest.IsZero() {
+		cal.SetXWRCalDesc(strs.T("last_updated_label") + ": " + newest.UTC().Format("2006-01-02 15:04"))
+	}
+}
+
+func feedAddEventToCalendar(cal *ics.Calendar, domain string, e Event, strs I18nStrings) {
 	vevent := cal.AddEvent(fmt.Sprintf("event-%d@%s", e.ID, domain))
 	vevent.SetSummary(e.Title)
-	if e.Description != "" {
-		vevent.SetDescription(e.Description)
+	changedAt := feedEventChangedAt(e)
+	vevent.SetDtStampTime(changedAt)
+	vevent.SetModifiedAt(changedAt)
+	vevent.SetSequence(int(changedAt.Unix()))
+	if e.IsCancelled {
+		vevent.SetStatus(ics.ObjectStatusCancelled)
+	} else {
+		vevent.SetStatus(ics.ObjectStatusConfirmed)
+	}
+	desc := e.Description
+	if createdAt, ok := strutil.ParseTime(e.CreatedAt); ok && changedAt.Sub(createdAt) > feedUpdateMarkerThreshold {
+		desc = strs.T("last_updated_label") + ": " + changedAt.UTC().Format("2006-01-02") + "\n\n" + desc
+	}
+	if desc != "" {
+		vevent.SetDescription(desc)
 	}
 	tStart, startOK := time.Parse(time.RFC3339, e.StartTime)
 	tEnd, endOK := time.Parse(time.RFC3339, e.EndTime)
@@ -548,6 +641,9 @@ func tagAtomHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
+		if feedCacheHeaders(w, r, events) {
+			return
+		}
 		title := tag.Name
 		if title == "" {
 			title = slug
@@ -568,6 +664,9 @@ func tagJSONFeedHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		}
 		if !ok {
 			http.NotFound(w, r)
+			return
+		}
+		if feedCacheHeaders(w, r, events) {
 			return
 		}
 		title := tag.Name
@@ -591,19 +690,19 @@ func feedURL(cfg *Config, path, format string) string {
 // "events.{format}"). HEAD (#1431) runs the same handler — net/http drops the
 // body — since calendar clients, feed readers and link checkers probe with
 // HEAD before subscribing, and a 404 there made the feeds look dead.
-func feedRouter(cfg *Config, db *sql.DB, client *DansalClient) func(http.Handler) http.Handler {
-	icsH := feedEventICSHandler(cfg, client)
+func feedRouter(cfg *Config, db *sql.DB, client *DansalClient, i18n *I18n) func(http.Handler) http.Handler {
+	icsH := feedEventICSHandler(cfg, client, i18n)
 	timetableICSH := feedEventTimetableICSHandler(cfg, client)
 	timetableCSVH := feedEventTimetableExportHandler(client, "csv")
 	timetableJSONH := feedEventTimetableExportHandler(client, "json")
-	mainH := feedMainHandler(cfg, db, client)
-	orgH := feedOrgHandler(cfg, db, client)
-	musicianH := feedMusicianHandler(cfg, client)
-	instructorH := feedInstructorHandler(cfg, client)
-	locationH := feedLocationHandler(cfg, client)
-	ballH := feedTypeHandler(cfg, client, "ball")
-	workshopH := feedTypeHandler(cfg, client, "workshop")
-	festivalH := feedTypeHandler(cfg, client, "festival")
+	mainH := feedMainHandler(cfg, db, client, i18n)
+	orgH := feedOrgHandler(cfg, db, client, i18n)
+	musicianH := feedMusicianHandler(cfg, client, i18n)
+	instructorH := feedInstructorHandler(cfg, client, i18n)
+	locationH := feedLocationHandler(cfg, client, i18n)
+	ballH := feedTypeHandler(cfg, client, "ball", i18n)
+	workshopH := feedTypeHandler(cfg, client, "workshop", i18n)
+	festivalH := feedTypeHandler(cfg, client, "festival", i18n)
 	tagAtomH := tagAtomHandler(cfg, client)
 	tagJSONFeedH := tagJSONFeedHandler(cfg, client)
 

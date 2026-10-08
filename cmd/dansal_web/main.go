@@ -633,7 +633,7 @@ func main() {
 		r.HandleFunc("GET /embed/locations", embedLocationsHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /embed/manifest.json", embedManifestHandler(cfg))
 
-		return authRefreshMiddleware(client)(dashboardAttentionMiddleware(client)(certAuthMiddleware(client)(feedRouter(cfg, db, client)(r))))
+		return authRefreshMiddleware(client)(dashboardAttentionMiddleware(client)(certAuthMiddleware(client)(feedRouter(cfg, db, client, i18n)(r))))
 	}
 
 	i18n := loadI18n(cfg.I18nFile)

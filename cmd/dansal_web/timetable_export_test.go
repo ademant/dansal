@@ -255,7 +255,7 @@ func TestFeedRouterTimetableICSPrecedence(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatalf("expected feedRouter to handle %s itself, fell through to next instead", r.URL.Path)
 	})
-	handler := feedRouter(cfg, dbConn, client)(next)
+	handler := feedRouter(cfg, dbConn, client, loadI18n(""))(next)
 
 	req := httptest.NewRequest(http.MethodGet, "/events/1/timetable.ics", nil)
 	rec := httptest.NewRecorder()
@@ -294,7 +294,7 @@ func TestFeedRouterHeadMatchesGet(t *testing.T) {
 		t.Errorf("%s %s fell through to the mux", r.Method, r.URL.Path)
 		w.WriteHeader(http.StatusTeapot)
 	})
-	handler := feedRouter(cfg, dbConn, client)(next)
+	handler := feedRouter(cfg, dbConn, client, loadI18n(""))(next)
 
 	for _, path := range []string{
 		"/events/1.ics",

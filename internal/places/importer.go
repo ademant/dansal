@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -45,7 +46,7 @@ type ImportStatus struct {
 	Country       string
 	Status        string // "running", "ok", "error"
 	PlaceCount    int
-	PostcodeCount int // #1459: 0 when the country has no GeoNames postal-code dump
+	PostcodeCount int // #1459: >0 once imported. 0 means never attempted; -1 means attempted but no dump/failed (#1476) — see Sync.
 	ImportedAt    time.Time
 	Error         string
 }
@@ -76,8 +77,12 @@ var syncMu sync.Mutex
 
 // Sync brings the place table in line with countries: rows of countries no
 // longer listed are deleted, and every listed country without a successful
-// import (or every one, when force) is imported from baseURL. Runs are
-// serialized; a failure is recorded per country and doesn't stop the others.
+// import (or every one, when force) is imported from baseURL. A country
+// already successfully imported before postal codes existed (#1459) —
+// status "ok" but postcode_count still 0, its never-attempted sentinel — gets
+// just its postcodes imported, without redownloading/reimporting its places
+// (#1476). Runs are serialized; a failure is recorded per country and
+// doesn't stop the others.
 func Sync(ctx context.Context, db *sql.DB, client *http.Client, baseURL string, countries []string, force bool) {
 	syncMu.Lock()
 	defer syncMu.Unlock()
@@ -99,20 +104,28 @@ func Sync(ctx context.Context, db *sql.DB, client *http.Client, baseURL string, 
 		}
 	}
 
-	var todo []string
+	var todo, postcodesOnly []string
 	for _, c := range countries {
 		var status string
-		db.QueryRow("SELECT status FROM places_import WHERE country = ?", c).Scan(&status)
-		if force || status != "ok" {
+		var postcodeCount int
+		db.QueryRow("SELECT status, postcode_count FROM places_import WHERE country = ?", c).Scan(&status, &postcodeCount)
+		switch {
+		case force || status != "ok":
 			todo = append(todo, c)
+		case postcodeCount == 0:
+			postcodesOnly = append(postcodesOnly, c)
 		}
 	}
-	if len(todo) == 0 {
+	if len(todo) == 0 && len(postcodesOnly) == 0 {
 		return
 	}
-	admin1, err := loadAdmin1(ctx, client, baseURL)
-	if err != nil {
-		log.Printf("places: state names unavailable, importing without them: %v", err)
+	var admin1 map[string]string
+	if len(todo) > 0 {
+		var err error
+		admin1, err = loadAdmin1(ctx, client, baseURL)
+		if err != nil {
+			log.Printf("places: state names unavailable, importing without them: %v", err)
+		}
 	}
 	for _, c := range todo {
 		setStatus(db, c, "running", 0, 0, "")
@@ -124,13 +137,25 @@ func Sync(ctx context.Context, db *sql.DB, client *http.Client, baseURL string, 
 		}
 		// #1459: postal codes are best-effort — not every country has a
 		// GeoNames postal-code dump, and a failure here must not undo the
-		// place import that just succeeded.
+		// place import that just succeeded. -1 (rather than 0) records that
+		// an import was attempted and found nothing, so Sync doesn't keep
+		// retrying a country with no dump on every future run (#1476).
 		pn, pErr := importPostcodes(ctx, db, client, ZipBaseURL(baseURL), c)
 		if pErr != nil {
 			log.Printf("places: postcode import %s: %v (place import still ok)", c, pErr)
+			pn = -1
 		}
 		log.Printf("places: imported %s: %d places, %d postcodes", c, n, pn)
 		setStatus(db, c, "ok", n, pn, "")
+	}
+	for _, c := range postcodesOnly {
+		pn, pErr := importPostcodes(ctx, db, client, ZipBaseURL(baseURL), c)
+		if pErr != nil {
+			log.Printf("places: postcode import %s: %v", c, pErr)
+			pn = -1
+		}
+		log.Printf("places: imported %s: %d postcodes (places already ok, unchanged)", c, pn)
+		db.Exec("UPDATE places_import SET postcode_count = ? WHERE country = ?", pn, c)
 	}
 }
 
@@ -320,10 +345,26 @@ func load(db *sql.DB, country string, r io.Reader, admin1 map[string]string) (in
 	return count, tx.Commit()
 }
 
+// companyPostcodeRe matches GeoNames postal-code dump names that are a
+// company's own dedicated code (Großkundenpostleitzahl, e.g. "TeamBank AG")
+// rather than a settlement, by legal-form suffix (#1476). Word-bounded so it
+// doesn't misfire on a place name that merely contains these letters (e.g.
+// "Hagen" has no standalone "AG").
+var companyPostcodeRe = regexp.MustCompile(`(?i)\b(AG|SE|KG|mbH|GmbH|Bank|Versand|Holding|Werke|Gruppe)\b`)
+
 // loadPostcodes replaces country's rows in postcodes with the GeoNames
 // postal-code dump in r (#1459): tab-separated, 12 columns — country code,
 // postal code, place name, admin name1, admin code1, admin name2, admin
 // code2, admin name3, admin code3, latitude, longitude, accuracy.
+//
+// Some rows are a company's own dedicated postcode rather than a settlement
+// (#1476) — GeoNames' DE dump mixes them in, e.g. "72105 TeamBank AG" next
+// to "72108 Rottenburg am Neckar". A row is kept when its name also appears
+// as a populated place already imported for this country (the common case —
+// the place import normally runs first), or otherwise when it doesn't look
+// like a company name: an unmatched name is more likely a small village
+// missing from the place dump than something worth losing, so only an
+// explicit company-suffix match is dropped.
 func loadPostcodes(db *sql.DB, country string, r io.Reader) (int, error) {
 	tx, err := db.Begin()
 	if err != nil {
@@ -333,6 +374,18 @@ func loadPostcodes(db *sql.DB, country string, r io.Reader) (int, error) {
 	if _, err := tx.Exec("DELETE FROM postcodes WHERE country = ?", country); err != nil {
 		return 0, err
 	}
+
+	placeNames := map[string]bool{}
+	if rows, err := tx.Query("SELECT DISTINCT name FROM places WHERE country = ?", country); err == nil {
+		for rows.Next() {
+			var n string
+			if rows.Scan(&n) == nil {
+				placeNames[Normalize(n)] = true
+			}
+		}
+		rows.Close()
+	}
+
 	stmt, err := tx.Prepare(`INSERT OR IGNORE INTO postcodes (country, code, name, admin1, lat, lng) VALUES (?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return 0, err
@@ -355,6 +408,9 @@ func loadPostcodes(db *sql.DB, country string, r io.Reader) (int, error) {
 		code := strings.ToUpper(strings.TrimSpace(f[1]))
 		name := strings.TrimSpace(f[2])
 		if code == "" || name == "" {
+			continue
+		}
+		if !placeNames[Normalize(name)] && companyPostcodeRe.MatchString(name) {
 			continue
 		}
 		if _, err := stmt.Exec(country, code, name, strings.TrimSpace(f[3]), lat, lng); err != nil {

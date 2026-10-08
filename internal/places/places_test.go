@@ -287,9 +287,12 @@ func TestSyncAndSearchPostcodes(t *testing.T) {
 	}
 }
 
-// TestSyncPostcodeImportFailureDoesNotFailPlaceImport covers #1459: a
+// TestSyncPostcodeImportFailureDoesNotFailPlaceImport covers #1459/#1476: a
 // country with no GeoNames postal-code dump (or a failed download for one)
-// still gets a successful place import — postcode_count just stays 0.
+// still gets a successful place import — postcode_count becomes -1 ("tried,
+// nothing found"), distinct from 0 ("never attempted"), so a later
+// non-forced Sync doesn't keep retrying a country that genuinely has no
+// postal-code dump.
 func TestSyncPostcodeImportFailureDoesNotFailPlaceImport(t *testing.T) {
 	db := setupDB(t)
 	dir := t.TempDir()
@@ -299,10 +302,94 @@ func TestSyncPostcodeImportFailureDoesNotFailPlaceImport(t *testing.T) {
 
 	Sync(context.Background(), db, http.DefaultClient, base, []string{"DE"}, false)
 	st, err := Statuses(db)
-	if err != nil || len(st) != 1 || st[0].Status != "ok" || st[0].PlaceCount != 6 || st[0].PostcodeCount != 0 {
+	if err != nil || len(st) != 1 || st[0].Status != "ok" || st[0].PlaceCount != 6 || st[0].PostcodeCount != -1 {
 		t.Fatalf("status = %+v, %v", st, err)
 	}
 	if res, _ := Search(db, []string{"DE"}, "hamb", 8); len(res) == 0 {
 		t.Fatal("place search must still work when postcode import failed")
+	}
+
+	// A later non-forced sync must not retry the postcode import: still no
+	// dump available, but the attempt already happened.
+	Sync(context.Background(), db, http.DefaultClient, base, []string{"DE"}, false)
+	st, _ = Statuses(db)
+	if len(st) != 1 || st[0].PostcodeCount != -1 {
+		t.Fatalf("status after second non-forced sync = %+v, want PostcodeCount still -1", st)
+	}
+}
+
+// TestSyncImportsPostcodesForPreExistingCountry covers #1476: a country
+// imported before #1459 existed — places_import.status already "ok", but
+// without the postcode_count column or the postcodes table at all — gets
+// its postcodes imported by a later, non-forced Sync, without redownloading
+// or reimporting its places (no place dump is made available here at all).
+func TestSyncImportsPostcodesForPreExistingCountry(t *testing.T) {
+	db := setupDB(t)
+	// The pre-#1459 schema: places_import existed, but with no
+	// postcode_count column, and no postcodes table.
+	if _, err := db.Exec(`CREATE TABLE places_import (
+		country     TEXT    PRIMARY KEY,
+		status      TEXT    NOT NULL DEFAULT '',
+		place_count INTEGER NOT NULL DEFAULT 0,
+		imported_at INTEGER NOT NULL DEFAULT 0,
+		error       TEXT    NOT NULL DEFAULT ''
+	)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO places_import (country, status, place_count, imported_at) VALUES ('DE', 'ok', 6, 1)`); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := EnsureSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('places_import') WHERE name='postcode_count'").Scan(&n)
+	if n == 0 {
+		t.Fatal("EnsureSchema did not add the postcode_count column")
+	}
+	db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='postcodes'").Scan(&n)
+	if n == 0 {
+		t.Fatal("EnsureSchema did not create the postcodes table")
+	}
+
+	dir := t.TempDir()
+	writePostcodeDump(t, dir, postcodeFixture) // no place dump at all
+	base := "file://" + dir + "/"
+
+	Sync(context.Background(), db, http.DefaultClient, base, []string{"DE"}, false)
+
+	st, err := Statuses(db)
+	if err != nil || len(st) != 1 || st[0].Status != "ok" || st[0].PlaceCount != 6 || st[0].PostcodeCount != 3 {
+		t.Fatalf("status after postcode-only sync = %+v, %v", st, err)
+	}
+	if res, _ := SearchPostcodes(db, []string{"DE"}, "721", 8); len(res) != 2 {
+		t.Errorf("postcodes should now be searchable, got %v", res)
+	}
+}
+
+// TestLoadPostcodesFiltersCompanyPostcodes covers #1476: GeoNames' DE postal
+// code dump mixes in Großkundenpostleitzahlen — postcodes dedicated to one
+// company, e.g. "72105 TeamBank AG" — that aren't real settlements and
+// shouldn't be suggested as a place.
+func TestLoadPostcodesFiltersCompanyPostcodes(t *testing.T) {
+	db := setupDB(t)
+	if err := EnsureSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	withCompany := append(append([]string{}, postcodeFixture...),
+		"DE\t72105\tTeamBank AG\tBaden-Württemberg\t08\tTübingen\t084\tTübingen\t08416\t49.0\t9.0\t4")
+	n, err := loadPostcodes(db, "DE", strings.NewReader(strings.Join(withCompany, "\n")+"\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != len(postcodeFixture) {
+		t.Fatalf("loadPostcodes count = %d, want %d (company row dropped)", n, len(postcodeFixture))
+	}
+	if res, _ := SearchPostcodes(db, []string{"DE"}, "72105", 8); len(res) != 0 {
+		t.Errorf("company postcode should be filtered out, got %v", res)
+	}
+	if res, _ := SearchPostcodes(db, []string{"DE"}, "72108", 8); len(res) == 0 {
+		t.Errorf("genuine postcode must still be imported")
 	}
 }

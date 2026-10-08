@@ -350,13 +350,17 @@ CREATE TABLE IF NOT EXISTS org_slug_redirects (
 		db.Exec(places.Schema)
 		db.Exec("INSERT OR IGNORE INTO schema_migrations VALUES (7)")
 	}
-	// Safety net: ensure the tables exist even if v7 was pre-marked.
-	{
-		var n int
-		db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='places'").Scan(&n)
-		if n == 0 {
-			db.Exec(places.Schema)
-		}
+	// Safety net (#1476): places.EnsureSchema is idempotent, and — unlike the
+	// plain CREATE TABLE IF NOT EXISTS above — also adds the postcode_count
+	// column (#1459) on a web.db where the places_import table already
+	// existed before that column joined the schema. dansal-web previously
+	// never called this on its own (only dansal-webmin did, from the
+	// site-config page or an import), so a fresh deploy's web.db had no
+	// postcodes table/column until an admin happened to open or save that
+	// page — postcode search failed with "no such table: postcodes" until
+	// then. Runs on every startup, independent of webmin.
+	if err := places.EnsureSchema(db); err != nil {
+		log.Printf("places: ensure schema: %v", err)
 	}
 
 	return db

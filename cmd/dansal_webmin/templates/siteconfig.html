@@ -212,7 +212,7 @@
       <td>{{.Country}}</td>
       <td>{{.Status}}{{with .Error}} <span class="hint" style="color:var(--danger,#c0392b)">— {{.}}</span>{{end}}</td>
       <td>{{if .PlaceCount}}{{.PlaceCount}}{{end}}</td>
-      <td>{{if .PostcodeCount}}{{.PostcodeCount}}{{else}}<span class="hint">none</span>{{end}}</td>
+      <td>{{if gt .PostcodeCount 0}}{{.PostcodeCount}}{{else}}<span class="hint">none</span>{{end}}</td>
       <td>{{if not .ImportedAt.IsZero}}{{.ImportedAt.Format "2006-01-02 15:04"}}{{end}}</td>
     </tr>
     {{end}}

@@ -484,7 +484,10 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		setSiteSetting(db, "holiday_country", strings.ToUpper(strings.TrimSpace(r.FormValue("holiday_country"))))
 		// #1429: the city type-ahead's countries. Every save syncs the place
 		// table in the background — a no-op unless a country was added
-		// (download + import) or removed (rows deleted).
+		// (download + import), removed (rows deleted), or has never had its
+		// postcodes imported (#1476: a country whose place import predates
+		// #1459 gets its postcodes backfilled here too, without a full
+		// place reimport).
 		placeCountries := places.ParseCountries(r.FormValue("place_countries"))
 		setSiteSetting(db, "place_countries", strings.Join(placeCountries, ","))
 		startPlaceSync(cfg, db, placeCountries, false)

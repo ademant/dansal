@@ -29,10 +29,13 @@ import (
 // and the place table has nothing — its usage policy forbids autocomplete,
 // and it doesn't match partial words anyway.
 
-// geocodeCacheTTL is how long a cached Nominatim result is served without
-// re-fetching. City coordinates are effectively static, so this is generous;
-// it's measured from first insert, not refreshed on reads (see setGeocodeCache).
-const geocodeCacheTTL = 90 * 24 * time.Hour
+// cfg.dataRetentionDuration() (#1440, default 90 days) is how long a cached
+// Nominatim result is served without re-fetching. City coordinates are
+// effectively static, so this is generous; it's measured from first insert,
+// not refreshed on reads (see setGeocodeCache). The same duration is the
+// row's actual retention horizon: startDataRetentionSweep (db.go) deletes
+// rows once they're this stale, instead of just skipping them at read time
+// and leaving them in the table forever.
 
 // geocodeMinQueryLen mirrors the frontend's own debounce/min-length gate —
 // enforced again here since the endpoint is reachable directly.
@@ -124,7 +127,7 @@ func geocodeHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		}
 
 		cacheKey := strings.ToLower(q)
-		if cached, ok := getGeocodeCache(db, cacheKey, geocodeCacheTTL); ok {
+		if cached, ok := getGeocodeCache(db, cacheKey, cfg.dataRetentionDuration()); ok {
 			w.Write([]byte(cached))
 			return
 		}

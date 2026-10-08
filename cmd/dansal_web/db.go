@@ -849,8 +849,35 @@ func getGeocodeCache(db *sql.DB, query string, maxAge time.Duration) (string, bo
 	return resultsJSON, true
 }
 
+// startDataRetentionSweep (#1440, compliance gap G3) deletes geocode_cache
+// rows (visitor search query text) once they're older than
+// cfg.dataRetentionDuration() — previously that duration only gated reads
+// (getGeocodeCache), so a row that was never looked up again stayed in the
+// table forever. Hourly, mirroring cmd/dansal's own startTokenCleanup.
+func startDataRetentionSweep(cfg *Config, db *sql.DB) {
+	go func() {
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			sweepGeocodeCache(cfg, db)
+		}
+	}()
+}
+
+// sweepGeocodeCache deletes geocode_cache rows older than
+// cfg.dataRetentionDuration(), factored out of startDataRetentionSweep's
+// ticker loop so it can be called directly in tests.
+func sweepGeocodeCache(cfg *Config, db *sql.DB) {
+	cutoff := time.Now().Add(-cfg.dataRetentionDuration()).Unix()
+	if res, err := db.Exec("DELETE FROM geocode_cache WHERE fetched_at < ?", cutoff); err != nil {
+		log.Printf("data retention sweep: geocode_cache: %v", err)
+	} else if n, _ := res.RowsAffected(); n > 0 {
+		log.Printf("data retention sweep: removed %d expired geocode_cache row(s)", n)
+	}
+}
+
 // setGeocodeCache stores (or refreshes) a Nominatim lookup result, resetting
-// fetched_at so the 90-day TTL restarts from this fetch.
+// fetched_at so the retention-day TTL restarts from this fetch.
 func setGeocodeCache(db *sql.DB, query, resultsJSON string) error {
 	_, err := db.Exec(
 		"INSERT INTO geocode_cache(query, results_json, fetched_at) VALUES(?,?,?) ON CONFLICT(query) DO UPDATE SET results_json=excluded.results_json, fetched_at=excluded.fetched_at",

@@ -56,20 +56,28 @@ func retryFailedDeliveries(cfg *Config, db *sql.DB) {
 		return
 	}
 	for _, f := range failures {
-		actor, err := getActorByOrgID(db, f.OrgID)
-		if err != nil {
-			log.Printf("delivery retry: get actor org %d: %v", f.OrgID, err)
-			continue
+		actor, actorErr := getActorByOrgID(db, f.OrgID)
+		var postErr error
+		if actorErr != nil {
+			// #1440 (G3): an org whose actor row is gone (e.g. the org itself
+			// was deleted — delivery_failures has no FK/cascade to actors)
+			// must still count toward give-up like any other failure;
+			// `continue`ing here left such a row's attempts/next_attempt_at
+			// frozen forever, so it was never swept.
+			log.Printf("delivery retry: get actor org %d: %v", f.OrgID, actorErr)
+			postErr = actorErr
+		} else {
+			keyID := actorKeyID(cfg, actor.OrgSlug)
+			postErr = postToInbox(context.Background(), f.InboxURL, keyID, actor.PrivateKeyPEM, []byte(f.ActivityJSON))
 		}
-		keyID := actorKeyID(cfg, actor.OrgSlug)
-		if err := postToInbox(context.Background(), f.InboxURL, keyID, actor.PrivateKeyPEM, []byte(f.ActivityJSON)); err != nil {
+		if postErr != nil {
 			newAttempts := f.Attempts + 1
 			if newAttempts > maxDeliveryAttempts {
-				log.Printf("delivery retry: giving up on %s after %d attempts: %v", f.InboxURL, f.Attempts, err)
+				log.Printf("delivery retry: giving up on %s after %d attempts: %v", f.InboxURL, f.Attempts, postErr)
 				deleteDeliveryFailure(db, f.ActivityID, f.OrgID, f.InboxURL)
 			} else {
 				nextAttempt := time.Now().Unix() + deliveryBackoff(newAttempts)
-				if dbErr := updateDeliveryFailure(db, f.ActivityID, f.OrgID, f.InboxURL, err.Error(), newAttempts, nextAttempt); dbErr != nil {
+				if dbErr := updateDeliveryFailure(db, f.ActivityID, f.OrgID, f.InboxURL, postErr.Error(), newAttempts, nextAttempt); dbErr != nil {
 					log.Printf("delivery retry: update record: %v", dbErr)
 				}
 			}

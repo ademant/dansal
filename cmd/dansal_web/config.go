@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v2"
 )
@@ -182,6 +183,23 @@ type Config struct {
 	GoogleSiteVerification string `yaml:"google_site_verification"`
 	// BingSiteVerification, if set, is rendered as a meta verification tag in <head>.
 	BingSiteVerification string `yaml:"bing_site_verification"`
+
+	// DataRetentionDays (#1440, compliance gap G3) is how long geocode_cache
+	// rows (visitor search query text) are kept before the hourly sweep
+	// deletes them — previously only enforced as a read-time staleness check
+	// (getGeocodeCache), so stale rows never actually left the table. Default 90.
+	DataRetentionDays int `yaml:"data_retention_days"`
+}
+
+// dataRetentionDuration is DataRetentionDays as a time.Duration, defaulting
+// to 90 days for a zero-value Config (e.g. hand-built in tests) rather than
+// requiring every caller to repeat the fallback.
+func (c *Config) dataRetentionDuration() time.Duration {
+	days := c.DataRetentionDays
+	if days <= 0 {
+		days = 90
+	}
+	return time.Duration(days) * 24 * time.Hour
 }
 
 var impressumLangs = []string{"de", "br", "ca", "cs", "en", "es", "fr", "it", "nl", "pl", "pt", "uk"}
@@ -246,6 +264,7 @@ func loadConfig() *Config {
 		WriteTimeoutSecs:          30,
 		IdleTimeoutSecs:           60,
 		FetchRunTimeoutSecs:       25,
+		DataRetentionDays:         90,
 	}
 
 	configPath := ""
@@ -356,6 +375,7 @@ func reloadConfig(path string) *Config {
 		WriteTimeoutSecs:          30,
 		IdleTimeoutSecs:           60,
 		FetchRunTimeoutSecs:       25,
+		DataRetentionDays:         90,
 	}
 	if path != "" {
 		data, err := os.ReadFile(path)

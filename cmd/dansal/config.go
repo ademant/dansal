@@ -101,6 +101,16 @@ type ServerConfig struct {
 	// 0 (default) keeps every archive forever, matching pre-#1407 behavior.
 	BackupKeep int `yaml:"backup_keep"`
 
+	// DataRetentionDays (#1440, compliance gap G3) bounds how long personal
+	// data sits in stores the hourly sweep didn't previously touch: confirmed/
+	// approved/checked-in/cancelled bookings (name, email, message), expired
+	// unclaimed contact_requests replies (sender_email, sender_telegram),
+	// pending_fetch_suggestions (email), and timetable_history (changed_by).
+	// Also used as the window for the long-lived booking expiry set at
+	// verify time (see bookingLongExpiry) — the age at which a confirmed
+	// booking becomes eligible for the sweep is the same number. Default 90.
+	DataRetentionDays int `yaml:"data_retention_days"`
+
 	// InviteSigningKeyPath is where the ECDSA P-256 key pair used to sign
 	// invite-link JWTs (see invite_jwt.go) is persisted. Generated on first
 	// use if the file doesn't exist. Defaults next to db_path so it survives
@@ -359,6 +369,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.PasswordKDF == "" {
 		cfg.Server.PasswordKDF = "argon2id"
+	}
+	if cfg.Server.DataRetentionDays == 0 {
+		cfg.Server.DataRetentionDays = 90
 	}
 }
 

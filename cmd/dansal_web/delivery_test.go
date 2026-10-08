@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -11,6 +12,35 @@ import (
 
 func testCfg() *Config {
 	return &Config{Domain: "example.com", RelayActorName: "relay"}
+}
+
+// TestRetryFailedDeliveriesGivesUpOnMissingActor covers #1440 (G3): a
+// delivery_failures row for an org whose actor no longer exists (the table
+// has no FK/cascade to actors, e.g. the org was deleted) must still count
+// toward give-up like a normal post failure. Before the fix, the actor
+// lookup error caused the loop to `continue` without touching attempts or
+// next_attempt_at, so such a row's age never advanced and it was never
+// swept — the gap this test guards against.
+func TestRetryFailedDeliveriesGivesUpOnMissingActor(t *testing.T) {
+	db := initDB(filepath.Join(t.TempDir(), "web.db"))
+	defer db.Close()
+
+	if err := insertDeliveryFailure(db, "act1", 999, "https://example.com/inbox", "{}", "boom", 0); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := testCfg()
+	for i := 0; i < maxDeliveryAttempts; i++ {
+		retryFailedDeliveries(cfg, db)
+		// Force due-ness for the next pass regardless of the backoff just set.
+		db.Exec("UPDATE delivery_failures SET next_attempt_at = 0")
+	}
+
+	var n int
+	db.QueryRow("SELECT COUNT(*) FROM delivery_failures WHERE activity_id='act1'").Scan(&n)
+	if n != 0 {
+		t.Errorf("row should have been swept after %d failed attempts due to a missing actor, got %d row(s) left", maxDeliveryAttempts, n)
+	}
 }
 
 func intPtr(i int) *int { return &i }

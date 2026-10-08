@@ -80,10 +80,10 @@ Status legend: **PRESENT** = deleted/expired by code; **PARTIAL** = some paths o
 | Event contacts | contact_name, contact_email | ABSENT (lives with event) | `main.go:3805-3806` |
 | Suggesters | suggester_email, suggester_name, suggestion_token, pending_edit_json | PARTIAL — cleared on publish only, not for rejected/never-published suggestions | `main.go:3807-3813`, `cmd/dansal/events.go:2914-2946` |
 | Attribution columns | changed_by, changed_by_id, created_by_id | ABSENT (intentionally preserved on user delete) | `cmd/dansal/dbhelpers.go:21-29` |
-| Bookings | name, email, message, lang, verify_token, qr_token, expires_at | PARTIAL — pending swept; confirmed rows get `expires_at = event end + 90 d` but **nothing deletes them after expiry** | `main.go:376` vs `cmd/dansal/bookings.go:157-166,379-384` |
+| Bookings | name, email, message, lang, verify_token, qr_token, expires_at | PRESENT (#1440) — pending and all terminal statuses (confirmed/approved/checked_in/cancelled) swept past `expires_at` = event end + `data_retention_days` | `main.go:376`, `sweepRetentionData` vs `cmd/dansal/bookings.go:bookingLongExpiry` |
 | Contact board posts | nickname, email, telegram_username, poster_telegram_chat_id, message, lat/lon, manage_token, expires_at | PRESENT (sweep `main.go:370`) | `main.go:4142-4162` |
-| Contact board replies | sender_email, sender_telegram, verify_token, expires_at | ABSENT as sweep — only consumed replies deleted | `cmd/dansal/telegram.go:206`, `cmd/dansal/contact_posts.go:1120` |
-| Feed suggestions | email (NOT NULL), org_contact_email | **ABSENT — no DELETE/expiry anywhere** | `main.go:4275-4291` |
+| Contact board replies | sender_email, sender_telegram, verify_token, expires_at | PRESENT (#1440) — consumed replies deleted on verify; expired-unclaimed ones now also swept hourly | `cmd/dansal/telegram.go:206`, `cmd/dansal/contact_posts.go:1120`, `sweepRetentionData` |
+| Feed suggestions | email (NOT NULL), org_contact_email | PRESENT (#1440) — swept once `created_at` passes `data_retention_days`, regardless of status | `sweepRetentionData` |
 | Org / musician / instructor contacts | contact_email, email, members_json, socials, notes_md | ABSENT (admin-managed entities) | `main.go:3997-4015`, `:3915-3942`, `:4106-4119` |
 | Locations free text | address, notes_md | ABSENT (may contain names) | `main.go:3877-3908` |
 | API keys | api_key (SHA-256), signing_secret_enc | PRESENT (CASCADE) | `main.go:3986-3996`, `cmd/dansal/apikeys.go:38-42` |
@@ -94,10 +94,10 @@ Status legend: **PRESENT** = deleted/expired by code; **PARTIAL** = some paths o
 |---|---|---|---|
 | AP actors | RSA keypair (private key encrypted at rest) | ABSENT | `db.go:38-45`, `dbcrypto.go` |
 | Followers / tag followers / outgoing follows | actor_uri, inbox_url | PRESENT only on manual Undo | `db.go:46-73`, `:556`, `:394`, `:711` |
-| Delivery failures | inbox_url + **full activity JSON** | PARTIAL — cleared on success only, **no dead-letter expiry** | `db.go:109-119`, `:1068`, `:1089-1094` |
+| Delivery failures | inbox_url + **full activity JSON** | PRESENT — deleted on success or after `maxDeliveryAttempts` (8); #1440 closed the one gap where an org whose actor was gone stalled the attempt counter forever | `delivery.go:retryFailedDeliveries` |
 | Federated events cache | raw_json, actor_id | PARTIAL (per-item delete) | `db.go:74-88`, `:831` |
-| Geocode cache | **stored search query text** (visitor-derived) | ABSENT — 90 d read TTL only, rows never deleted | `db.go:266-270`, `:757-770` |
-| Timetable history | changed_by + snapshot | ABSENT (unbounded growth) | `main.go:4083-4089` |
+| Geocode cache | **stored search query text** (visitor-derived) | PRESENT (#1440) — swept hourly past `data_retention_days` (default 90), was read-time-TTL-only before | `cmd/dansal_web/db.go:sweepGeocodeCache` |
+| Timetable history | changed_by + snapshot | PRESENT (#1440) — swept past `data_retention_days`, in addition to the existing event-delete CASCADE | `sweepRetentionData` |
 
 ### 2.4 Authentication quality (good by default)
 
@@ -119,17 +119,20 @@ Status legend: **PRESENT** = deleted/expired by code; **PARTIAL** = some paths o
 | verification_tokens, magic_login_tokens | TTL | `main.go:368-369` |
 | contact_posts | `expires_at < now` | `main.go:370` |
 | board sessions | 30 d / 90 d absolute | `board_sessions.go:279-281` |
-| bookings | **`status='pending'` only** | `main.go:376` |
+| bookings (pending) | `status='pending' AND expires_at < now` | `main.go:376` |
+| bookings (confirmed/approved/checked_in/cancelled) | `status != 'pending' AND expires_at < now` (expiry = event end + `data_retention_days`, set at verify time) | `sweepRetentionData`, `bookings.go:bookingLongExpiry` |
+| `pending_fetch_suggestions` | `created_at` older than `data_retention_days` | `sweepRetentionData` |
+| `contact_requests` (expired, unclaimed) | `verify_token IS NOT NULL AND expires_at < now` | `sweepRetentionData` |
+| `timetable_history` | `changed_at` older than `data_retention_days` | `sweepRetentionData` |
+| `geocode_cache` (dansal-web) | `fetched_at` older than `data_retention_days` | `cmd/dansal_web/db.go:sweepGeocodeCache`, hourly via `startDataRetentionSweep` |
+| `delivery_failures` (dansal-web) | deleted on success or after `maxDeliveryAttempts` (8, with backoff); an org whose actor row is gone now also counts toward give-up instead of stalling forever | `cmd/dansal_web/delivery.go:retryFailedDeliveries` |
 | webauthn_sessions, oidc_flows, totp_used_codes, invite_links, pending_registrations | TTL | `main.go:387-388`, `totp.go:75`, `register.go:1025`, `admin.go:794` |
 
-### 3.2 Never swept (retention gaps)
+`data_retention_days` (`server.data_retention_days` in `config.yaml`, same key in `dansal-web`'s `web.yaml`) defaults to 90 and is operator-configurable per instance (#1440).
 
-1. Confirmed/approved/cancelled **bookings** past their own `expires_at` (`bookings.go:379`)
-2. **`pending_fetch_suggestions`** — email NOT NULL, no expiry at all (`main.go:4275`)
-3. Expired-but-unclaimed **`contact_requests`** replies
-4. **`geocode_cache`** rows — visitor query text persists indefinitely (`db.go:266`)
-5. **`delivery_failures`** dead letters (full activity JSON, `db.go:109`)
-6. **`timetable_history`** / `delivered` growth
+### 3.2 Never swept (retention gaps) — closed by #1440
+
+The six gaps below (confirmed bookings, `pending_fetch_suggestions`, expired-unclaimed `contact_requests`, `geocode_cache`, `delivery_failures`, `timetable_history`) are now covered by the sweeps in §3.1. `delivery_failures` turned out to already have a give-up-after-N-attempts dead-letter path from unrelated later work; #1440 only closed its one remaining edge case (an actor-lookup failure no longer stalls the attempt counter).
 
 ### 3.3 Erasure and access
 
@@ -298,7 +301,7 @@ Priorities: **P0** = blocks a credible compliance claim · **P1** = strong hygie
 |---|---|---|---|---|
 | G1 | **No privacy notice content.** Write default `privacy.md`/`terms.md`: controller identity, purposes + legal bases, cookie list (§4.1), transfer register (§5), retention schedule (§3), data-subject rights + contact, moderation/DSR notice. | P0 | Operator | `pages.go:73-90` |
 | G2 | **Privacy/terms not discoverable.** Link both from the footer using existing `nav_privacy`/`nav_terms` i18n keys. Art. 12 requires the notice to be *easily accessible*. | P0 | Code | `templates/base.html:508` |
-| G3 | **Retention sweeps missing** for 6 stores (§3.2): confirmed bookings past `expires_at`, `pending_fetch_suggestions`, expired `contact_requests`, `geocode_cache`, `delivery_failures` dead letters, `timetable_history`. Add to the hourly sweep + document the schedule. | P0 | Code | `main.go:356-401` |
+| G3 | ~~**Retention sweeps missing** for 6 stores (§3.2).~~ **Closed by #1440**: all six now swept (§3.1), horizon configurable via `data_retention_days` (default 90). | P0 | Code | `main.go:356-401`, §3.1 |
 | G4 | **DSA notice-and-action (Art. 16).** Public report endpoint (or `abuse@` contact surfaced on every page) → admin queue, with receipt confirmation. | P0 | Code | — |
 | G5 | **DSA statement of reasons (Art. 17).** Persist reason + ground + redress path when suggestions/replies are rejected; show it to the submitter. | P0 | Code | `main.go:4726,4743` |
 | G6 | **No data export (Art. 15/20).** CLI/API to dump one subject's data (account, sessions, bookings, posts, suggestions) as JSON. | P0 | Code | `export_import.go:139-176` |

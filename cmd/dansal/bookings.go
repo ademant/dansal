@@ -155,13 +155,21 @@ func bookingCheckinWindow(eventID int) (opens, expires time.Time) {
 // deadline for its email verification link; it deliberately says nothing about
 // when the QR code may be scanned — see bookingCheckinExpiry.
 func bookingLongExpiry(eventID int) time.Time {
+	// #1440: this is also the retention horizon the hourly sweep uses to
+	// delete the booking (name/email/message) once it's past — keep both
+	// in sync via config.Server.DataRetentionDays rather than a literal.
+	days := 90
+	if config != nil && config.Server.DataRetentionDays > 0 {
+		days = config.Server.DataRetentionDays
+	}
+	retention := time.Duration(days) * 24 * time.Hour
 	var endTimeStr string
 	if err := db.QueryRow("SELECT end_time FROM events WHERE id=?", eventID).Scan(&endTimeStr); err == nil {
 		if ts, err := strconv.ParseInt(strings.TrimSpace(endTimeStr), 10, 64); err == nil {
-			return time.Unix(ts, 0).UTC().Add(90 * 24 * time.Hour)
+			return time.Unix(ts, 0).UTC().Add(retention)
 		}
 	}
-	return time.Now().UTC().Add(90 * 24 * time.Hour)
+	return time.Now().UTC().Add(retention)
 }
 
 // bookingAuthCheck fetches the event_id for a booking and verifies the caller

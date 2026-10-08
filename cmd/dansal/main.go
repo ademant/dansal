@@ -353,6 +353,38 @@ func middlewareChain(h http.Handler, mws ...func(http.Handler) http.Handler) htt
 	return h
 }
 
+// sweepRetentionData deletes rows past their data_retention_days horizon
+// from stores the hourly sweep never touched before (#1440, compliance gap
+// G3): confirmed/approved/checked_in/cancelled bookings, pending_fetch_suggestions,
+// expired-unclaimed contact_requests, and timetable_history. Factored out of
+// startTokenCleanup's ticker loop so it's directly callable from tests.
+func sweepRetentionData(now int64) {
+	// #1440 (G3): confirmed/approved/checked_in/cancelled bookings keep
+	// name/email/message until bookingLongExpiry's horizon (event end +
+	// data_retention_days, set once at verify time) — unlike the pending
+	// row swept above, nothing ever deleted these once that passed.
+	db.Exec("DELETE FROM bookings WHERE status != 'pending' AND expires_at < ?", now)
+
+	retentionDays := 90
+	if config != nil && config.Server.DataRetentionDays > 0 {
+		retentionDays = config.Server.DataRetentionDays
+	}
+	retentionCutoff := now - int64(retentionDays)*24*60*60
+	// #1440 (G3): a pending_fetch_suggestion (email) never expired at all
+	// before — approve/reject only flip status, the row and its email live
+	// on regardless of outcome.
+	db.Exec("DELETE FROM pending_fetch_suggestions WHERE created_at < datetime(?, 'unixepoch')", retentionCutoff)
+	// #1440 (G3): an unclaimed contact_requests reply (sender_email,
+	// sender_telegram) whose verify link expired was never swept — only a
+	// *verified* one is deleted, by the verify handler itself once it's
+	// forwarded (contact_posts.go).
+	db.Exec("DELETE FROM contact_requests WHERE verify_token IS NOT NULL AND expires_at < ?", now)
+	// #1440 (G3): timetable_history (changed_by + full snapshot) was only
+	// ever cleared via events' ON DELETE CASCADE — a long-lived recurring
+	// event's history grew unbounded.
+	db.Exec("DELETE FROM timetable_history WHERE changed_at < ?", retentionCutoff)
+}
+
 func startTokenCleanup() {
 	go func() {
 		ticker := time.NewTicker(time.Hour)
@@ -374,6 +406,7 @@ func startTokenCleanup() {
 				db.Exec("DELETE FROM tokens WHERE last_seen_at IS NOT NULL AND last_seen_at < ?", idleCutoff)
 			}
 			db.Exec("DELETE FROM bookings WHERE status='pending' AND expires_at < ?", now)
+			sweepRetentionData(now)
 			// Clean up users pre-created by webauthnInviteBegin that were never
 			// completed: their invite session expired, they have no credentials,
 			// and they have no org membership.

@@ -423,6 +423,7 @@ endif
 	    -e "s/\bdansal_web\b/dansal_web_$(INSTANCE)/g" \
 	    -e "s/zone=api_limit/zone=api_limit_$(INSTANCE)/g" \
 	    -e "s/zone=auth_limit/zone=auth_limit_$(INSTANCE)/g" \
+	    -e "s/zone=tiles_limit/zone=tiles_limit_$(INSTANCE)/g" \
 	    -e "s/zone=conn_limit/zone=conn_limit_$(INSTANCE)/g" \
 	    -e "s/limit_conn conn_limit/limit_conn conn_limit_$(INSTANCE)/g" \
 	    -e "s/zone=bot_slow/zone=bot_slow_$(INSTANCE)/g" \

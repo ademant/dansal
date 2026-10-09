@@ -13,13 +13,12 @@ import (
 )
 
 type SuggestPageData struct {
-	HintSMTP       bool // SMTP configured → show email verification hint
-	PreviewEvents  []PreviewEvent
-	PreviewJSON    []string
-	Error          string
-	CaptchaSiteKey string
-	GroupedTags    []TagGroup
-	FormToken      string
+	HintSMTP      bool // SMTP configured → show email verification hint
+	PreviewEvents []PreviewEvent
+	PreviewJSON   []string
+	Error         string
+	GroupedTags   []TagGroup
+	FormToken     string
 	// GeoToken (#1314) gates the public geocode-search proxy — a stateless
 	// HMAC'd timestamp (newFormToken/validGeoToken, formguard.go), distinct
 	// from FormToken above: that one is a one-time token consumed by the
@@ -114,7 +113,6 @@ func suggestPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		}
 		data := SuggestPageData{
 			HintSMTP:          cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
-			CaptchaSiteKey:    cfg.CaptchaSiteKey,
 			FormToken:         tok,
 			GeoToken:          newFormToken(),
 			Dances:            dances,
@@ -234,7 +232,6 @@ func suggestPreviewHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			HintSMTP:          cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
 			CanUploadImageNow: suggestCanUploadImage(r),
 			PreviewEvents:     events,
-			CaptchaSiteKey:    cfg.CaptchaSiteKey,
 			FormToken:         issueFormToken(ip),
 			GeoToken:          newFormToken(),
 			Dances:            dances,
@@ -346,14 +343,6 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			logFormReject(r, "PENDING_SUBMISSION", ip, nil)
 			suggestError(w, r, cfg, tmpls, client, i18n, i18n.T(r, "suggest_error_pending"), ip)
 			return
-		}
-
-		// Captcha check.
-		if cfg.CaptchaSiteKey != "" {
-			if err := verifyTurnstile(cfg, r.FormValue("cf-turnstile-response")); err != nil {
-				suggestError(w, r, cfg, tmpls, client, i18n, i18n.T(r, "suggest_error_captcha"), ip)
-				return
-			}
 		}
 
 		description := r.FormValue("description")

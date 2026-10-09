@@ -112,10 +112,6 @@ type Config struct {
 	SMTPHost     string `yaml:"smtp_host"`
 	SMTPSendmail string `yaml:"smtp_sendmail"`
 
-	// Captcha (Cloudflare Turnstile)
-	CaptchaSiteKey   string `yaml:"captcha_site_key"`
-	CaptchaSecretKey string `yaml:"captcha_secret_key"`
-
 	// Rate limiting for auth endpoints
 	LoginMaxFailures   int `yaml:"login_max_failures"`    // max bad login attempts before block; default 5
 	LoginWindowMins    int `yaml:"login_window_mins"`     // sliding window for login failures; default 10

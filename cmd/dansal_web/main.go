@@ -705,26 +705,26 @@ func main() {
 // (step 1) and, since #1149 converted every onclick=/onchange=/onsubmit=/
 // oninput=/onkeydown=/onfocus=/onload= attribute to the delegated data-fn
 // dispatcher, every remaining external <script src> tag too (Leaflet,
-// flatpickr, Turnstile). script-src therefore drops 'unsafe-inline' in favor
+// flatpickr). script-src therefore drops 'unsafe-inline' in favor
 // of 'nonce-<value>' 'strict-dynamic': a nonce'd script is trusted, and any
 // script IT creates dynamically (e.g. admin_event_form.html's deferred
 // Leaflet loader) inherits that trust automatically, without needing its own
-// nonce or a host allowlist entry. The https://unpkg.com/https://challenges.
-// cloudflare.com host expressions are kept only as a fallback for browsers
-// that understand 'nonce-' (CSP2+) but not 'strict-dynamic' (CSP3) — such
-// browsers ignore 'strict-dynamic' as an unrecognized token and fall back to
-// the nonce plus this host list; CSP3 browsers ignore the host list entirely
-// per 'strict-dynamic' semantics, which is fine since every remaining script
-// tag now carries a nonce. style-src keeps 'unsafe-inline' regardless
-// (inline style= attributes are lower risk and out of scope for #1141) plus
-// https://unpkg.com, which serves Leaflet's CSS. img-src allows https: for
+// nonce or a host allowlist entry. The https://unpkg.com host expression is
+// kept only as a fallback for browsers that understand 'nonce-' (CSP2+) but
+// not 'strict-dynamic' (CSP3) — such browsers ignore 'strict-dynamic' as an
+// unrecognized token and fall back to the nonce plus this host list; CSP3
+// browsers ignore the host list entirely per 'strict-dynamic' semantics,
+// which is fine since every remaining script tag now carries a nonce.
+// style-src keeps 'unsafe-inline' regardless (inline style= attributes are
+// lower risk and out of scope for #1141) plus https://unpkg.com, which
+// serves flatpickr's CSS (embed_calendar.html). img-src allows https: for
 // map tiles (OpenStreetMap/CARTO) and data: for inline SVG/icons.
 func baselineCSP(nonce string) string {
 	return "default-src 'self'; " +
 		"img-src 'self' data: https:; " +
 		"font-src 'self' data:; " +
 		"style-src 'self' 'unsafe-inline' https://unpkg.com; " +
-		"script-src 'self' 'nonce-" + nonce + "' 'strict-dynamic' https://unpkg.com https://challenges.cloudflare.com; " +
+		"script-src 'self' 'nonce-" + nonce + "' 'strict-dynamic' https://unpkg.com; " +
 		// #1313: Nominatim/MusicBrainz/Discogs/Wikidata are no longer called
 		// from the browser — all four are proxied server-side now (geocode.go,
 		// enrichment_proxy.go), so the browser only ever needs 'self' here.

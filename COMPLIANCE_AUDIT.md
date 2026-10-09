@@ -267,10 +267,10 @@ suggestions + the contact board, an **online platform**.
 | Item | Status | Evidence |
 |---|---|---|
 | Identifying User-Agent | ✅ | `cmd/dansal/fetchurl.go:127-129` |
-| **robots.txt / Crawl-delay compliance** | ❌ | No robots fetch/parse anywhere in the importer |
-| Per-source ToS / licence / permission record | ❌ | `fetch_sources` schema has no such columns (`main.go:3952-3964`) |
+| **robots.txt / Crawl-delay compliance** | ✅ Closed by #1484 | `cmd/dansal/robotstxt_import.go`, checked in `importFromSource` (the recurring fetch-all path only — a one-off admin recheck or suggest-a-feed preview is not "crawling") |
+| Per-source ToS / licence / permission record | ✅ Closed by #1483 | `fetch_sources.licence/attribution/terms_url/opt_out` |
 | Original event URL shown publicly | ✅ | `templates/event.html:654-656` |
-| Feed-source attribution shown publicly | ❌ | Rendered only for logged-in admins (`event.html:697-703`, inside `{{if $.User}}`); no `isBasedOn`/`via` in JSON-LD or AP output |
+| Feed-source attribution shown publicly | ✅ Closed by #1485 | New public block in `event.html` (separate from the admin-only edit-link block) + `creditText`/`isBasedOn` in JSON-LD |
 | Third-party HTML sanitisation | ⚠️ | No bluemonday; goldmark defaults + regex scheme filter (`cmd/dansal_web/templatefuncs_misc.go:29-52`); RSS descriptions stored raw (`cmd/dansal/fetchurl_rss.go:194,255`) |
 | OSM map attribution | ✅ | `static/base.js:212-224` (project rule: `attachTileLayer`, see AGENTS.md) |
 | Rate/politeness on fetches | ✅ (basic) | Hourly timer + backoff/Retry-After (`fetchurl.go:162`, `systemd/dansal-fetch.timer`) |
@@ -319,7 +319,7 @@ Priorities: **P0** = blocks a credible compliance claim · **P1** = strong hygie
 | G6 | ~~**No data export (Art. 15/20).** CLI/API to dump one subject's data (account, sessions, bookings, posts, suggestions) as JSON.~~ **Closed by #1479** (registered users) **and #1480** (anonymous visitors, manual). | P0 | Code | §3.3 |
 | G7 | ~~**Log retention undefined.** Ship a logrotate stanza + journald `SystemMaxUse`; reduce routine email/IP logging where fail2ban doesn't need it; document the retention period in the notice.~~ **Closed by #1481** (retention + PII trims) **and #1482** (fail2ban multi-instance fix found while scoping this). Retention period (30 days) still needs folding into the operator's privacy notice (G1). | P0 | Code+Ops | §3.5 |
 | G8 | **No breach runbook.** Document the 72h Art. 33 workflow: detection → assessment → authority notification → data-subject notification → record. | P1 | Operator | — |
-| G9 | **Feed robots.txt compliance + per-source licence/attribution fields**; show a public "imported from" credit on event pages; surface opt-out requests from publishers. | P1 | Code | `fetchurl.go:127`, `main.go:3952`, `event.html:697` |
+| G9 | ~~**Feed robots.txt compliance + per-source licence/attribution fields**; show a public "imported from" credit on event pages; surface opt-out requests from publishers.~~ **Closed by #1483/#1484/#1485.** | P1 | Code | §7 |
 | G10 | **No vetted HTML sanitizer** for imported descriptions (bluemonday); RSS bodies stored raw. | P1 | Code | `fetchurl_rss.go:194` |
 | G11 | **Third-party JS**: self-host flatpickr on embeds and qrcode in webmin (add SRI at minimum); disclose Turnstile in the notice or replace with an EU-hosted captcha. | P1 | Code | `embed_calendar.html:7`, `users.html:59` |
 | G12 | **Federation privacy**: consider `authorized_fetch: true` by default (follower lists are currently unauthenticated-readable); define follower-data retention/erasure; add an abuse contact for AP peers. | P1 | Code | `config.go:50-54` |

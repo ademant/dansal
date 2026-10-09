@@ -43,6 +43,65 @@ func TestRetryFailedDeliveriesGivesUpOnMissingActor(t *testing.T) {
 	}
 }
 
+// TestRetryFailedDeliveriesRemovesFollowerAfterMaxFailures covers #1490
+// (compliance G12): a follower whose inbox keeps exhausting
+// maxDeliveryAttempts should eventually be removed instead of being retained
+// (and retried) forever, while an unrelated follower of the same org that
+// never fails must be left alone.
+func TestRetryFailedDeliveriesRemovesFollowerAfterMaxFailures(t *testing.T) {
+	db := initDB(filepath.Join(t.TempDir(), "web.db"))
+	defer db.Close()
+
+	const orgID = 7
+	deadInbox := "https://dead.example.com/inbox"
+	aliveInbox := "https://alive.example.com/inbox"
+	if err := addFollower(db, orgID, "https://dead.example.com/actor", deadInbox); err != nil {
+		t.Fatal(err)
+	}
+	if err := addFollower(db, orgID, "https://alive.example.com/actor", aliveInbox); err != nil {
+		t.Fatal(err)
+	}
+	if err := insertDeliveryFailure(db, "act1", orgID, deadInbox, "{}", "boom", 0); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := testCfg()
+	cfg.FollowerMaxFailures = 2
+
+	// First give-up cycle: should bump fail_count to 1, follower stays.
+	for i := 0; i < maxDeliveryAttempts; i++ {
+		retryFailedDeliveries(cfg, db)
+		db.Exec("UPDATE delivery_failures SET next_attempt_at = 0")
+	}
+	var failCount int
+	if err := db.QueryRow("SELECT fail_count FROM followers WHERE inbox_url = ?", deadInbox).Scan(&failCount); err != nil {
+		t.Fatalf("follower should still exist after 1 give-up: %v", err)
+	}
+	if failCount != 1 {
+		t.Errorf("fail_count after 1 give-up = %d, want 1", failCount)
+	}
+
+	// Second give-up cycle (same dead inbox, new activity): should remove the follower.
+	if err := insertDeliveryFailure(db, "act2", orgID, deadInbox, "{}", "boom", 0); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < maxDeliveryAttempts; i++ {
+		retryFailedDeliveries(cfg, db)
+		db.Exec("UPDATE delivery_failures SET next_attempt_at = 0")
+	}
+	var n int
+	db.QueryRow("SELECT COUNT(*) FROM followers WHERE inbox_url = ?", deadInbox).Scan(&n)
+	if n != 0 {
+		t.Errorf("follower should have been removed after %d give-ups, got %d row(s) left", cfg.FollowerMaxFailures, n)
+	}
+
+	// The never-failing follower must be untouched.
+	db.QueryRow("SELECT COUNT(*) FROM followers WHERE inbox_url = ?", aliveInbox).Scan(&n)
+	if n != 1 {
+		t.Errorf("unrelated follower %s should not have been touched, got %d row(s)", aliveInbox, n)
+	}
+}
+
 func intPtr(i int) *int { return &i }
 
 func testEvent() Event {

@@ -54,7 +54,12 @@ type Config struct {
 	// bootstrap a follow before they can sign anything. Default: true
 	// (compliance G12, #1489) — set explicitly to false in web.yaml to
 	// restore open (unauthenticated) fetches.
-	AuthorizedFetch     bool     `yaml:"authorized_fetch"`
+	AuthorizedFetch bool `yaml:"authorized_fetch"`
+	// FollowerMaxFailures (#1490, compliance G12): number of consecutive
+	// delivery give-up cycles (retryFailedDeliveries exhausting
+	// maxDeliveryAttempts for a follower's inbox) before that follower is
+	// removed. Default 3. A successful delivery resets the counter.
+	FollowerMaxFailures int      `yaml:"follower_max_failures"`
 	RelayActorName      string   `yaml:"relay_actor_name"`
 	RelayAlsoKnownAs    []string `yaml:"relay_also_known_as"`
 	ShowFederatedEvents bool     `yaml:"show_federated_events"`
@@ -264,6 +269,7 @@ func loadConfig() *Config {
 		FetchRunTimeoutSecs:       25,
 		DataRetentionDays:         90,
 		AuthorizedFetch:           true,
+		FollowerMaxFailures:       3,
 	}
 
 	configPath := ""
@@ -376,6 +382,7 @@ func reloadConfig(path string) *Config {
 		FetchRunTimeoutSecs:       25,
 		DataRetentionDays:         90,
 		AuthorizedFetch:           true,
+		FollowerMaxFailures:       3,
 	}
 	if path != "" {
 		data, err := os.ReadFile(path)

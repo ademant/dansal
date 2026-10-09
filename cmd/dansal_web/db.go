@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS followers (
     org_id INTEGER NOT NULL,
     actor_uri TEXT NOT NULL,
     inbox_url TEXT NOT NULL,
+    fail_count INTEGER NOT NULL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(org_id, actor_uri)
 );
@@ -363,6 +364,24 @@ CREATE TABLE IF NOT EXISTS org_slug_redirects (
 		log.Printf("places: ensure schema: %v", err)
 	}
 
+	// Migration v8 (#1490, compliance G12): followers.fail_count — counts
+	// consecutive times a follower's inbox exhausted all delivery retries
+	// (maxDeliveryAttempts in delivery.go), so retryFailedDeliveries can
+	// remove followers whose inbox has been dead for cfg.FollowerMaxFailures
+	// give-up cycles instead of retaining their actor_uri/inbox_url forever.
+	if !migrationApplied(db, 8) {
+		db.Exec("ALTER TABLE followers ADD COLUMN fail_count INTEGER NOT NULL DEFAULT 0")
+		db.Exec("INSERT OR IGNORE INTO schema_migrations VALUES (8)")
+	}
+	// Safety net: ensure the column exists even if v8 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('followers') WHERE name='fail_count'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE followers ADD COLUMN fail_count INTEGER NOT NULL DEFAULT 0")
+		}
+	}
+
 	return db
 }
 
@@ -654,6 +673,41 @@ func countFollowers(db *sql.DB, orgID int) (int, error) {
 	var n int
 	err := db.QueryRow("SELECT COUNT(*) FROM followers WHERE org_id = ?", orgID).Scan(&n)
 	return n, err
+}
+
+// bumpFollowerFailCount (#1490, compliance G12) records one more give-up
+// cycle (retryFailedDeliveries exhausting maxDeliveryAttempts) for a
+// follower's inbox, and removes the follower once fail_count reaches
+// maxFailures — a remote actor whose inbox has been dead for that many
+// give-up cycles stops being retained. Returns whether the follower was
+// removed.
+func bumpFollowerFailCount(db *sql.DB, orgID int, inboxURL string, maxFailures int) (removed bool, err error) {
+	res, err := db.Exec(
+		"UPDATE followers SET fail_count = fail_count + 1 WHERE org_id = ? AND inbox_url = ? AND fail_count + 1 < ?",
+		orgID, inboxURL, maxFailures,
+	)
+	if err != nil {
+		return false, err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		return false, nil
+	}
+	// Either already at/past the threshold, or no matching row at all —
+	// the DELETE is a no-op in the latter case.
+	res, err = db.Exec("DELETE FROM followers WHERE org_id = ? AND inbox_url = ?", orgID, inboxURL)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
+// resetFollowerFailCount clears fail_count after a successful delivery —
+// a transient outage shouldn't accumulate toward removal across unrelated
+// incidents.
+func resetFollowerFailCount(db *sql.DB, orgID int, inboxURL string) error {
+	_, err := db.Exec("UPDATE followers SET fail_count = 0 WHERE org_id = ? AND inbox_url = ? AND fail_count != 0", orgID, inboxURL)
+	return err
 }
 
 func listFollowers(db *sql.DB, orgID int) ([]struct{ ActorURI, InboxURL string }, error) {

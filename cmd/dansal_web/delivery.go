@@ -75,6 +75,16 @@ func retryFailedDeliveries(cfg *Config, db *sql.DB) {
 			if newAttempts > maxDeliveryAttempts {
 				log.Printf("delivery retry: giving up on %s after %d attempts: %v", f.InboxURL, f.Attempts, postErr)
 				deleteDeliveryFailure(db, f.ActivityID, f.OrgID, f.InboxURL)
+				// #1490 (G12): a give-up here means this inbox has failed
+				// maxDeliveryAttempts times in a row; count it toward
+				// removing the follower rather than retaining a dead
+				// actor_uri/inbox_url indefinitely.
+				removed, bumpErr := bumpFollowerFailCount(db, f.OrgID, f.InboxURL, cfg.FollowerMaxFailures)
+				if bumpErr != nil {
+					log.Printf("delivery retry: bump follower fail count for %s: %v", f.InboxURL, bumpErr)
+				} else if removed {
+					log.Printf("delivery retry: removed follower %s after %d give-ups", f.InboxURL, cfg.FollowerMaxFailures)
+				}
 			} else {
 				nextAttempt := time.Now().Unix() + deliveryBackoff(newAttempts)
 				if dbErr := updateDeliveryFailure(db, f.ActivityID, f.OrgID, f.InboxURL, postErr.Error(), newAttempts, nextAttempt); dbErr != nil {
@@ -84,6 +94,12 @@ func retryFailedDeliveries(cfg *Config, db *sql.DB) {
 		} else {
 			log.Printf("delivery retry: succeeded to %s (activity %s)", f.InboxURL, f.ActivityID)
 			deleteDeliveryFailure(db, f.ActivityID, f.OrgID, f.InboxURL)
+			// #1490 (G12): a successful retry means this inbox is alive
+			// again — don't let fail_count accumulate across unrelated
+			// outages toward removal.
+			if err := resetFollowerFailCount(db, f.OrgID, f.InboxURL); err != nil {
+				log.Printf("delivery retry: reset follower fail count for %s: %v", f.InboxURL, err)
+			}
 		}
 	}
 }
@@ -197,6 +213,9 @@ func deliverActivityToFollowers(cfg *Config, db *sql.DB, actor *ActorRecord, act
 			}
 		} else {
 			deleteDeliveryFailure(db, activity.ID, actor.OrgID, f.InboxURL)
+			if dbErr := resetFollowerFailCount(db, actor.OrgID, f.InboxURL); dbErr != nil {
+				log.Printf("delivery: reset follower fail count for %s: %v", f.InboxURL, dbErr)
+			}
 		}
 	}
 	return nil

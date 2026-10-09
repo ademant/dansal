@@ -885,6 +885,18 @@ func importFromSource(ctx context.Context, src FetchSource) ([]Event, ImportCoun
 	if u, err := url.Parse(src.URL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return nil, ImportCounts{}, fmt.Errorf("fetch URL must use http or https: %q", src.URL)
 	}
+	// robots.txt + Crawl-delay (#1484, compliance G9 phase-66): this is the
+	// one dispatch point every recurring (fetch-all) import goes through,
+	// deliberately not fetchFeedBody itself — see checkRobots' doc comment
+	// for why recheck_source.go and the suggest-a-feed preview must stay
+	// exempt. Sources run concurrently (adminFetchAll, #1249), so two
+	// sources sharing a host can both pass the Crawl-delay check in the same
+	// run before either records its attempt; that's an accepted minor gap,
+	// not a correctness issue — delay spacing still holds across runs.
+	if allowed, reason := checkRobots(ctx, src.URL); !allowed {
+		return nil, ImportCounts{}, fmt.Errorf("%s", reason)
+	}
+	noteRobotsFetchAttempt(src.URL)
 	switch src.Type {
 	case "json":
 		return importFromJSONSource(ctx, src)

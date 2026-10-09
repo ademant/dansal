@@ -383,6 +383,18 @@ var pageTemplate = template.Must(template.New("page").Parse(`<!doctype html>
     article pre code { padding:0; background:transparent; }
     article table { border-collapse:collapse; width:100%; overflow:auto; display:block; }
     article th, article td { border:1px solid var(--line); padding:8px 10px; }
+    /* Mermaid diagrams (#1488) are pre-rendered to SVG at authoring time
+       (scripts/render-mermaid-diagrams.py), not in cmd/dansal_doc -- the
+       raw fenced mermaid code block stays in the markdown source for
+       editing (and for GitHub's own file view to render) but is hidden
+       here since the rendered image sits right after it. :has() has
+       broad modern browser support; a browser without it just shows the
+       raw source too, which is a harmless fallback, not a broken page.
+       The images render on a fixed light background (mermaid's default
+       theme assumes one), so they get their own card rather than sitting
+       flush against a dark page background. */
+    article pre:has(code.language-mermaid) { display:none; }
+    article img[src*="mermaid-"] { background:#fff; padding:12px; border-radius:6px; border:1px solid var(--line); }
     footer { max-width:1160px; margin:0 auto; padding:18px 24px 34px; color:var(--muted); border-top:1px solid var(--line); font-size:.9rem; }
     @media (max-width: 760px) {
       .top { padding:14px 18px; align-items:flex-start; flex-direction:column; gap:4px; }

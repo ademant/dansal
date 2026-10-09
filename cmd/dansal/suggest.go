@@ -248,6 +248,12 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "links are not allowed in title or description", http.StatusBadRequest)
 		return
 	}
+	// #1447, compliance G10: anonymous, unauthenticated free text — the
+	// containsLink check above already ran on the raw text (catching a URL
+	// whether it's plain text or sitting inside an href attribute), so
+	// sanitizing afterward only affects what gets stored.
+	req.Title = decodeHTMLEntities(sanitizeFeedHTML(req.Title))
+	req.Description = decodeHTMLEntities(sanitizeFeedHTML(req.Description))
 
 	startTime, err := parseTimeToUnix(req.StartTime)
 	if err != nil {

@@ -1110,7 +1110,8 @@ type EventInput struct {
 // Deduplication runs findExistingEvent's shared 5-tier hierarchy (#1005),
 // also used by previewDuplicateStatus so the two paths can't drift.
 func insertEvent(q querier, in EventInput) (int, string, string, error) {
-	title, description := decodeHTMLEntities(in.Title), decodeHTMLEntities(in.Description)
+	title := decodeHTMLEntities(in.Title)
+	description := decodeHTMLEntities(sanitizeFeedHTML(in.Description))
 	startTime, endTime := in.StartTime, in.EndTime
 	locationID := in.LocationID
 	hasBall, hasWorkshop, hasFestival := in.HasBall, in.HasWorkshop, in.HasFestival

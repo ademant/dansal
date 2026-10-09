@@ -243,7 +243,7 @@ suggestions + the contact board, an **online platform**.
 | Points of contact / legal representative | 10–12 | ⚠️ Via `/impressum` only | `main.go:369-371` |
 | Terms and conditions | 13/14 | ⚠️ Route exists; operator-supplied, unlinked, may be empty | `pages.go:73-90` |
 | Transparency reporting | 15 | Likely exempt (micro/small) — *verify Art. 15(4)* | — |
-| **Notice-and-action mechanism** | **16** | **❌ Absent** — no report/abuse endpoint, form, or mailbox anywhere | grep across `cmd/dansal_web/main.go` |
+| **Notice-and-action mechanism** | **16** | ✅ Footer `Contact` field (webmin-editable) doubles as the reporting channel — **closed by #1478** | `base.html:506`, `cmd/dansal_webmin/templates/siteconfig.html:165` |
 | **Statement of reasons** | **17** | **❌ Absent** — rejections return a generic status, no persisted reasoned decision | `cmd/dansal/main.go:4726,4743` |
 | Notify suspicions of criminal offences | 18 | ❌ (no procedure) | — |
 | Internal complaint handling, out-of-court dispute, trusted flaggers, misuse measures, recommender transparency, risk assessment | 20–35 | **Exempt** as micro/small enterprise (Art. 19) unless designated a VLOP | Art. 19(1) |
@@ -302,7 +302,7 @@ Priorities: **P0** = blocks a credible compliance claim · **P1** = strong hygie
 | G1 | **No privacy notice content.** Write default `privacy.md`/`terms.md`: controller identity, purposes + legal bases, cookie list (§4.1), transfer register (§5), retention schedule (§3), data-subject rights + contact, moderation/DSR notice. | P0 | Operator | `pages.go:73-90` |
 | G2 | **Privacy/terms not discoverable.** Link both from the footer using existing `nav_privacy`/`nav_terms` i18n keys. Art. 12 requires the notice to be *easily accessible*. | P0 | Code | `templates/base.html:508` |
 | G3 | ~~**Retention sweeps missing** for 6 stores (§3.2).~~ **Closed by #1440**: all six now swept (§3.1), horizon configurable via `data_retention_days` (default 90). | P0 | Code | `main.go:356-401`, §3.1 |
-| G4 | **DSA notice-and-action (Art. 16).** Public report endpoint (or `abuse@` contact surfaced on every page) → admin queue, with receipt confirmation. | P0 | Code | — |
+| G4 | ~~**DSA notice-and-action (Art. 16).** Public report endpoint (or `abuse@` contact surfaced on every page) → admin queue, with receipt confirmation.~~ **Closed by #1478**: the existing footer `Contact` field is the reporting channel (webmin hint now says so); operator still needs to set a reachable address and mention it in the privacy notice (G1). | P0 | Code | `siteconfig.html:165` |
 | G5 | **DSA statement of reasons (Art. 17).** Persist reason + ground + redress path when suggestions/replies are rejected; show it to the submitter. | P0 | Code | `main.go:4726,4743` |
 | G6 | **No data export (Art. 15/20).** CLI/API to dump one subject's data (account, sessions, bookings, posts, suggestions) as JSON. | P0 | Code | `export_import.go:139-176` |
 | G7 | **Log retention undefined.** Ship a logrotate stanza + journald `SystemMaxUse`; reduce routine email/IP logging where fail2ban doesn't need it; document the retention period in the notice. | P0 | Code+Ops | `deploy/nginx/README.md:263-265` |

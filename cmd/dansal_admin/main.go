@@ -263,6 +263,8 @@ func main() {
 		cmdMTLSList(rest)
 	case "mtls-ca-cert":
 		cmdMTLSCACert(rest)
+	case "purge-actor":
+		cmdPurgeActor(rest)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", sub)
 		usage()
@@ -321,6 +323,9 @@ Data export/import:
 Personal data export (GDPR Art. 15/20):
   export-user --id INT [--output FILE] [--db PATH]            Export a registered user's data
   export-user-by-email --email STR [--output FILE] [--db PATH] Export an anonymous visitor's data
+
+Federation (ActivityPub, web.db):
+  purge-actor --actor-uri URI [--db PATH] [--apply]  Erase a remote actor's federation data (dry-run by default)
 
 SMTP:
   smtp-show                                          Show current SMTP configuration
@@ -633,6 +638,27 @@ Flags:
   --email   Email address (required)
   --output  Destination file (default: stdout)
   --db      Path to calendar.db (default: /var/lib/dansal/calendar.db)`,
+
+	"purge-actor": `Usage: dansal_admin purge-actor --actor-uri URI [--db PATH] [--apply]
+
+Erasure request (GDPR Art. 17) for a remote ActivityPub actor's federation
+data. Unlike every other dansal_admin command, this one opens dansal_web's
+own web.db rather than calendar.db — followers/follows/tag_followers/
+delivery_failures live there, not in the API database. Deletes, in one
+transaction:
+  - followers matching actor_uri
+  - follows matching followee_ap_id
+  - tag_followers matching actor_uri
+  - delivery_failures for any inbox_url the actor was known under
+
+Without --apply the command only reports what would be deleted (dry-run).
+Intended for manual use after an erasure request arrives at the instance's
+contact address (#1478), same as export-user-by-email.
+
+Flags:
+  --actor-uri  actor_uri of the remote actor (required)
+  --db         Path to web.db (default: /var/lib/dansal-web/web.db)
+  --apply      Write changes to the database (default is dry-run)`,
 
 	"fill-location-fields": `Usage: dansal_admin fill-location-fields [--db PATH] [--apply]
 

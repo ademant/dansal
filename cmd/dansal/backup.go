@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ademant/dansal/internal/backupcrypt"
 	sqlite3 "github.com/mattn/go-sqlite3"
 )
 
@@ -138,6 +139,22 @@ func createBackup(outputPath string, since time.Time, keepCredentials bool) admi
 	if archiveErr != nil {
 		os.Remove(outputPath)
 		return adminResponse{OK: false, Error: archiveErr.Error()}
+	}
+
+	// #1492 (compliance G13): encrypt the archive at rest when a key file
+	// is configured. Gated to !keepCredentials — the credentials-included
+	// path (adminBackupWithCredentials) is only ever reached via
+	// cmd/dansal_admin's password-backup, which fetches this plaintext
+	// file over the admin socket and encrypts it itself with a
+	// human-typed password; auto-encrypting it here too would double-
+	// encrypt an archive password-backup then can't decrypt.
+	if !keepCredentials && config.Server.BackupEncryptionKeyFile != "" {
+		encPath, err := encryptBackupInPlace(outputPath, config.Server.BackupEncryptionKeyFile)
+		if err != nil {
+			os.Remove(outputPath)
+			return adminResponse{OK: false, Error: "encrypt backup: " + err.Error()}
+		}
+		outputPath = encPath
 	}
 
 	info, _ := os.Stat(outputPath)
@@ -588,7 +605,7 @@ func listBackups() ([]backupFileInfo, error) {
 	}
 	var files []backupFileInfo
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".tar.gz") {
+		if e.IsDir() || !isBackupArchiveName(e.Name()) {
 			continue
 		}
 		info, err := e.Info()
@@ -621,6 +638,42 @@ func adminListBackups(_ adminRequest) adminResponse {
 // evict full backups (or vice versa) — any other file in backup_dir
 // (manually placed, or from an unrelated tool) is never touched.
 var backupPrefixes = []string{"dansal-backup-", "dansal-incremental-", "dansal-config-backup-"}
+
+// isBackupArchiveName reports whether name is a dansal-generated backup
+// archive — plaintext (.tar.gz) or, since #1492, encrypted in place
+// (.tar.gz.enc). Shared by listBackups and pruneBackups so both recognize
+// an encrypted nightly backup identically.
+func isBackupArchiveName(name string) bool {
+	return strings.HasSuffix(name, ".tar.gz") || strings.HasSuffix(name, ".tar.gz.enc")
+}
+
+// encryptBackupInPlace (#1492, compliance G13) encrypts the plaintext
+// archive at plainPath using the raw contents of keyFile as the key
+// material, writing plainPath+".enc" and removing the plaintext. keyFile is
+// a static secret (not a human-typed password) so the nightly/scheduled
+// backup can run unattended; feeding it through the same PBKDF2-based
+// EncryptFile as password-backup keeps both encrypted archive flavors
+// readable by the same password-restore.
+func encryptBackupInPlace(plainPath, keyFile string) (string, error) {
+	key, err := os.ReadFile(keyFile)
+	if err != nil {
+		return "", fmt.Errorf("read backup_encryption_key_file: %w", err)
+	}
+	key = []byte(strings.TrimSpace(string(key)))
+	if len(key) == 0 {
+		return "", fmt.Errorf("backup_encryption_key_file %q is empty", keyFile)
+	}
+
+	encPath := plainPath + ".enc"
+	if err := backupcrypt.EncryptFile(plainPath, encPath, key); err != nil {
+		os.Remove(encPath)
+		return "", err
+	}
+	if err := os.Remove(plainPath); err != nil {
+		log.Printf("backup: encrypted %s but could not remove plaintext %s: %v", encPath, plainPath, err)
+	}
+	return encPath, nil
+}
 
 // pruneBackupsIfConfigured prunes backup_dir after a successful write at
 // writtenPath, honoring the two guards #1407 requires: no-op when
@@ -655,7 +708,7 @@ func pruneBackups(dir string, keep int, justWritten string) {
 	for _, prefix := range backupPrefixes {
 		var files []backupFileInfo
 		for _, e := range entries {
-			if e.IsDir() || !strings.HasPrefix(e.Name(), prefix) || !strings.HasSuffix(e.Name(), ".tar.gz") {
+			if e.IsDir() || !strings.HasPrefix(e.Name(), prefix) || !isBackupArchiveName(e.Name()) {
 				continue
 			}
 			info, err := e.Info()

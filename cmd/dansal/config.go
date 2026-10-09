@@ -100,6 +100,14 @@ type ServerConfig struct {
 	// after each successful backup; older ones in that kind are pruned.
 	// 0 (default) keeps every archive forever, matching pre-#1407 behavior.
 	BackupKeep int `yaml:"backup_keep"`
+	// BackupEncryptionKeyFile (#1492, compliance G13) points at a file whose
+	// raw contents are used as the encryption key for nightly/scheduled
+	// backups — a static key file, not a human-typed password, so
+	// createBackup can encrypt unattended. Must not live inside BackupDir:
+	// an attacker (or restore operator) with the backup archive should not
+	// also automatically have the key next to it. Empty (default): backups
+	// are written unencrypted, as before.
+	BackupEncryptionKeyFile string `yaml:"backup_encryption_key_file"`
 
 	// DataRetentionDays (#1440, compliance gap G3) bounds how long personal
 	// data sits in stores the hourly sweep didn't previously touch: confirmed/

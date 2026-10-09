@@ -295,12 +295,25 @@ endif
 		    -e 's|/var/lib/dansal/calendar.db|/var/lib/dansal/$(INSTANCE)/calendar.db|' \
 		    -e 's|/var/lib/dansal/images|/var/lib/dansal/$(INSTANCE)/images|' \
 		    -e 's|/var/lib/dansal/backups|/var/lib/dansal/$(INSTANCE)/backups|' \
+		    -e 's|/etc/dansal/backup.key|/etc/dansal/$(INSTANCE)/backup.key|' \
 		    packaging/config.yaml > $(SYSCONFDIR)/$(INSTANCE)/config.yaml; \
 		chown root:$(SERVICE) $(SYSCONFDIR)/$(INSTANCE)/config.yaml; \
 		chmod 660 $(SYSCONFDIR)/$(INSTANCE)/config.yaml; \
 		echo "Created $(SYSCONFDIR)/$(INSTANCE)/config.yaml — set port, base_url, smtp, etc."; \
 	else \
 		echo "$(SYSCONFDIR)/$(INSTANCE)/config.yaml already exists — not overwriting"; \
+	fi
+	# #1492 (compliance G13): random backup encryption key, generated once
+	# per instance. Lives in SYSCONFDIR, never in backup_dir, so a copy of
+	# the backups alone is never enough to decrypt them. Readable only by
+	# root and the service group (dansal_admin/dansal both run as $(SERVICE)).
+	@if [ ! -s $(SYSCONFDIR)/$(INSTANCE)/backup.key ]; then \
+		(umask 177; openssl rand -base64 32 > $(SYSCONFDIR)/$(INSTANCE)/backup.key); \
+		chown root:$(SERVICE) $(SYSCONFDIR)/$(INSTANCE)/backup.key; \
+		chmod 440 $(SYSCONFDIR)/$(INSTANCE)/backup.key; \
+		echo "Generated $(SYSCONFDIR)/$(INSTANCE)/backup.key — back this up separately from the backup archives it protects, or restores become impossible."; \
+	else \
+		echo "$(SYSCONFDIR)/$(INSTANCE)/backup.key already exists — not overwriting"; \
 	fi
 	@if [ ! -s $(SYSCONFDIR)/$(INSTANCE)/web.yaml ]; then \
 		sed \

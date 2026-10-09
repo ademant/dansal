@@ -11,6 +11,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/ademant/dansal/internal/backupcrypt"
 	"gopkg.in/yaml.v2"
 )
 
@@ -1184,7 +1185,7 @@ func cmdPasswordBackup(args []string) {
 	}
 
 	fmt.Fprintln(os.Stderr, "Deriving key (this takes a moment)...")
-	if err := encryptFile(tmpPath, outPath, pw); err != nil {
+	if err := backupcrypt.EncryptFile(tmpPath, outPath, pw); err != nil {
 		die("encrypt: %v", err)
 	}
 
@@ -1220,7 +1221,7 @@ func cmdPasswordRestore(args []string) {
 	}
 
 	fmt.Fprintln(os.Stderr, "Deriving key (this takes a moment)...")
-	data, err := decryptFile(*input, pw)
+	data, err := backupcrypt.DecryptFile(*input, pw)
 	if err != nil {
 		die("%v", err)
 	}
@@ -1303,7 +1304,7 @@ func cmdConfigBackup(args []string) {
 	}
 
 	fmt.Fprintln(os.Stderr, "Deriving key (this takes a moment)...")
-	if err := encryptFile(tmpPath, outPath, pw); err != nil {
+	if err := backupcrypt.EncryptFile(tmpPath, outPath, pw); err != nil {
 		die("encrypt: %v", err)
 	}
 

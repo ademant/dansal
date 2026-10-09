@@ -1,4 +1,4 @@
-package main
+package backupcrypt
 
 import (
 	"crypto/aes"
@@ -22,26 +22,26 @@ func TestEncryptDecryptFileRoundTrip(t *testing.T) {
 	}
 
 	password := []byte("hunter2")
-	if err := encryptFile(src, dst, password); err != nil {
-		t.Fatalf("encryptFile: %v", err)
+	if err := EncryptFile(src, dst, password); err != nil {
+		t.Fatalf("EncryptFile: %v", err)
 	}
 
-	plain, err := decryptFile(dst, password)
+	plain, err := DecryptFile(dst, password)
 	if err != nil {
-		t.Fatalf("decryptFile: %v", err)
+		t.Fatalf("DecryptFile: %v", err)
 	}
 	if string(plain) != "plaintext backup contents" {
 		t.Errorf("decrypted = %q, want original content", plain)
 	}
 
-	if _, err := decryptFile(dst, []byte("wrong password")); err == nil {
+	if _, err := DecryptFile(dst, []byte("wrong password")); err == nil {
 		t.Error("expected decryption to fail with wrong password")
 	}
 }
 
 // writeLegacyScryptFile builds a version 0x01 (scrypt) encrypted backup file
 // by hand, matching the format that shipped before #803 switched new
-// backups to PBKDF2. This lets us verify decryptFile still reads backups
+// backups to PBKDF2. This lets us verify DecryptFile still reads backups
 // created by the old dansal_admin binary.
 func writeLegacyScryptFile(t *testing.T, dst string, password, data []byte) {
 	t.Helper()
@@ -98,9 +98,9 @@ func TestDecryptFileLegacyScryptFormat(t *testing.T) {
 	password := []byte("hunter2")
 	writeLegacyScryptFile(t, dst, password, []byte("old backup content"))
 
-	plain, err := decryptFile(dst, password)
+	plain, err := DecryptFile(dst, password)
 	if err != nil {
-		t.Fatalf("decryptFile on legacy scrypt file: %v", err)
+		t.Fatalf("DecryptFile on legacy scrypt file: %v", err)
 	}
 	if string(plain) != "old backup content" {
 		t.Errorf("decrypted = %q, want old backup content", plain)
@@ -113,7 +113,7 @@ func TestDecryptFileRejectsUnsupportedVersion(t *testing.T) {
 	if err := os.WriteFile(dst, append([]byte(encMagic), 0x99), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := decryptFile(dst, []byte("x")); err == nil {
+	if _, err := DecryptFile(dst, []byte("x")); err == nil {
 		t.Error("expected error for unsupported version byte")
 	}
 }

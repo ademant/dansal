@@ -266,6 +266,20 @@ Backups are written to `server.backup_dir` (default `/var/lib/dansal/<instance>/
 
 By default every archive is kept forever. Set `server.backup_keep: 30` (or any number) to bound disk usage — after each successful backup, older archives beyond that count are deleted, counted separately per kind (full backups, incremental backups, and config backups never evict each other). Only dansal's own generated filenames (`dansal-backup-*`, `dansal-incremental-*`, `dansal-config-backup-*`) are ever pruned; anything else placed in `backup_dir` is left alone. A backup written to an explicit `--output` path outside `backup_dir` is never pruned either.
 
+### Encryption at Rest (#1492, compliance G13)
+
+`scripts/install-instance` (via `make setup-instance`) generates a random key file at `/etc/dansal/<instance>/backup.key` (mode `440`, root:dansal) and points `server.backup_encryption_key_file` at it in `config.yaml`. Whenever that setting is non-empty, every nightly/scheduled backup — both the systemd-timer-driven `dansal_admin backup` and the in-process `backup_interval_hours` scheduler — is encrypted in place with AES-256-GCM immediately after being written, and the plaintext archive is removed. The resulting `dansal-backup-*.tar.gz.enc` files are counted toward `backup_keep`/pruning exactly like unencrypted ones.
+
+Restore an automatically-encrypted archive the same way as a manual `password-backup` one, but pass the key file's contents as the password:
+
+```bash
+dansal_admin --config /etc/dansal/prod/config.yaml password-restore \
+  --input /var/lib/dansal/prod/backups/dansal-backup-20260101-030000.tar.gz.enc \
+  --password "$(cat /etc/dansal/prod/backup.key)"
+```
+
+**The key file is not itself backed up by anything in dansal.** Losing it means losing the ability to restore any encrypted archive ever produced with it. Copy it somewhere durable and separate from `backup_dir` as part of initial setup (a password manager, a second host, printed and locked in a drawer — anywhere that isn't next to the backups it protects). Setting `server.backup_encryption_key_file` to empty disables automatic encryption and reverts to plaintext archives.
+
 ### Manual Backup
 
 ```bash

@@ -38,9 +38,16 @@ server:
   # backups, incremental backups, and config backups are counted
   # separately, so one kind can never crowd out another). After each
   # successful backup, older archives beyond this count in backup_dir are
-  # deleted. 0 (default) keeps every archive forever -- set this to bound
-  # disk usage, e.g. 30 keeps roughly a month of nightly backups.
+  # deleted. 0/unset defaults to 14; set -1 to keep every archive forever;
+  # e.g. 30 keeps roughly a month of nightly backups.
   backup_keep: 30
+
+  # Path to a file whose raw contents are used to encrypt nightly/scheduled
+  # backups at rest (AES-256-GCM). Generated automatically by
+  # scripts/install-instance / `make setup-instance` -- do not move it
+  # into backup_dir, since the key must not sit next to the archives it
+  # protects. Empty (default): backups are written unencrypted.
+  backup_encryption_key_file: /etc/dansal/backup.key
 
   # Public base URL of the API, used in email links and iCal feeds.
   # Required. Example: https://api.dansal.example.com

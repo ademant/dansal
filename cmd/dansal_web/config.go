@@ -51,7 +51,9 @@ type Config struct {
 	// AuthorizedFetch requires a valid HTTP Signature on all AP GET requests
 	// (actor objects, outbox, followers). Discovery endpoints (WebFinger,
 	// nodeinfo, host-meta) are never gated — remote servers need them to
-	// bootstrap a follow before they can sign anything. Default: false.
+	// bootstrap a follow before they can sign anything. Default: true
+	// (compliance G12, #1489) — set explicitly to false in web.yaml to
+	// restore open (unauthenticated) fetches.
 	AuthorizedFetch     bool     `yaml:"authorized_fetch"`
 	RelayActorName      string   `yaml:"relay_actor_name"`
 	RelayAlsoKnownAs    []string `yaml:"relay_also_known_as"`
@@ -261,6 +263,7 @@ func loadConfig() *Config {
 		IdleTimeoutSecs:           60,
 		FetchRunTimeoutSecs:       25,
 		DataRetentionDays:         90,
+		AuthorizedFetch:           true,
 	}
 
 	configPath := ""
@@ -372,6 +375,7 @@ func reloadConfig(path string) *Config {
 		IdleTimeoutSecs:           60,
 		FetchRunTimeoutSecs:       25,
 		DataRetentionDays:         90,
+		AuthorizedFetch:           true,
 	}
 	if path != "" {
 		data, err := os.ReadFile(path)

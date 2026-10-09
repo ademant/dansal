@@ -4,6 +4,7 @@
 - [Besucher](Besucher)
 
 **Benutzer**
+- [Benutzer](Benutzer)
 - [Benutzer-Registrierung](Benutzer-Registrierung)
 - [Benutzer-Anmeldung](Benutzer-Anmeldung)
 - [Benutzer-Veranstaltungen](Benutzer-Veranstaltungen)
@@ -11,6 +12,7 @@
 - [Benutzer-Organisationen](Benutzer-Organisationen)
 - [Benutzer-Musiker](Benutzer-Musiker)
 - [Benutzer-WordPress](Benutzer-WordPress)
+- [Benutzer-Pflege](Benutzer-Pflege)
 
 **Systemadministration**
 - [Benutzer-Administration](Benutzer-Administration)

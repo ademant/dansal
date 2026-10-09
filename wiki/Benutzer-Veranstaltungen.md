@@ -116,12 +116,7 @@ Es gibt mehrere Wege, eine neue Veranstaltung anzulegen:
    - **Ort**: Bestehenden Ort auswählen oder neuen anlegen
    - **Organisation**: Eigene Organisation auswählen
 
-3. **Veranstaltungstyp** wählen:
-   - **Ball** – Gesellschaftlicher Tanzabend
-   - **Workshop** – Tanz- oder Musikworkshop (mit Schwierigkeitsgrad)
-   - **Festival** – Mehrtägige Veranstaltung
-   - **Session** – Offene Jam-Session
-   - **Kombination** – Mehrere Typen in einer Veranstaltung (z. B. Workshop + Ball)
+3. **Tags** setzen (Format/Typ/Niveau) – siehe Abschnitt **Tags** unter „Veranstaltungsdetails ausfüllen"
 
 ---
 
@@ -134,38 +129,38 @@ Nach den Grunddaten können weitere Informationen hinzugefügt werden:
 - Formatierter Text aus Word wird automatisch in Markdown umgewandelt
 - **Tipp:** Kurze, prägnante Beschreibung mit den wichtigsten Informationen
 
-### Preise
-- Mehrere Preisstufen möglich:
-  - Normalpreis
-  - Ermäßigt
-  - Frühbucher
-  - Abendkasse
-  - Spende
-  - Kostenlos
-- Für jede Stufe: Betrag und Beschreibung
+### Eintritt (Preise)
+- Einen Eintrittstyp wählen:
+  - **Kostenlos**
+  - **Freiwillige Spende**
+  - **Festpreis**
+  - **Verschiedene Preise** – mehrere frei benannte Preiszeilen (z. B. Normalpreis, Ermäßigt, Frühbucher, Abendkasse) mit je Betrag und Beschreibung
 
-### Buchungslink
+### Buchungslink (Abschnitt „Tickets")
 - Link zu externem Ticketsystem (z. B. Eventbrite, Pretix)
+- Zusätzlich: Verfügbarkeit (normal / begrenzt / ausverkauft) und Buchungsstatus
 - Wird prominent auf der Veranstaltungsseite angezeigt
 
 ### Tags
-Dansal verwendet ein **flexibles Tag-System** statt starrer Ja/Nein-Felder:
+Dansal verwendet ein **flexibles Tag-System** statt starrer Ja/Nein-Felder. Die Tags stehen im Abschnitt **Grundinfo** des Veranstaltungsformulars:
 
 | Kategorie | Werte | Beispiel |
 |---|---|---|
-| **Format** | Ball, Fest Noz, Session, Konzert, Festival, Open Air, Workshop, Musikkurs | `bal-folk`, `fest-noz` |
-| **Typ** | Tanz-Workshop, Musiker-Workshop | `dance-workshop`, `musician-workshop` |
-| **Niveau** | Anfänger, Fortgeschrittene, Profis | `beginner`, `advanced` |
+| **Format** | Ball, Festival, Open Air, Session, Konzert | `bal-folk`, `festival` |
+| **Typ** | Tanzworkshop, Musikerworkshop | `dance-workshop`, `musician-workshop` |
+| **Niveau** | Anfänger, Mittelstufe, Fortgeschritten | `beginners`, `intermediate` |
+
+Das **Niveau** wird nur angezeigt, wenn ein Workshop-Typ (Tanz- oder Musikerworkshop) ausgewählt ist.
 
 **Vorteile:**
-- Eine Veranstaltung kann mehrere Tags gleichzeitig haben (z. B. `bal-folk` + `workshop`)
+- Eine Veranstaltung kann mehrere Tags gleichzeitig haben (z. B. `bal-folk` + `dance-workshop`)
 - Neue Tag-Werte können einfach hinzugefügt werden
 - Keine starren Kategorien
 
 ### Bilder
 - **Hauptbild**: Veranstaltungsplakat oder Foto (breites Format wird empfohlen)
 - **Banner**: Wird in Sozialen Medien geteilt (automatisch generiert falls nicht vorhanden)
-- Unterstützte Formate: AVIF (empfohlen), JPEG
+- Unterstützte Formate: JPEG, PNG, GIF, WebP, AVIF (die Ausgabe wird zu AVIF konvertiert)
 - Maximale Größe: Wird automatisch verkleinert
 
 ---
@@ -175,7 +170,7 @@ Dansal verwendet ein **flexibles Tag-System** statt starrer Ja/Nein-Felder:
 ### Musiker hinzufügen
 
 1. Im Veranstaltung-Formular den Abschnitt **Musiker** öffnen
-2. existing Musiker aus der Datenbank suchen
+2. Vorhandenen Musiker aus der Datenbank suchen
 3. Neuen Musiker anlegen, falls nicht vorhanden:
    - **Name, Kurzname**
    - **Beschreibung, Genre, Biografie**
@@ -206,8 +201,9 @@ Falls eine Veranstaltung aus mehreren zeitlich getrennten Abschnitten besteht (z
    - **Zeitraum** (Start, Ende)
    - **Titel** (z. B. "Tanzworkshop Anfänger")
    - **Beschreibung**
+   - **Ort / Raum** (optional; der Raum ist ein Freitextfeld, z. B. „Saal A")
+   - **Typ** (Art des Programmpunkts, z. B. Bal, Workshop, Konzert, Session)
    - **Musiker / Anleiter** (optional)
-   - **Raum** (falls mehrere Räume vorhanden)
 
 **Beispiel:**
 
@@ -240,9 +236,8 @@ Jede Veranstaltung lässt sich jederzeit bearbeiten:
 ### Veranstaltung absagen
 
 1. Veranstaltung öffnen
-2. Button **"Absagen"** klicken
-3. Absagegrund eingeben (optional)
-4. Bestätigen
+2. Auf das 🚫-Symbol **„Veranstaltung absagen"** klicken und den Dialog bestätigen
+   (alternativ im Bearbeiten-Formular die Checkbox **„Abgesagt"** setzen)
 
 **Effekt:**
 - Veranstaltung bleibt in der Datenbank erhalten
@@ -254,7 +249,7 @@ Jede Veranstaltung lässt sich jederzeit bearbeiten:
 1. Veranstaltung öffnen
 2. Button **"Klonen"** klicken
 3. Neue Veranstaltung wird mit allen Daten der Originalveranstaltung erstellt
-4. **Datum muss neu gesetzt werden** (wird automatisch geleert)
+4. **Startdatum ändern** – im Klon-Modus wird das Datum mit dem Original vorbelegt und muss angepasst werden, bevor gespeichert werden kann
 
 **Typischer Einsatz:** Wiederkehrende Veranstaltungen mit ähnlichem Ablauf (z. B. monatlicher Ball).
 
@@ -299,7 +294,8 @@ Für Organisationen, die bereits ein anderes Kalendersystem nutzen.
    - Automatisch erkannt: Ort übernehmen
    - Manuell zuordnen: anderen bestehenden Ort wählen
    - Als neuen Ort anlegen: Feed-Name als neuen Ort speichern
-7. Gewünschte Termine auswählen und **Importieren** klicken
+7. **Kategorien zuordnen:** Kategorien aus dem Feed auf vorhandene Tags abbilden (oder ignorieren)
+8. Gewünschte Termine auswählen und **Importieren** klicken
 
 **Wichtig:**
 - **Wiederkehrende Termine** (RRULE in iCal) werden automatisch in einzelne Vorkommen aufgeteilt

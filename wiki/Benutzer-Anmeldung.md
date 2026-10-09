@@ -16,12 +16,14 @@ Die Anmeldeseite bietet mehrere Möglichkeiten:
 
 | Schaltfläche | Methode |
 |---|---|
+| **Anmelden** | Klassische Anmeldung mit E-Mail-Adresse (oder Anzeigename) und Passwort — steht als Standard oben |
 | **Sofort anmelden** | Passkey — der Browser fragt nach Fingerabdruck, Gesicht oder PIN |
-| **E-Mail + Passwort** | Klassische Anmeldung |
 | **Mit Passkey anmelden** | Passkey manuell auswählen |
 | **Per E-Mail** | Passwortloser Magic Link per E-Mail |
 | **Per Telegram** | Magic Link über Telegram |
 | **Per Matrix** | Magic Link über Matrix |
+
+> ℹ️ **Hinweis**: Hat die Instanz externe Anmeldedienste (SSO, z. B. über OpenID Connect) eingerichtet, erscheinen oben zusätzliche Schaltflächen für diese Anbieter.
 
 ---
 
@@ -29,13 +31,31 @@ Die Anmeldeseite bietet mehrere Möglichkeiten:
 
 Dansal unterstützt mehrere Anmeldemethoden, die du kombinieren kannst:
 
+```mermaid
+graph TD
+    A[Besucher] --> B{Anmeldemethode}
+    B -->|Passkey| C[Fingerabdruck /<br/>Gesicht / PIN]
+    B -->|Passwort| D[E-Mail oder Anzeigename<br/>+ Passwort]
+    B -->|Magic Link| E[Per E-Mail /<br/>Telegram / Matrix]
+    B -->|SSO| F[Externer Anbieter<br/>OpenID Connect]
+    C --> G{TOTP aktiviert?}
+    D --> G
+    H[Link in Nachricht<br/>15 Min, einmalig] --> G
+    E --> H
+    F --> G
+    G -->|ja| I[Code aus<br/>Authenticator-App]
+    G -->|nein| J[Dashboard]
+    I --> J
+```
+![Mermaid diagram](images/mermaid-2076e4af2f37.svg)
+
 ### 1. Passkey (empfohlen)
 - **Was ist das?** Ein kryptografischer Schlüssel, der sicher auf deinem Gerät gespeichert wird (Fingerabdruck, Gesichtserkennung oder PIN)
 - **Vorteile**: Kein Passwort nötig, sehr sicher, schnell
 - **Hinweis**: Jedes Gerät braucht seinen eigenen Passkey
 
 ### 2. Passwort
-- **Klassische Anmeldung** mit Benutzername und Passwort
+- **Klassische Anmeldung** mit E-Mail-Adresse (oder Anzeigename) und Passwort
 - Kann mit anderen Methoden kombiniert werden
 
 ### 3. Magic Link (Passwortlos)
@@ -93,28 +113,32 @@ Nach der Anmeldung kannst du in deinen Profileinstellungen weitere Anmeldemethod
 Unter **Einstellungen** (Klick auf dein Avatar-Symbol) kannst du:
 
 - Anzeigenamen und Kurzbeschreibung anpassen
-- Telegram, Matrix, Mastodon verknüpfen
+- E-Mail-Adresse ändern und deren Verifizierungsstatus einsehen
+- Telegram, Matrix, Mastodon und eine Website verknüpfen
 - Weitere Passkeys hinzufügen oder löschen
-- TOTP (Authenticator-App) einrichten
+- TOTP (Authenticator-App) einrichten — möglich, sobald ein Passwort gesetzt ist
 - Passwort setzen oder ändern
 - API-Schlüssel verwalten
+- Verknüpfte SSO-Identitäten (OpenID Connect) anzeigen, verknüpfen oder entfernen
+- Aktive Sitzungen (Geräte) einsehen und andere abmelden
+- Deine Daten herunterladen (Export)
 - Das Konto dauerhaft löschen
 
-Bis jetzt ist nur Deine E-Mail-Adresse gespeichert. Dies muss keine Adresse sein, welche Du für tägliche Arbeiten verwendest. Es wird davon abgeraten, ein Passwort zu verwenden.
-
-Auf den Profileinstellungen kannst Du einen Nutzernamen festlegen. Nutzername wird aktuell nur verwendet, um anderen angemeldeten Personen zu zeigen, ob Du eine Veranstaltung verändert hast.
+In den Profileinstellungen legst Du einen **Anzeigenamen** fest. Er wird verwendet, um anderen angemeldeten Personen anzuzeigen, wer eine Veranstaltung verändert hat, und kann zusätzlich zur E-Mail-Adresse zum Anmelden verwendet werden (Feld „E-Mail-Adresse oder Anzeigename").
 
 ---
 
 ## Passkey auf einem zweiten Gerät einrichten
 
-Passkey ist eine moderne und sichere Methode, mit der Du nur mit einem ausgewählten Gerät (z. B. Deinem Smartphone) anmelden kannst. Mit einem zweiten Gerät musst Du eine eigene Passkey einrichten.
+Passkey ist eine moderne und sichere Methode, mit der Du nur mit einem ausgewählten Gerät (z. B. Deinem Smartphone) anmelden kannst. Mit einem zweiten Gerät musst Du einen eigenen Passkey einrichten.
 
 ### Schritt 1: Anmelden mit Magic Link
 
 ![Anmeldeseite](images/screenshots/02_Login.png)
 
 Auf der Anmeldeseite trage Deine E-Mail-Adresse ein und gehe auf den Punkt "Per E-Mail". Ein Login-Link wird Dir per E-Mail zugesandt. Damit wirst Du angemeldet.
+
+> 💡 **Tipp**: Bist Du auf einem anderen Gerät bereits angemeldet, findest Du in den Einstellungen unter **Passkeys** den Button **„Auf anderem Gerät anmelden"**. Er erzeugt einen Anmelde- bzw. QR-Code, mit dem Du dich auf dem neuen Gerät anmelden kannst.
 
 ### Schritt 2: Gehe zu Einstellungen
 

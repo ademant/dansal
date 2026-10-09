@@ -388,6 +388,8 @@ if [[ $CERTBOT == true ]]; then
         make deploy-nginx INSTANCE="${INSTANCE}"
         make deploy-nginx-doc INSTANCE="${INSTANCE}"
         [[ -n $WEBMIN_DOMAIN ]] && make deploy-nginx-webmin INSTANCE="${INSTANCE}"
+        make deploy-fail2ban INSTANCE="${INSTANCE}"
+        make deploy-logrotate INSTANCE="${INSTANCE}"
         info "Certbot auto-renewal is handled by the certbot systemd timer."
         info "Check with: systemctl status certbot.timer"
     else

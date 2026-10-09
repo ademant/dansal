@@ -311,7 +311,7 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			return
 		}
 
-		log.Printf("register: new registration for %s (status=%s)", email, result["status"])
+		log.Printf("register: new registration pending_id=%s (status=%s)", result["pending_id"], result["status"])
 
 		// Set a persistent cookie so the user can resume verification if the tab is closed.
 		if pid := result["pending_id"]; pid != "" {

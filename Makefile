@@ -13,7 +13,7 @@ SYSTEMDDIR := /etc/systemd/system
 
 .PHONY: build build-dansal build-dansal_web build-dansal_admin build-dansal_webmin build-dansal_doc \
         run fmt vet vulncheck clean install install-web install-webmin install-doc install-units setup-instance \
-        update check-config deb deploy-nginx deploy-nginx-webmin deploy-nginx-doc deploy-nginx-default install-nginx-brotli deploy-full \
+        update check-config deb deploy-nginx deploy-nginx-webmin deploy-nginx-doc deploy-nginx-default install-nginx-brotli deploy-fail2ban deploy-logrotate deploy-full \
         wp-zip deploy-wp rollback list
 
 # ROLLBACK_VERSION only takes VERSION into account when it was actually passed
@@ -281,6 +281,13 @@ endif
 	install -d -m 755 /usr/share/dansal/wiki
 	install -m 644 wiki/*.md /usr/share/dansal/wiki/
 	cp -r wiki/images /usr/share/dansal/wiki/
+	# Host-wide journald retention (#1481, compliance G7): all dansal units
+	# log to journald only, no app log files, so this is the app-log
+	# equivalent of deploy-logrotate. Not per-instance -- a single shared
+	# drop-in, safe to re-install across multiple instances on one host.
+	install -d -m 755 /etc/systemd/journald.conf.d
+	install -m 644 deploy/journald/dansal.conf /etc/systemd/journald.conf.d/dansal.conf
+	systemctl restart systemd-journald 2>/dev/null || true
 	# Template configs — installed only if not already present (or empty from a failed prior run)
 	@if [ ! -s $(SYSCONFDIR)/$(INSTANCE)/config.yaml ]; then \
 		sed \
@@ -530,9 +537,76 @@ deploy-nginx-default:
 	systemctl reload nginx
 	echo "Deployed /etc/nginx/conf.d/00-default-catchall.conf"
 
+# Deploy fail2ban filter + jail for a specific instance (#1482): every
+# dansal/dansal-web unit is a systemd template (dansal@<instance>.service),
+# but deploy/fail2ban/jail.d/*.conf ships hardcoded for the bare
+# dansal.service/dansal-web.service names the legacy non-instanced `make
+# install` target uses — journalmatch never matches an instanced unit, so
+# the jail silently bans nothing. Template it the same way deploy-nginx
+# templates events.example.com -> $DOMAIN: substitute the unit name and
+# give the jail section its own name per instance (jail.d/*.conf sections
+# are merged across files, so two instances both named [dansal] would
+# collide and the second file read would silently win).
+# Usage: sudo make deploy-fail2ban INSTANCE=prod
+.ONESHELL:
+deploy-fail2ban:
+	@[ "$(shell id -u)" = "0" ] || { echo "deploy-fail2ban requires root"; exit 1; }
+ifndef INSTANCE
+	$(error INSTANCE is required: sudo make deploy-fail2ban INSTANCE=prod)
+endif
+	set -e
+	if [ ! -d /etc/fail2ban ]; then \
+	    echo "fail2ban not found — skipping (templates in deploy/fail2ban/)"; \
+	    exit 0; \
+	fi
+	install -d -m 755 /etc/fail2ban/filter.d /etc/fail2ban/jail.d
+	# Filters have no instance-specific content (same regex for every
+	# instance), installed once (idempotent copy), same convention as
+	# deploy-nginx's shared log_format file.
+	install -m 644 deploy/fail2ban/filter.d/dansal.conf     /etc/fail2ban/filter.d/dansal.conf
+	install -m 644 deploy/fail2ban/filter.d/dansal-web.conf /etc/fail2ban/filter.d/dansal-web.conf
+	sed \
+	    -e "s/\[dansal\]/[dansal-$(INSTANCE)]/" \
+	    -e "s/_SYSTEMD_UNIT=dansal\.service/_SYSTEMD_UNIT=dansal@$(INSTANCE).service/" \
+	    deploy/fail2ban/jail.d/dansal.conf > /etc/fail2ban/jail.d/dansal-$(INSTANCE).conf
+	sed \
+	    -e "s/\[dansal-web\]/[dansal-web-$(INSTANCE)]/" \
+	    -e "s/_SYSTEMD_UNIT=dansal-web\.service/_SYSTEMD_UNIT=dansal-web@$(INSTANCE).service/" \
+	    deploy/fail2ban/jail.d/dansal-web.conf > /etc/fail2ban/jail.d/dansal-web-$(INSTANCE).conf
+	systemctl reload fail2ban 2>/dev/null || true
+	echo "Deployed /etc/fail2ban/jail.d/dansal-$(INSTANCE).conf and dansal-web-$(INSTANCE).conf"
+
+# Deploy logrotate config for one instance's nginx logs (#1481, compliance
+# G7): the per-domain access/error/feed log files deploy-nginx creates
+# aren't guaranteed to be covered by the distro's own /etc/logrotate.d/nginx
+# glob (see deploy/nginx/README.md) -- ship an explicit, instance-scoped
+# stanza so retention doesn't depend on that. Templated the same way
+# deploy-nginx templates events.example.com -> $DOMAIN.
+# Usage: sudo make deploy-logrotate INSTANCE=prod
+.ONESHELL:
+deploy-logrotate:
+	@[ "$(shell id -u)" = "0" ] || { echo "deploy-logrotate requires root"; exit 1; }
+ifndef INSTANCE
+	$(error INSTANCE is required: sudo make deploy-logrotate INSTANCE=prod)
+endif
+	set -e
+	WEB_CONF=$(SYSCONFDIR)/$(INSTANCE)/web.yaml
+	[ -f "$$WEB_CONF" ] || { echo "Error: $$WEB_CONF not found — run setup-instance first"; exit 1; }
+	DOMAIN=$$(grep -E '^domain:' "$$WEB_CONF" | sed -E 's/domain:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/')
+	[ -z "$$DOMAIN" ] && { echo "Error: domain not set in $$WEB_CONF"; exit 1; }
+	echo "$$DOMAIN" | grep -q '\.' || { echo "Error: domain '$$DOMAIN' looks invalid"; exit 1; }
+	install -d -m 755 /etc/logrotate.d
+	sed -e "s/events\.example\.com/$$DOMAIN/g" deploy/logrotate/dansal.conf > /etc/logrotate.d/dansal-$(INSTANCE)
+	# logrotate -d exits 0 even on a malformed stanza (unknown directives
+	# just get a warning and are skipped), so check its own "Handling N
+	# logs" summary rather than the exit code.
+	logrotate -d /etc/logrotate.d/dansal-$(INSTANCE) 2>&1 | grep -q "Handling 1 logs" || \
+	    { echo "Error: logrotate did not recognise the generated stanza"; rm -f /etc/logrotate.d/dansal-$(INSTANCE); exit 1; }
+	echo "Deployed /etc/logrotate.d/dansal-$(INSTANCE)"
+
 # Deploy both web application and nginx configuration for an instance.
 # Usage: sudo make deploy-full INSTANCE=prod
-deploy-full: deploy deploy-nginx
+deploy-full: deploy deploy-nginx deploy-fail2ban deploy-logrotate
 
 # WordPress plugin — zip and deploy targets.
 WP_PLUGIN_DIR ?= /srv/wordpress/balfolk.social/wp-content/plugins

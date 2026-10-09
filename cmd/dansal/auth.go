@@ -37,7 +37,7 @@ type LoginResponse struct {
 
 // recordFailedLogin increments the per-user failure counter and disables the
 // account when the configured threshold is reached within the window.
-func recordFailedLogin(userID int, email, clientIP string, storedCount int, failedSince string) {
+func recordFailedLogin(userID int, clientIP string, storedCount int, failedSince string) {
 	maxFailures := config.Server.LoginMaxFailures
 	windowSecs := config.Server.LoginFailureWindowSecs
 
@@ -64,7 +64,7 @@ func recordFailedLogin(userID int, email, clientIP string, storedCount int, fail
 		} else {
 			db.Exec("UPDATE users SET disabled=1, failed_login_count=? WHERE id=?", newCount, userID)
 		}
-		log.Printf("auth: user %q disabled after %d failed logins within window (last from %s)", email, newCount, clientIP)
+		log.Printf("auth: user %d disabled after %d failed logins within window (last from %s)", userID, newCount, clientIP)
 		credentials.pruneByUserID(userID)
 		db.Exec("DELETE FROM tokens WHERE user_id=?", userID)
 	} else if newSince != nil {
@@ -366,14 +366,14 @@ func login(w http.ResponseWriter, r *http.Request) {
 	failedSince := authUser.FailedLoginSince
 
 	if authUser.Disabled != 0 {
-		log.Printf("auth failed from %s: user %q is disabled", clientIP, user.Email)
+		log.Printf("auth failed from %s: user %d is disabled", clientIP, user.ID)
 		writeError(w, "Invalid email or password", http.StatusUnauthorized)
 		return
 	}
 
 	// Reject empty password logins — user must use passkey or magic link.
 	if passwordHash == "" {
-		log.Printf("auth failed from %s: no password set for user %q", clientIP, user.Email)
+		log.Printf("auth failed from %s: no password set for user %d", clientIP, user.ID)
 		writeError(w, "No password set — use a passkey or magic link", http.StatusUnauthorized)
 		return
 	}
@@ -382,7 +382,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	ok, migrate := checkPassword(req.Password, passwordHash)
 	if !ok {
 		log.Printf("auth failed from %s: invalid credentials", clientIP)
-		recordFailedLogin(user.ID, user.Email, clientIP, failedCount, failedSince)
+		recordFailedLogin(user.ID, clientIP, failedCount, failedSince)
 		writeError(w, "Invalid email or password", http.StatusUnauthorized)
 		return
 	}
@@ -403,7 +403,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !totpCheckAndMark(user.ID, totpSecret, req.TotpCode, time.Now()) {
-			log.Printf("auth failed from %s: invalid or replayed TOTP code for %q", clientIP, user.Email)
+			log.Printf("auth failed from %s: invalid or replayed TOTP code for user %d", clientIP, user.ID)
 			writeError(w, "Invalid TOTP code", http.StatusUnauthorized)
 			return
 		}

@@ -160,9 +160,15 @@ The six gaps below (confirmed bookings, `pending_fetch_suggestions`, expired-unc
 
 ### 3.5 Logs
 
-- App logs contain raw IPs and emails (e.g. `cmd/dansal/auth.go:67,347-406`,
-  `cmd/dansal_web/contact_board.go`, `cmd/dansal_web/suggest.go`); form-guard rejections
-  are hashed (`cmd/dansal_web/formguard.go:138`, hash at `iputil.go:27-33`).
+- **Closed by #1481/#1482.** Auth-failure logs (`cmd/dansal/auth.go`) and the
+  registration log (`cmd/dansal_web/register.go`) now log user IDs instead of
+  emails; the raw IP stays where fail2ban's `<HOST>` match needs it
+  (`deploy/fail2ban/filter.d/*.conf`), verified unaffected. No app log files
+  exist to retain (journald only, `deploy/journald/dansal.conf`, 30 days);
+  nginx access/error/feed logs get an explicit per-instance logrotate stanza
+  (`deploy/logrotate/dansal.conf`, 30 days) regardless of distro defaults.
+  #1482 additionally fixed a pre-existing bug where fail2ban's jail never
+  matched the actual multi-instance systemd unit names at all.
 - nginx main format records `$remote_addr`, UA, XFF
   (`deploy/nginx/dansal-log-formats.conf:19-22`); feed log is anonymised (`:28`).
 - **No logrotate stanza shipped** (README defers to the distro,
@@ -311,7 +317,7 @@ Priorities: **P0** = blocks a credible compliance claim · **P1** = strong hygie
 | G4 | ~~**DSA notice-and-action (Art. 16).** Public report endpoint (or `abuse@` contact surfaced on every page) → admin queue, with receipt confirmation.~~ **Closed by #1478**: the existing footer `Contact` field is the reporting channel (webmin hint now says so); operator still needs to set a reachable address and mention it in the privacy notice (G1). | P0 | Code | `siteconfig.html:165` |
 | G5 | **DSA statement of reasons (Art. 17).** Persist reason + ground + redress path when suggestions/replies are rejected; show it to the submitter. | P0 | Code | `main.go:4726,4743` |
 | G6 | ~~**No data export (Art. 15/20).** CLI/API to dump one subject's data (account, sessions, bookings, posts, suggestions) as JSON.~~ **Closed by #1479** (registered users) **and #1480** (anonymous visitors, manual). | P0 | Code | §3.3 |
-| G7 | **Log retention undefined.** Ship a logrotate stanza + journald `SystemMaxUse`; reduce routine email/IP logging where fail2ban doesn't need it; document the retention period in the notice. | P0 | Code+Ops | `deploy/nginx/README.md:263-265` |
+| G7 | ~~**Log retention undefined.** Ship a logrotate stanza + journald `SystemMaxUse`; reduce routine email/IP logging where fail2ban doesn't need it; document the retention period in the notice.~~ **Closed by #1481** (retention + PII trims) **and #1482** (fail2ban multi-instance fix found while scoping this). Retention period (30 days) still needs folding into the operator's privacy notice (G1). | P0 | Code+Ops | §3.5 |
 | G8 | **No breach runbook.** Document the 72h Art. 33 workflow: detection → assessment → authority notification → data-subject notification → record. | P1 | Operator | — |
 | G9 | **Feed robots.txt compliance + per-source licence/attribution fields**; show a public "imported from" credit on event pages; surface opt-out requests from publishers. | P1 | Code | `fetchurl.go:127`, `main.go:3952`, `event.html:697` |
 | G10 | **No vetted HTML sanitizer** for imported descriptions (bluemonday); RSS bodies stored raw. | P1 | Code | `fetchurl_rss.go:194` |

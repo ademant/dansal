@@ -482,7 +482,12 @@ type Event struct {
 	SeriesImageAIGenerated bool   `json:"series_image_ai_generated,omitempty"`
 	// SeriesCadence (#1185) mirrors event_series.cadence for this event's
 	// series — see cmd/dansal's Event.SeriesCadence doc comment.
-	SeriesCadence          string `json:"series_cadence,omitempty"`
+	SeriesCadence string `json:"series_cadence,omitempty"`
+	// SourceAttribution/SourceLicence/SourceTermsURL (#1485) mirror
+	// cmd/dansal's Event fields of the same name — see its doc comment.
+	SourceAttribution      string `json:"source_attribution,omitempty"`
+	SourceLicence          string `json:"source_licence,omitempty"`
+	SourceTermsURL         string `json:"source_terms_url,omitempty"`
 	NeedsDuplicateReview   bool   `json:"needs_duplicate_review,omitempty"`
 	DuplicateOfID          *int   `json:"duplicate_of_id,omitempty"`
 	PreviousStartTime      string `json:"previous_start_time,omitempty"`

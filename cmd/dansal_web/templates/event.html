@@ -85,6 +85,11 @@
        the site doesn't actually know. */}}
   {{- if .BookingURL}}, "offers": {"@type": "Offer", "url": "{{.BookingURL}}", "availability": "https://schema.org/InStock"}{{end}}
   {{- end}}
+  {{- /* Public import credit (#1485, compliance G9 phase-67) */}}
+  {{- if .FetchSourceID}}
+  {{- with .SourceAttribution}}, "creditText": "{{.}}"{{end}}
+  {{- with .SourceTermsURL}}, "isBasedOn": "{{.}}"{{end}}
+  {{- end}}
   }
   {{- if and .Location .ID}}, {
     "@id": "https://{{$.Domain}}/location/{{.Location.ID}}",
@@ -719,6 +724,26 @@
         {{end}}
       {{end}}
     </div>
+    {{end}}
+
+    {{/* Public import credit (#1485, compliance G9 phase-67) — separate from
+         the {{if $.User}} admin edit-link block above, which must stay
+         admin-only regardless (it links to an internal admin page).
+         Falls back to the linked organization's name/website when the
+         source's own attribution/terms_url were never filled in; shows
+         nothing if neither is available rather than blocking the page. */}}
+    {{if .FetchSourceID}}
+    {{if or .SourceAttribution $.Data.Org}}
+    <div class="sidebar-block">
+      <div class="sidebar-label">{{$.Strings.T "evt_import_credit"}}</div>
+      <div class="sidebar-meta-text">{{if .SourceAttribution}}{{.SourceAttribution}}{{else}}{{$.Data.Org.Name}}{{end}}{{with .SourceLicence}} · {{.}}{{end}}</div>
+      {{if .SourceTermsURL}}
+      <div><a href="{{.SourceTermsURL}}" target="_blank" rel="noopener" class="sidebar-link">{{$.Strings.T "evt_import_terms"}}</a></div>
+      {{else if $.Data.Org.Website}}
+      <div><a href="{{$.Data.Org.Website}}" target="_blank" rel="noopener" class="sidebar-link">{{$.Strings.T "evt_website"}}</a></div>
+      {{end}}
+    </div>
+    {{end}}
     {{end}}
 
     <p class="evt-disclaimer">{{$.Strings.T "evt_disclaimer"}}</p>

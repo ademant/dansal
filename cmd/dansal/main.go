@@ -2928,6 +2928,29 @@ func migrateDB() {
 			db.Exec(entityRedirectsSchema)
 		}
 	}
+	// #1483: per-source licence/attribution/opt-out (compliance G9, phase-65).
+	if !applied(48) {
+		db.Exec("ALTER TABLE fetch_sources ADD COLUMN licence TEXT NOT NULL DEFAULT ''")
+		db.Exec("ALTER TABLE fetch_sources ADD COLUMN attribution TEXT NOT NULL DEFAULT ''")
+		db.Exec("ALTER TABLE fetch_sources ADD COLUMN terms_url TEXT NOT NULL DEFAULT ''")
+		db.Exec("ALTER TABLE fetch_sources ADD COLUMN opt_out INTEGER NOT NULL DEFAULT 0")
+		mark(48)
+	}
+	// Safety net: ensure each column exists even if migration 48 was pre-marked.
+	for _, col := range []string{"licence", "attribution", "terms_url"} {
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('fetch_sources') WHERE name=?", col).Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE fetch_sources ADD COLUMN " + col + " TEXT NOT NULL DEFAULT ''")
+		}
+	}
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('fetch_sources') WHERE name='opt_out'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE fetch_sources ADD COLUMN opt_out INTEGER NOT NULL DEFAULT 0")
+		}
+	}
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -4030,7 +4053,11 @@ func createTables() error {
 		updated_by TEXT DEFAULT '',
 		kufer_config TEXT,
 		category_filter TEXT,
-		imported_once INTEGER NOT NULL DEFAULT 0
+		imported_once INTEGER NOT NULL DEFAULT 0,
+		licence TEXT NOT NULL DEFAULT '',
+		attribution TEXT NOT NULL DEFAULT '',
+		terms_url TEXT NOT NULL DEFAULT '',
+		opt_out INTEGER NOT NULL DEFAULT 0
 	);
 	CREATE TABLE IF NOT EXISTS location_organizations (
 		location_id INTEGER NOT NULL,
@@ -4499,6 +4526,7 @@ func createTables() error {
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(44)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(45)")
 	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(46)")
+	db.Exec("INSERT OR IGNORE INTO schema_migrations(version) VALUES(48)")
 	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_display_name_unique
 		ON users(display_name COLLATE NOCASE)
 		WHERE display_name IS NOT NULL AND display_name != ''`)

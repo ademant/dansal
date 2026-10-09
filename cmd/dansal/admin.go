@@ -310,6 +310,12 @@ func adminFetchAll() adminResponse {
 		if src.Type == "jsonld" && src.ImportedOnce {
 			continue
 		}
+		// OptOut (#1483, compliance G9): the publisher asked to stop being
+		// fetched. Already-imported events and their attribution are left
+		// as-is — this only stops future polling.
+		if src.OptOut {
+			continue
+		}
 		sources = append(sources, src)
 	}
 

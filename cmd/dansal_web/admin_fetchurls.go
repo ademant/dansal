@@ -367,7 +367,21 @@ func adminFetchurlSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 		templateMode := r.FormValue("template_mode")
 		kuferConfig := kuferConfigFromForm(r)
 
-		if err := client.UpdateFetchSource(r.Context(), id, typ, tags, danceIDs, orgID, templateID, templateMode, fetchTemplateData(db, templateID), kuferConfig, token); err != nil {
+		update := FetchSourceUpdate{
+			Type:         typ,
+			Tags:         tags,
+			DanceIDs:     danceIDs,
+			OrgID:        orgID,
+			TemplateID:   templateID,
+			TemplateMode: templateMode,
+			TemplateData: fetchTemplateData(db, templateID),
+			KuferConfig:  kuferConfig,
+			Licence:      r.FormValue("licence"),
+			Attribution:  r.FormValue("attribution"),
+			TermsURL:     r.FormValue("terms_url"),
+			OptOut:       r.FormValue("opt_out") != "",
+		}
+		if err := client.UpdateFetchSource(r.Context(), id, update, token); err != nil {
 			src, _ := client.GetFetchSource(r.Context(), id, token)
 			orgs, _ := client.GetOrganizations(r.Context())
 			orgMap := buildOrgMap(orgs)
@@ -562,7 +576,21 @@ func adminFetchurlBulkHandler(cfg *Config, client *DansalClient) http.HandlerFun
 						}
 						if !hasTag {
 							newTags := append(src.Tags, newTag)
-							if err := client.UpdateFetchSource(r.Context(), src.ID, src.Type, newTags, src.DanceIDs, src.OrganizationID, src.TemplateID, src.TemplateMode, src.TemplateData, src.KuferConfig, token); err != nil {
+							update := FetchSourceUpdate{
+								Type:         src.Type,
+								Tags:         newTags,
+								DanceIDs:     src.DanceIDs,
+								OrgID:        src.OrganizationID,
+								TemplateID:   src.TemplateID,
+								TemplateMode: src.TemplateMode,
+								TemplateData: src.TemplateData,
+								KuferConfig:  src.KuferConfig,
+								Licence:      src.Licence,
+								Attribution:  src.Attribution,
+								TermsURL:     src.TermsURL,
+								OptOut:       src.OptOut,
+							}
+							if err := client.UpdateFetchSource(r.Context(), src.ID, update, token); err != nil {
 								log.Printf("bulk add tag %q to fetch source %d: %v", newTag, src.ID, err)
 							}
 						}

@@ -849,6 +849,10 @@ type FetchSource struct {
 	TemplateMode   string   `json:"template_mode,omitempty"`
 	TemplateData   string   `json:"template_data,omitempty"`
 	KuferConfig    string   `json:"kufer_config,omitempty"`
+	Licence        string   `json:"licence,omitempty"`
+	Attribution    string   `json:"attribution,omitempty"`
+	TermsURL       string   `json:"terms_url,omitempty"`
+	OptOut         bool     `json:"opt_out,omitempty"`
 }
 
 // KuferConfig mirrors cmd/dansal's type of the same name — the JSON shape
@@ -1687,16 +1691,40 @@ func (c *DansalClient) GetFetchSource(ctx context.Context, id int, token string)
 	return src, c.do(ctx, http.MethodGet, fmt.Sprintf("/api/v1/feeds/%d", id), token, nil, &src)
 }
 
-func (c *DansalClient) UpdateFetchSource(ctx context.Context, id int, typ string, tags []string, danceIDs []int, orgID *int, templateID *int, templateMode, templateData string, kuferConfig string, token string) error {
+// FetchSourceUpdate is the body for DansalClient.UpdateFetchSource. A named
+// struct rather than another positional parameter, since Licence/
+// Attribution/TermsURL/OptOut (#1483) would have made an already-9-parameter
+// function harder to call correctly, not easier — same reasoning as
+// EventInput in cmd/dansal/events.go.
+type FetchSourceUpdate struct {
+	Type         string
+	Tags         []string
+	DanceIDs     []int
+	OrgID        *int
+	TemplateID   *int
+	TemplateMode string
+	TemplateData string
+	KuferConfig  string
+	Licence      string
+	Attribution  string
+	TermsURL     string
+	OptOut       bool
+}
+
+func (c *DansalClient) UpdateFetchSource(ctx context.Context, id int, u FetchSourceUpdate, token string) error {
 	payload := map[string]any{
-		"type":            typ,
-		"tags":            tags,
-		"dance_ids":       danceIDs,
-		"organization_id": orgID,
-		"template_id":     templateID,
-		"template_mode":   templateMode,
-		"template_data":   templateData,
-		"kufer_config":    kuferConfig,
+		"type":            u.Type,
+		"tags":            u.Tags,
+		"dance_ids":       u.DanceIDs,
+		"organization_id": u.OrgID,
+		"template_id":     u.TemplateID,
+		"template_mode":   u.TemplateMode,
+		"template_data":   u.TemplateData,
+		"kufer_config":    u.KuferConfig,
+		"licence":         u.Licence,
+		"attribution":     u.Attribution,
+		"terms_url":       u.TermsURL,
+		"opt_out":         u.OptOut,
 	}
 	body, _ := json.Marshal(payload)
 	return c.do(ctx, http.MethodPatch, fmt.Sprintf("/api/v1/feeds/%d", id), token, body, nil)

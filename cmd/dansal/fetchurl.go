@@ -46,6 +46,10 @@ type FetchSourcePatchRequest struct {
 	TemplateData   string   `json:"template_data"`
 	KuferConfig    string   `json:"kufer_config"`
 	CategoryFilter []string `json:"category_filter"`
+	Licence        string   `json:"licence"`
+	Attribution    string   `json:"attribution"`
+	TermsURL       string   `json:"terms_url"`
+	OptOut         bool     `json:"opt_out"`
 }
 
 type FetchSource struct {
@@ -75,6 +79,16 @@ type FetchSource struct {
 	// the event has passed, which would otherwise fail forever and inflate
 	// consecutive_failures for no benefit.
 	ImportedOnce bool `json:"imported_once,omitempty"`
+	// Licence/Attribution/TermsURL (#1483, compliance G9): evidence of the
+	// basis on which this source's content is republished, and the text/link
+	// shown as public "imported from" credit (see event.html, phase-67).
+	Licence     string `json:"licence,omitempty"`
+	Attribution string `json:"attribution,omitempty"`
+	TermsURL    string `json:"terms_url,omitempty"`
+	// OptOut (#1483): set when the publisher has asked to stop being
+	// fetched. The recurring importer (fetch-all) skips opted-out sources;
+	// already-imported events and their attribution are left as-is.
+	OptOut bool `json:"opt_out,omitempty"`
 }
 
 // KuferConfig is the JSON stored in fetch_sources.kufer_config for type="kufer"
@@ -92,7 +106,7 @@ type KuferConfig struct {
 }
 
 // fetchSourceCols is the SELECT column list for fetch_sources rows.
-const fetchSourceCols = "id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, last_result, created_at, template_id, template_mode, COALESCE(template_data,''), COALESCE(kufer_config,''), COALESCE(category_filter,''), imported_once"
+const fetchSourceCols = "id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, last_result, created_at, template_id, template_mode, COALESCE(template_data,''), COALESCE(kufer_config,''), COALESCE(category_filter,''), imported_once, licence, attribution, terms_url, opt_out"
 
 // templateImportData mirrors the JSON stored in event_templates.data.
 // Timetable uses the same TimetableEntryRequest as the direct API and event
@@ -602,7 +616,7 @@ func scanFetchSource(s scanner) (FetchSource, error) {
 	var lastFetched, lastResult sql.NullString
 	var orgID, templateID sql.NullInt64
 	var templateMode sql.NullString
-	if err := s.Scan(&src.ID, &src.URL, &src.Type, &tagsJSON, &danceIDsCSV, &orgID, &lastFetched, &lastResult, &src.CreatedAt, &templateID, &templateMode, &src.TemplateData, &src.KuferConfig, &categoryFilterJSON, &src.ImportedOnce); err != nil {
+	if err := s.Scan(&src.ID, &src.URL, &src.Type, &tagsJSON, &danceIDsCSV, &orgID, &lastFetched, &lastResult, &src.CreatedAt, &templateID, &templateMode, &src.TemplateData, &src.KuferConfig, &categoryFilterJSON, &src.ImportedOnce, &src.Licence, &src.Attribution, &src.TermsURL, &src.OptOut); err != nil {
 		return FetchSource{}, err
 	}
 	if tagsJSON != "" {
@@ -788,6 +802,10 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 	src.TemplateMode = req.TemplateMode
 	src.TemplateData = req.TemplateData
 	src.KuferConfig = req.KuferConfig
+	src.Licence = req.Licence
+	src.Attribution = req.Attribution
+	src.TermsURL = req.TermsURL
+	src.OptOut = req.OptOut
 	if src.TemplateID == nil {
 		src.TemplateData = ""
 	}
@@ -811,8 +829,8 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 		kuferVal = src.KuferConfig
 	}
 	if _, err := db.Exec(
-		"UPDATE fetch_sources SET type = ?, tags = ?, organization_id = ?, template_id = ?, template_mode = ?, template_data = ?, kufer_config = ?, category_filter = ?, updated_at = strftime('%s','now'), updated_by = ? WHERE id = ?",
-		src.Type, string(tagsJSON), orgVal, tplVal, src.TemplateMode, tplDataVal, kuferVal, string(categoryFilterJSON), resolveDisplayName(callerID), src.ID,
+		"UPDATE fetch_sources SET type = ?, tags = ?, organization_id = ?, template_id = ?, template_mode = ?, template_data = ?, kufer_config = ?, category_filter = ?, licence = ?, attribution = ?, terms_url = ?, opt_out = ?, updated_at = strftime('%s','now'), updated_by = ? WHERE id = ?",
+		src.Type, string(tagsJSON), orgVal, tplVal, src.TemplateMode, tplDataVal, kuferVal, string(categoryFilterJSON), src.Licence, src.Attribution, src.TermsURL, src.OptOut, resolveDisplayName(callerID), src.ID,
 	); err != nil {
 		writeInternalError(w, err)
 		return

@@ -62,6 +62,17 @@
     {{end}}
   </select>
 
+  <label for="attribution">{{$.Strings.T "fetch_attribution"}}</label>
+  <input id="attribution" type="text" name="attribution" value="{{.Source.Attribution}}" placeholder="{{$.Strings.T "fetch_attribution_placeholder"}}">
+
+  <label for="licence">{{$.Strings.T "fetch_licence"}}</label>
+  <input id="licence" type="text" name="licence" value="{{.Source.Licence}}">
+
+  <label for="terms_url">{{$.Strings.T "fetch_terms_url"}}</label>
+  <input id="terms_url" type="url" name="terms_url" value="{{.Source.TermsURL}}">
+
+  <label class="check-label"><input type="checkbox" name="opt_out" value="1"{{if .Source.OptOut}} checked{{end}}> {{$.Strings.T "fetch_opt_out"}}</label>
+
   {{if .Dances}}
   <label>Dance styles</label>
   <div class="dance-checkboxes">

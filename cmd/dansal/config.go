@@ -98,7 +98,10 @@ type ServerConfig struct {
 	// BackupKeep (#1407) is how many of the most recent archives to keep per
 	// kind (dansal-backup-*, dansal-incremental-*, dansal-config-backup-*)
 	// after each successful backup; older ones in that kind are pruned.
-	// 0 (default) keeps every archive forever, matching pre-#1407 behavior.
+	// 0/unset defaults to 14 (#1493, compliance G13); set -1 to keep every
+	// archive forever. Prior to #1493, 0 itself meant unlimited -- an
+	// existing config.yaml with an explicit `backup_keep: 0` must change it
+	// to -1 to preserve that behavior after upgrading.
 	BackupKeep int `yaml:"backup_keep"`
 	// BackupEncryptionKeyFile (#1492, compliance G13) points at a file whose
 	// raw contents are used as the encryption key for nightly/scheduled
@@ -380,6 +383,15 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.DataRetentionDays == 0 {
 		cfg.Server.DataRetentionDays = 90
+	}
+	// #1493 (compliance G13): unset/0 now means "use the default" (14)
+	// rather than "keep forever" -- an instance that wants unlimited
+	// retention must say so explicitly with -1. Anyone upgrading with an
+	// existing config.yaml that wrote `backup_keep: 0` to mean unlimited
+	// will silently start pruning to 14 after this change; they need to
+	// change that value to -1 to keep prior behavior.
+	if cfg.Server.BackupKeep == 0 {
+		cfg.Server.BackupKeep = 14
 	}
 }
 

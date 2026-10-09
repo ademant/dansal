@@ -161,3 +161,28 @@ func TestPruneBackupsIfConfiguredSkipsOutsideBackupDir(t *testing.T) {
 		t.Errorf("a write outside backup_dir must never be pruned, got %d files remaining, want 3", len(entries))
 	}
 }
+
+// TestApplyDefaultsBackupKeep covers #1493 (compliance G13): unset/0 now
+// defaults to 14 rather than meaning unlimited, and -1 is the new explicit
+// "keep forever" sentinel (pruneBackupsIfConfigured's existing
+// BackupKeep <= 0 guard already treats any non-positive value as a no-op,
+// so -1 works without any change there).
+func TestApplyDefaultsBackupKeep(t *testing.T) {
+	cfg := &Config{}
+	applyDefaults(cfg)
+	if cfg.Server.BackupKeep != 14 {
+		t.Errorf("unset backup_keep after applyDefaults = %d, want 14", cfg.Server.BackupKeep)
+	}
+
+	cfg = &Config{Server: ServerConfig{BackupKeep: -1}}
+	applyDefaults(cfg)
+	if cfg.Server.BackupKeep != -1 {
+		t.Errorf("explicit backup_keep: -1 after applyDefaults = %d, want -1 preserved", cfg.Server.BackupKeep)
+	}
+
+	cfg = &Config{Server: ServerConfig{BackupKeep: 30}}
+	applyDefaults(cfg)
+	if cfg.Server.BackupKeep != 30 {
+		t.Errorf("explicit backup_keep: 30 after applyDefaults = %d, want 30 preserved", cfg.Server.BackupKeep)
+	}
+}

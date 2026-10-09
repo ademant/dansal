@@ -264,7 +264,9 @@ sudo systemctl status dansal-backup@prod.timer
 
 Backups are written to `server.backup_dir` (default `/var/lib/dansal/<instance>/backups/`).
 
-By default every archive is kept forever. Set `server.backup_keep: 30` (or any number) to bound disk usage — after each successful backup, older archives beyond that count are deleted, counted separately per kind (full backups, incremental backups, and config backups never evict each other). Only dansal's own generated filenames (`dansal-backup-*`, `dansal-incremental-*`, `dansal-config-backup-*`) are ever pruned; anything else placed in `backup_dir` is left alone. A backup written to an explicit `--output` path outside `backup_dir` is never pruned either.
+`server.backup_keep` defaults to 14 (#1493, compliance G13) — after each successful backup, archives beyond that count are deleted, counted separately per kind (full backups, incremental backups, and config backups never evict each other). Set it to any other number to change the retention window, or to `-1` to keep every archive forever. Only dansal's own generated filenames (`dansal-backup-*`, `dansal-incremental-*`, `dansal-config-backup-*`) are ever pruned; anything else placed in `backup_dir` is left alone. A backup written to an explicit `--output` path outside `backup_dir` is never pruned either.
+
+**Upgrading from before #1493:** `backup_keep: 0` used to mean unlimited retention. It now means "use the default" (14). If you were relying on `0` for unlimited retention, change it to `-1` when upgrading.
 
 ### Encryption at Rest (#1492, compliance G13)
 

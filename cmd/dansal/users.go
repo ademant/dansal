@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ademant/dansal/internal/userexport"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -501,6 +502,26 @@ func getMeStats(w http.ResponseWriter, r *http.Request) {
 		"events_created":     created,
 		"events_last_edited": lastEdited,
 	})
+}
+
+// GET /api/v1/me/export - Art. 15/20 self-service data export (#1479): every
+// row across every table with a foreign key to users(id), including the
+// caller's own account row. See internal/userexport for what's covered and
+// what's redacted.
+func getMeExport(w http.ResponseWriter, r *http.Request) {
+	callerID, _ := callerFromRequest(r)
+	if callerID == 0 {
+		writeError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	data, err := userexport.Export(db, int64(callerID))
+	if err != nil {
+		log.Printf("getMeExport: %v", err)
+		writeError(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(data)
 }
 
 // DELETE /api/v1/users/me - Self-deletion by the authenticated user.

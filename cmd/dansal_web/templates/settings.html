@@ -345,6 +345,13 @@
   </div>
   {{end}}
 
+  {{/* Export my data (#1479) */}}
+  <div class="settings-card">
+    <h2>{{$.Strings.T "settings_export_title"}}</h2>
+    <p class="hint" style="margin:0 0 .5rem">{{$.Strings.T "settings_export_hint"}}</p>
+    <a href="/settings/export" class="btn-secondary">{{$.Strings.T "settings_export_btn"}}</a>
+  </div>
+
   {{/* Delete account */}}
   {{with .Data}}
   {{if ne .User.Role "admin"}}

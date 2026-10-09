@@ -209,6 +209,10 @@ func main() {
 		cmdExport(rest)
 	case "import":
 		cmdImport(rest)
+	case "export-user":
+		cmdExportUser(rest)
+	case "export-user-by-email":
+		cmdExportUserByEmail(rest)
 	case "smtp-show":
 		cmdSMTPShow(rest)
 	case "smtp-set":
@@ -313,6 +317,10 @@ Data export/import:
   export --table TABLE [--output FILE] [--db PATH]   Export table to JSON
   import --table TABLE [--input FILE] [--db PATH]    Import JSON (dry-run by default)
          [--apply]                                   Tables: fetchurl, locations, organisations, events
+
+Personal data export (GDPR Art. 15/20):
+  export-user --id INT [--output FILE] [--db PATH]            Export a registered user's data
+  export-user-by-email --email STR [--output FILE] [--db PATH] Export an anonymous visitor's data
 
 SMTP:
   smtp-show                                          Show current SMTP configuration
@@ -596,6 +604,35 @@ Flags:
   --input   Source JSON file (default: stdin)
   --db      Path to calendar.db (default: /var/lib/dansal/calendar.db)
   --apply   Write changes to the database (default is dry-run)`,
+
+	"export-user": `Usage: dansal_admin export-user --id INT [--output FILE] [--db PATH]
+
+GDPR Art. 15/20 export for a registered user: every row across every table
+with a foreign key to users(id), including the account row itself. Secret
+columns (password hash, TOTP secret, API key values, passkey public keys,
+session tokens) are never included. For DSARs against accounts that can no
+longer log in — a logged-in user can get the same data via
+GET /api/v1/me/export.
+
+Flags:
+  --id      User ID (required)
+  --output  Destination file (default: stdout)
+  --db      Path to calendar.db (default: /var/lib/dansal/calendar.db)`,
+
+	"export-user-by-email": `Usage: dansal_admin export-user-by-email --email STR [--output FILE] [--db PATH]
+
+GDPR Art. 15/20 export for an anonymous visitor (no account, so no user_id
+to key on): bookings, event suggestions, and contact-board posts/replies
+matched by email address, case-insensitively. Intended for manual use after
+a data-access request arrives at the instance's contact address — there is
+no public endpoint for this lookup, since it is unauthenticated by design
+and would otherwise let anyone read someone else's data by typing their
+email.
+
+Flags:
+  --email   Email address (required)
+  --output  Destination file (default: stdout)
+  --db      Path to calendar.db (default: /var/lib/dansal/calendar.db)`,
 
 	"fill-location-fields": `Usage: dansal_admin fill-location-fields [--db PATH] [--apply]
 

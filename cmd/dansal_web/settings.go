@@ -284,6 +284,29 @@ func settingsMagicLinkHandler(cfg *Config, client *DansalClient) http.HandlerFun
 	}
 }
 
+// settingsExportHandler proxies GET /api/v1/me/export (#1479) and serves
+// the result as a downloadable JSON file, rather than rendering it — this
+// is the user's own data export, not a page.
+func settingsExportHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		token := getSessionToken(r)
+		var result map[string]any
+		if err := client.do(r.Context(), "GET", "/api/v1/me/export", token, nil, &result, http.StatusOK); err != nil {
+			http.Error(w, `{"error":"failed to export data"}`, http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Disposition", `attachment; filename="dansal-data-export.json"`)
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "  ")
+		enc.Encode(result)
+	}
+}
+
 func settingsDeleteAccountHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		su, ok := requireLogin(w, r)

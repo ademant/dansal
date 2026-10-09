@@ -139,8 +139,14 @@ The six gaps below (confirmed bookings, `pending_fetch_suggestions`, expired-unc
 - Erasure: self-service `DELETE /api/v1/me` (`cmd/dansal/users.go:506-527`, web UI
   `cmd/dansal_web/settings.go:287`) + admin/CLI delete; schema-driven cascade nulls
   attribution or deletes dependent rows (`cmd/dansal/dbhelpers.go:29-64`).
-- **Access/export (Art. 15/20): ABSENT.** `dansal_admin export` covers 4 non-user tables
-  only (`cmd/dansal_admin/export_import.go:139-176`).
+- **Access/export (Art. 15/20): closed by #1479/#1480.** Registered users:
+  `GET /api/v1/me/export` + `dansal_admin export-user <id>`, schema-driven via
+  the same foreign-key walk as erasure above (`internal/userexport`). Anonymous
+  visitors (bookings/suggestions/board posts, email-only, no `user_id`):
+  `dansal_admin export-user-by-email <email>`, a manual-process tool run after
+  a request arrives at the instance's contact address (#1478) — deliberately
+  not a public endpoint, since an unauthenticated email-matched lookup would
+  let anyone read someone else's data.
 - Anonymisation routine: ABSENT (deletion only).
 - AP follower export/erasure: ABSENT.
 
@@ -304,7 +310,7 @@ Priorities: **P0** = blocks a credible compliance claim · **P1** = strong hygie
 | G3 | ~~**Retention sweeps missing** for 6 stores (§3.2).~~ **Closed by #1440**: all six now swept (§3.1), horizon configurable via `data_retention_days` (default 90). | P0 | Code | `main.go:356-401`, §3.1 |
 | G4 | ~~**DSA notice-and-action (Art. 16).** Public report endpoint (or `abuse@` contact surfaced on every page) → admin queue, with receipt confirmation.~~ **Closed by #1478**: the existing footer `Contact` field is the reporting channel (webmin hint now says so); operator still needs to set a reachable address and mention it in the privacy notice (G1). | P0 | Code | `siteconfig.html:165` |
 | G5 | **DSA statement of reasons (Art. 17).** Persist reason + ground + redress path when suggestions/replies are rejected; show it to the submitter. | P0 | Code | `main.go:4726,4743` |
-| G6 | **No data export (Art. 15/20).** CLI/API to dump one subject's data (account, sessions, bookings, posts, suggestions) as JSON. | P0 | Code | `export_import.go:139-176` |
+| G6 | ~~**No data export (Art. 15/20).** CLI/API to dump one subject's data (account, sessions, bookings, posts, suggestions) as JSON.~~ **Closed by #1479** (registered users) **and #1480** (anonymous visitors, manual). | P0 | Code | §3.3 |
 | G7 | **Log retention undefined.** Ship a logrotate stanza + journald `SystemMaxUse`; reduce routine email/IP logging where fail2ban doesn't need it; document the retention period in the notice. | P0 | Code+Ops | `deploy/nginx/README.md:263-265` |
 | G8 | **No breach runbook.** Document the 72h Art. 33 workflow: detection → assessment → authority notification → data-subject notification → record. | P1 | Operator | — |
 | G9 | **Feed robots.txt compliance + per-source licence/attribution fields**; show a public "imported from" credit on event pages; surface opt-out requests from publishers. | P1 | Code | `fetchurl.go:127`, `main.go:3952`, `event.html:697` |

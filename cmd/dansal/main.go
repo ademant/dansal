@@ -3860,7 +3860,7 @@ func createTables() error {
 		attributes TEXT,
 		contact_name TEXT,
 		contact_email TEXT,
-		suggester_email TEXT DEFAULT '',
+		suggester_email TEXT DEFAULT '', -- anonymous suggestions only (logged-in creates use created_by_id below); DSARs key on this, see dansal_admin export-user-by-email (#1480)
 		suggester_name TEXT DEFAULT '',
 		suggestion_token TEXT,
 		email_verified INTEGER DEFAULT 0,
@@ -4213,7 +4213,7 @@ func createTables() error {
 		persons INTEGER NOT NULL DEFAULT 1,
 		message TEXT DEFAULT '',
 		nickname TEXT NOT NULL,
-		email TEXT NOT NULL DEFAULT '',
+		email TEXT NOT NULL DEFAULT '', -- anonymous (user_id NULL) posts are keyed by this for DSARs; see dansal_admin export-user-by-email (#1480)
 		telegram_username TEXT,
 		poster_telegram_chat_id TEXT,
 		email_verified INTEGER DEFAULT 0,
@@ -4227,7 +4227,7 @@ func createTables() error {
 	CREATE TABLE IF NOT EXISTS contact_requests (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		post_id INTEGER NOT NULL,
-		sender_email TEXT NOT NULL DEFAULT '',
+		sender_email TEXT NOT NULL DEFAULT '', -- no user_id at all (replies to someone else's post); DSARs key on this, see dansal_admin export-user-by-email (#1480)
 		sender_telegram TEXT NOT NULL DEFAULT '',
 		message TEXT NOT NULL,
 		verify_token TEXT UNIQUE,
@@ -4239,7 +4239,7 @@ func createTables() error {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		event_id INTEGER NOT NULL,
 		name TEXT NOT NULL,
-		email TEXT NOT NULL,
+		email TEXT NOT NULL, -- no user_id at all; DSARs key on this, see dansal_admin export-user-by-email (#1480)
 		persons INTEGER NOT NULL DEFAULT 1,
 		message TEXT DEFAULT '',
 		status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','confirmed','approved','checked_in','cancelled')),
@@ -4338,7 +4338,7 @@ func createTables() error {
 	CREATE TABLE IF NOT EXISTS pending_fetch_suggestions (
 		id                INTEGER PRIMARY KEY AUTOINCREMENT,
 		token             TEXT NOT NULL UNIQUE,
-		email             TEXT NOT NULL,
+		email             TEXT NOT NULL, -- no user_id at all; DSARs key on this, see dansal_admin export-user-by-email (#1480)
 		feed_url          TEXT NOT NULL,
 		feed_type         TEXT NOT NULL,
 		event_count       INTEGER NOT NULL DEFAULT 0,
@@ -4919,6 +4919,7 @@ func main() {
 	// spellings (/users/me, /user/…, /auth/totp) stay as deprecated aliases.
 	smux.Handle("GET /api/v1/me", auth(getMe))
 	smux.Handle("GET /api/v1/me/stats", auth(getMeStats))
+	smux.Handle("GET /api/v1/me/export", auth(getMeExport))
 	smux.Handle("DELETE /api/v1/me", auth(deleteOwnAccount))
 	smux.Handle("POST /api/v1/me/password", auth(changeOwnPassword))
 	smux.Handle("POST /api/v1/me/magic-link", auth(generateSelfMagicLink))

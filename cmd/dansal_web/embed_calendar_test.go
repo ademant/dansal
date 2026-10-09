@@ -18,7 +18,7 @@ func TestEmbedCalendarOrgCheckboxes(t *testing.T) {
 	base := map[string]any{
 		"Lang": "de", "Nonce": "x", "Events": []Event{}, "CalData": template.JS("[]"),
 		"Tags": []Tag{}, "OrgNames": map[int]string{}, "From": "2026-01-01", "To": "2026-01-14",
-		"SelectedTag": "", "FPLocale": "", "FPLocaleSRI": "",
+		"SelectedTag": "", "FPLocale": "",
 		"Strings": strs, "BaseURL": "https://example.test", "SiteName": "dansal", "TileToken": "t",
 	}
 

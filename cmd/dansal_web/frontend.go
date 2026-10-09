@@ -509,6 +509,21 @@ var markerclusterJS []byte
 //go:embed static/leaflet.markercluster/MarkerCluster.Default.css
 var markerclusterCSS []byte
 
+// Vendored flatpickr (#1448, compliance G11): the exact same pinned bytes
+// previously loaded from unpkg.com in embed_calendar.html -- verified
+// byte-identical against the existing SRI hashes (embed.go's
+// fpLocaleSRI/the template's integrity= attributes) before vendoring, so
+// this is pure self-hosting, not a version change.
+//
+//go:embed static/flatpickr/flatpickr.js
+var flatpickrJS []byte
+
+//go:embed static/flatpickr/flatpickr.css
+var flatpickrCSS []byte
+
+//go:embed static/flatpickr/l10n
+var flatpickrLocalesFS embed.FS
+
 func suggestAvailable(cfg *Config) bool {
 	return cfg.SMTPHost != "" || cfg.SMTPSendmail != "" || cfg.TelegramBotToken != ""
 }

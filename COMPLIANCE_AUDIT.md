@@ -203,8 +203,10 @@ Two keys only: `colorScheme`, `dansal_starred_<eventID>` — client-side, purged
 | Provider | Where | Notes |
 |---|---|---|
 | ~~`challenges.cloudflare.com` Turnstile~~ | — | **Removed by #1487**: the other anti-abuse layers on the suggest form (honeypot, form-token timing, rate limits, email verification) were already judged sufficient on their own. |
-| `unpkg.com` flatpickr (**US**) | `templates/embed_calendar.html:7,101-102` | Calendar embeds only; SRI-pinned. Main site already self-hosts (`cmd/dansal_web/frontend.go:439`). Self-hosting this too tracked in #1448. |
-| `unpkg.com` qrcode (**US**) | `cmd/dansal_webmin/templates/users.html:59` | Admin UI only; **no SRI**. |
+| ~~`unpkg.com` flatpickr~~ | — | **Self-hosted by #1448** (`static/flatpickr/`, byte-verified against the previous SRI hashes before vendoring). `unpkg.com` dropped from the CSP entirely. |
+| ~~`unpkg.com` qrcode~~ | — | **Self-hosted by #1448** — copied the same file `cmd/dansal_web` already vendors into `cmd/dansal_webmin/static/`. |
+
+No third-party browser loads remain anywhere in the product.
 
 Map tiles are **server-side proxied** (`cmd/dansal_web/tiles.go:37-43`) — visitor IPs
 never reach OSM tile servers; OSM attribution always rendered (`static/base.js:212-224`).
@@ -229,7 +231,6 @@ referrer — no dansal redirect layer, no click tracking, no UTM/personal-data p
 | Destination | Data sent | Side | Refs |
 |---|---|---|---|
 | `api.pwnedpasswords.com` (**US**) | 5-char SHA-1 prefix of new password | server | `cmd/dansal/users.go:641` |
-| `unpkg.com` (**US**) | visitor IP | browser | `templates/embed_calendar.html`, webmin `users.html` |
 | `api.telegram.org` (**Dubai/BVI**) | chat_id, verification/magic links | server | `cmd/dansal/telegram.go:21` |
 | Matrix homeserver (operator-configured) | verification/magic messages | server | `cmd/dansal/verify.go:231` |
 | SMTP relay (operator-configured) | recipient address, message body | server | `cmd/dansal/email.go:114-160` |
@@ -320,7 +321,7 @@ Priorities: **P0** = blocks a credible compliance claim · **P1** = strong hygie
 | G8 | **No breach runbook.** Document the 72h Art. 33 workflow: detection → assessment → authority notification → data-subject notification → record. | P1 | Operator | — |
 | G9 | ~~**Feed robots.txt compliance + per-source licence/attribution fields**; show a public "imported from" credit on event pages; surface opt-out requests from publishers.~~ **Closed by #1483/#1484/#1485.** | P1 | Code | §7 |
 | G10 | ~~**No vetted HTML sanitizer** for imported descriptions (bluemonday); RSS bodies stored raw.~~ **Closed by #1447.** | P1 | Code | §7 |
-| G11 | **Third-party JS**: self-host flatpickr on embeds and qrcode in webmin (add SRI at minimum). ~~Disclose Turnstile in the notice or replace with an EU-hosted captcha.~~ **Turnstile removed entirely by #1487**; flatpickr/qrcode tracked in #1448. | P1 | Code | `embed_calendar.html:7`, `users.html:59` |
+| G11 | ~~**Third-party JS**: self-host flatpickr on embeds and qrcode in webmin; disclose Turnstile or replace it.~~ **Closed by #1487** (Turnstile removed entirely) **and #1448** (flatpickr/qrcode self-hosted, `unpkg.com` dropped from both CSPs). No third-party browser loads remain. | P1 | Code | §4.3 |
 | G12 | **Federation privacy**: consider `authorized_fetch: true` by default (follower lists are currently unauthenticated-readable); define follower-data retention/erasure; add an abuse contact for AP peers. | P1 | Code | `config.go:50-54` |
 | G13 | **Backups**: default to encrypted archives, set a finite `backup_keep`, document restore test cadence. | P1 | Code+Ops | `config.go:98-102`, `backup.go:118` |
 | G14 | **Admin 2FA enforcement** option (require TOTP/WebAuthn for admin roles). | P2 | Code | — |

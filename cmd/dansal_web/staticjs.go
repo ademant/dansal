@@ -93,7 +93,30 @@ var (
 	markerclusterCSSMin    []byte
 	markerclusterCSSGzip   []byte
 	markerclusterCSSBrotli []byte
+
+	// Vendored flatpickr (#1448) gets the same treatment. flatpickrLocales
+	// maps each flatpickr locale code (embed_calendar.go's fpLocales values,
+	// not dansal's own language codes) to its precomputed representations.
+	flatpickrJSMin     []byte
+	flatpickrJSGzip    []byte
+	flatpickrJSBrotli  []byte
+	flatpickrCSSMin    []byte
+	flatpickrCSSGzip   []byte
+	flatpickrCSSBrotli []byte
+	flatpickrLocales   map[string]negotiatedAsset
 )
+
+// flatpickrLocaleCodes are the l10n files vendored under static/flatpickr/l10n
+// -- see embed_calendar.go's fpLocales for which dansal language maps to which
+// of these.
+var flatpickrLocaleCodes = []string{"de", "fr", "es", "it", "nl", "uk", "cat", "pt", "pl", "cs"}
+
+// negotiatedAsset bundles the three representations serveNegotiatedStatic
+// picks between, for assets (like each flatpickr locale file) kept in a map
+// rather than named variables.
+type negotiatedAsset struct {
+	plain, gzip, brotli []byte
+}
 
 func init() {
 	baseJSMin = minifyBytes("application/javascript", "base.js", baseJS)
@@ -114,6 +137,24 @@ func init() {
 	markerclusterCSSMin = minifyBytes("text/css", "MarkerCluster.Default.css", markerclusterCSS)
 	markerclusterCSSGzip = mustGzip(markerclusterCSSMin)
 	markerclusterCSSBrotli = mustBrotli(markerclusterCSSMin)
+
+	flatpickrJSMin = minifyBytes("application/javascript", "flatpickr.js", flatpickrJS)
+	flatpickrJSGzip = mustGzip(flatpickrJSMin)
+	flatpickrJSBrotli = mustBrotli(flatpickrJSMin)
+	flatpickrCSSMin = minifyBytes("text/css", "flatpickr.css", flatpickrCSS)
+	flatpickrCSSGzip = mustGzip(flatpickrCSSMin)
+	flatpickrCSSBrotli = mustBrotli(flatpickrCSSMin)
+
+	flatpickrLocales = make(map[string]negotiatedAsset, len(flatpickrLocaleCodes))
+	for _, loc := range flatpickrLocaleCodes {
+		raw, err := flatpickrLocalesFS.ReadFile("static/flatpickr/l10n/" + loc + ".js")
+		if err != nil {
+			log.Printf("flatpickr locale %s: %v -- skipping", loc, err)
+			continue
+		}
+		minified := minifyBytes("application/javascript", "flatpickr/l10n/"+loc+".js", raw)
+		flatpickrLocales[loc] = negotiatedAsset{plain: minified, gzip: mustGzip(minified), brotli: mustBrotli(minified)}
+	}
 }
 
 func mustGzip(b []byte) []byte {

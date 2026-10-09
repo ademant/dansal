@@ -63,6 +63,7 @@ func main() {
 
 	buildHandler := func(cfg *Config) http.Handler {
 		mux := http.NewServeMux()
+		mux.HandleFunc("GET /static/qrcode.min.js", qrcodeJSHandler)
 		mux.HandleFunc("GET /login", loginPageHandler(cfg, tmpls))
 		mux.HandleFunc("POST /login", loginPostHandler(cfg, tmpls))
 		mux.HandleFunc("POST /logout", logoutHandler(cfg))
@@ -148,18 +149,17 @@ func main() {
 // since #1149 converted every onclick=/onchange=/onsubmit=/oninput=/
 // onkeydown=/onfocus=/onload= attribute to the delegated data-fn dispatcher,
 // the one remaining external <script src> tag (users.html's QR code
-// library) too. script-src therefore drops 'unsafe-inline' in favor of
+// library, now self-hosted too, #1448 -- no external script host left at
+// all) too. script-src therefore drops 'unsafe-inline' in favor of
 // 'nonce-<value>' 'strict-dynamic' (see cmd/dansal_web/main.go's baselineCSP
-// for the full rationale, identical here). https://unpkg.com is kept only as
-// a fallback for CSP2-but-not-CSP3 browsers, which ignore the unrecognized
-// 'strict-dynamic' token and fall back to the nonce plus this host list.
-// style-src keeps 'unsafe-inline' regardless (out of scope for #1141).
+// for the full rationale, identical here). style-src keeps 'unsafe-inline'
+// regardless (out of scope for #1141).
 func webminCSP(nonce string) string {
 	return "default-src 'self'; " +
 		"img-src 'self' data:; " +
 		"font-src 'self' data:; " +
-		"style-src 'self' 'unsafe-inline' https://unpkg.com; " +
-		"script-src 'self' 'nonce-" + nonce + "' 'strict-dynamic' https://unpkg.com; " +
+		"style-src 'self' 'unsafe-inline'; " +
+		"script-src 'self' 'nonce-" + nonce + "' 'strict-dynamic'; " +
 		"object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 }
 

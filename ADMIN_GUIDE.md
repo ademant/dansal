@@ -315,6 +315,49 @@ dansal_admin --config /etc/dansal/prod/config.yaml password-restore --input /pat
 sqlite3 /var/lib/dansal/<instance>/calendar.db "PRAGMA integrity_check;"
 ```
 
+### Restore Testing (#1494, compliance G13)
+
+An unverified backup is not a reliable control — test quarterly that the latest archive actually restores, using a disposable scratch instance so the test never touches live data. This builds on the same scratch-instance pattern used for e2e testing (see the `e2e-testing` skill):
+
+```bash
+# 1. Scratch directory with its own config, port, and (empty, fresh) DB.
+S=/tmp/dansal-restore-test
+mkdir -p "$S/images"
+cp packaging/config.yaml "$S/"
+sed -i \
+    -e 's|^  port: 8000|  port: 18000|' \
+    -e 's|^  listen: "127.0.0.1:8000"|  listen: "127.0.0.1:18000"|' \
+    -e "s|/var/lib/dansal/calendar.db|$S/calendar.db|" \
+    -e "s|/var/lib/dansal/images|$S/images|" \
+    -e "s|/var/lib/dansal/dansal.sock|$S/dansal.sock|" \
+    -e "s|/var/lib/dansal/backups|$S/backups|" \
+    -e 's|^  base_url: ""|  base_url: "http://localhost:18000"|' \
+    "$S/config.yaml"
+
+# 2. Start it (uses the binaries already built/deployed for this instance).
+/usr/lib/dansal/prod/dansal --config "$S/config.yaml" &
+DANSAL_PID=$!
+sleep 1
+
+# 3. Restore the latest backup into the scratch instance, not prod.
+#    Plaintext archive:
+dansal_admin --socket "$S/dansal.sock" restore --input /var/lib/dansal/prod/backups/dansal-backup-<latest>.tar.gz
+#    Encrypted archive (#1492):
+dansal_admin --socket "$S/dansal.sock" password-restore \
+  --input /var/lib/dansal/prod/backups/dansal-backup-<latest>.tar.gz.enc \
+  --password "$(cat /etc/dansal/prod/backup.key)"
+
+# 4. Verify.
+sqlite3 "$S/calendar.db" "PRAGMA integrity_check;"
+sqlite3 "$S/calendar.db" "SELECT COUNT(*) FROM events;"   # sanity-check against the live instance's rough count
+
+# 5. Tear down — never leave the scratch instance running.
+kill "$DANSAL_PID"
+rm -rf "$S"
+```
+
+Record the test date and result (pass/fail, row counts checked) somewhere durable — a line in the operator's own runbook or incident log is enough; there is no automated timer for this yet (a possible follow-up, not currently scheduled).
+
 ## System Maintenance
 
 ### Database Vacuum

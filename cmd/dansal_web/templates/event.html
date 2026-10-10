@@ -1485,17 +1485,29 @@ document.querySelectorAll('.board-post-form').forEach(function(form){
       .finally(function(){ if (submitBtn) submitBtn.disabled = false; });
   });
 })();
-// Background refresh for the booking form's _form_token (#1211) and the
-// board-post location search's geo_token (#1314). The board-post form's own
-// _form_token is handled separately (on-panel-open refresh, above). Runs
-// regardless of whether this event has a booking form — the location
-// search doesn't depend on one existing.
+// Booking form token (#1211) + geo_token (#1314) setup.
+// Board-post token is handled separately (on-panel-open, above).
 // base.js is deferred (#1326): setGeoToken() only exists once it has run,
-// so this must wait for DOMContentLoaded or it throws a ReferenceError and
-// the geocode search stays token-less (403 for anonymous visitors, #1379).
+// so this must wait for DOMContentLoaded (#1379).
+// #1486: booking form token issued lazily on first focusin so bot/crawler
+// page views don't consume the form_token_cap. keepFormTokensFresh still
+// handles 10-min background refresh after the first token is in place.
 document.addEventListener('DOMContentLoaded', function(){
   setGeoToken({{$.Data.GeoToken | jsStr}});
-  keepFormTokensFresh([document.querySelector('.booking-form input[name="_form_token"]')], function(d){
+  var bookingInput = document.querySelector('.booking-form input[name="_form_token"]');
+  if (bookingInput) {
+    var bookingForm = bookingInput.form || bookingInput.closest('form');
+    if (bookingForm) {
+      bookingForm.addEventListener('focusin', function onFirstFocus() {
+        bookingForm.removeEventListener('focusin', onFirstFocus);
+        fetch('/api-internal/refresh-form-token', {credentials: 'same-origin'})
+          .then(function(r){ return r.ok ? r.json() : null; })
+          .then(function(d){ if (d && d.token) bookingInput.value = d.token; if (d && d.geo_token) setGeoToken(d.geo_token); })
+          .catch(function(){});
+      });
+    }
+  }
+  keepFormTokensFresh([bookingInput], function(d){
     if (d.geo_token) setGeoToken(d.geo_token);
   });
 });

@@ -1125,7 +1125,6 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		// the banner forever.
 		flash := flashTake(r.URL.Query().Get("msg"))
 
-		clientIP := getClientIP(r)
 		lang := i18n.detectLang(r)
 		pageTitle := eventPageTitle(event, lang)
 
@@ -1166,8 +1165,6 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			BookingErrorMsg:        flash.BookingErrorMsg,
 			BookingErrorID:         flash.BookingErrorID,
 			UserOrgs:               epd.userOrgs,
-			BookFormToken:          issueFormToken(clientIP),
-			BoardFormToken:         issueFormToken(clientIP),
 			GeoToken:               newFormToken(),
 			PrevEvent:              epd.prevEvent,
 			NextEvent:              epd.nextEvent,
@@ -1775,7 +1772,6 @@ func boardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		sort.Strings(towns)
 
 		title := i18n.T(r, "nav_board")
-		ip := getClientIP(r)
 		data := BoardData{
 			Posts:         posts,
 			TownFilter:    townFilter,
@@ -1785,12 +1781,10 @@ func boardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			ShowSleep:     showSleep,
 			ShowTickets:   showTickets,
 			ShowLostFound: showLostFound,
-			FormToken:     issueFormToken(ip), // contact forms
-			ResendToken:   issueFormToken(ip), // resend-manage form (#1303)
-			RenewToken:    issueFormToken(ip), // renew-session form (#1303)
-			ResendSent:    q.Get("resend") == "1",
-			RenewSent:     q.Get("renew") == "1",
-			RenewDone:     q.Get("renewed") == "1",
+			// #1486: tokens issued lazily in JS on first user interaction
+			ResendSent: q.Get("resend") == "1",
+			RenewSent:  q.Get("renew") == "1",
+			RenewDone:  q.Get("renewed") == "1",
 		}
 		renderTemplate(w, tmpls.board, tmplData(r, cfg, i18n, title, data))
 	}

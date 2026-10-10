@@ -341,6 +341,9 @@ type siteConfigData struct {
 	TimezoneOptions []string
 	TimezoneError   string
 	SameAs          string // one external profile URL per line (#1296)
+	SecurityContact string // #1477: security.txt Contact (mailto: or https:)
+	SecurityPolicy  string // #1477: security.txt Policy URL (optional)
+	SecurityExpires string // #1477: security.txt Expires (RFC3339, stable)
 	NoDB            bool
 	NoImagesDir     bool
 }
@@ -445,6 +448,9 @@ func siteConfigPageHandler(cfg *Config, tmpls *Templates, db *sql.DB) http.Handl
 		data.DateFormat = getSiteSetting(db, "date_format")
 		data.TimeFormatSite = getSiteSetting(db, "time_format")
 		data.SameAs = getSiteSetting(db, "same_as")
+		data.SecurityContact = getSiteSetting(db, "security_contact")
+		data.SecurityPolicy = getSiteSetting(db, "security_policy")
+		data.SecurityExpires = getSiteSetting(db, "security_expires")
 		data.MultiLangFields = buildMultiLangFields(db)
 
 		if cfg.ImagesDir == "" {
@@ -510,6 +516,30 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		// (siteSettingsCache.SameAs) in dansal_web.
 		setSiteSetting(db, "same_as", strings.TrimSpace(r.FormValue("same_as")))
 
+		// #1477: security.txt contact/policy/expires — configurable without restart.
+		// A bare email address is stored with a mailto: prefix automatically.
+		// Expires defaults to now+1y when a contact is set but no explicit
+		// date was submitted or the submitted value is not a valid RFC3339 time.
+		secContact := strings.TrimSpace(r.FormValue("security_contact"))
+		if secContact != "" && !strings.HasPrefix(secContact, "mailto:") && !strings.HasPrefix(secContact, "https://") && !strings.HasPrefix(secContact, "http://") {
+			secContact = "mailto:" + secContact
+		}
+		setSiteSetting(db, "security_contact", secContact)
+		setSiteSetting(db, "security_policy", strings.TrimSpace(r.FormValue("security_policy")))
+		secExpires := strings.TrimSpace(r.FormValue("security_expires"))
+		if secExpires != "" {
+			// Validate: must parse as a date (YYYY-MM-DD or RFC3339).
+			if t, err := time.Parse("2006-01-02", secExpires); err == nil {
+				secExpires = t.UTC().Format(time.RFC3339)
+			} else if _, err := time.Parse(time.RFC3339, secExpires); err != nil {
+				secExpires = "" // invalid — treat as unset
+			}
+		}
+		if secExpires == "" && secContact != "" {
+			secExpires = time.Now().AddDate(1, 0, 0).UTC().Truncate(time.Second).Format(time.RFC3339)
+		}
+		setSiteSetting(db, "security_expires", secExpires)
+
 		// #1461: home_intro and default_desc_* save through
 		// siteConfigLegalTextSaveHandler now (same per-language, same-form
 		// shape as impressum/privacy/terms), not this main settings form.
@@ -542,7 +572,7 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		if len(uploadedAssets) > 0 {
 			log.Printf("audit: site_settings assets=[%s] updated by user=%d", strings.Join(uploadedAssets, ","), callerID)
 		}
-		log.Printf("audit: site_settings keys=[site_name,contact,holiday_country,default_dance_ids,indexnow_key,rescheduled_badge_days,logo_ai_generated,banner_ai_generated,date_format,time_format,same_as] updated by user=%d", callerID)
+		log.Printf("audit: site_settings keys=[site_name,contact,holiday_country,default_dance_ids,indexnow_key,rescheduled_badge_days,logo_ai_generated,banner_ai_generated,date_format,time_format,same_as,security_contact,security_policy,security_expires] updated by user=%d", callerID)
 
 		http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Settings saved"), http.StatusSeeOther)
 	}

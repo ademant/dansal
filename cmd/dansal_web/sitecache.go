@@ -42,6 +42,9 @@ type siteSettingsCache struct {
 	descBall             map[string]string // #1290: lang -> default event description sentence for a ball/fest-noz-tagged event
 	descWorkshop         map[string]string // #1290: lang -> default event description sentence for a workshop-tagged event
 	descFestival         map[string]string // #1290: lang -> default event description sentence for a festival-tagged event
+	securityContact      string            // #1477: security.txt Contact field (mailto: or https:)
+	securityPolicy       string            // #1477: security.txt Policy field (optional URL)
+	securityExpires      string            // #1477: security.txt Expires field (RFC3339, stable)
 }
 
 func newSiteSettingsCache(db *sql.DB) *siteSettingsCache {
@@ -93,15 +96,20 @@ func (c *siteSettingsCache) load() {
 	descBall := loadLangMapWithDefault(c.db, "default_desc_ball", webcommon.ParseLangYAML(webcommon.DefaultDescBallYAML))
 	descWorkshop := loadLangMapWithDefault(c.db, "default_desc_workshop", webcommon.ParseLangYAML(webcommon.DefaultDescWorkshopYAML))
 	descFestival := loadLangMapWithDefault(c.db, "default_desc_festival", webcommon.ParseLangYAML(webcommon.DefaultDescFestivalYAML))
+	securityContact := getSiteSetting(c.db, "security_contact")
+	securityPolicy := getSiteSetting(c.db, "security_policy")
+	securityExpires := getSiteSetting(c.db, "security_expires")
 	c.mu.Lock()
 	c.contact, c.siteName, c.impressum, c.legalPages, c.indexNowKey, c.holidayCountry, c.rescheduledBadgeDays,
 		c.defaultDanceIDs, c.bannerAIGenerated, c.logoAIGenerated,
 		c.dateFormat, c.timeFormatSite, c.tileToken, c.sameAs, c.homeIntro,
-		c.descBall, c.descWorkshop, c.descFestival, c.at =
+		c.descBall, c.descWorkshop, c.descFestival,
+		c.securityContact, c.securityPolicy, c.securityExpires, c.at =
 		contact, siteName, imp, legalPages, indexNowKey, holidayCountry, rescheduledBadgeDays,
 		defaultDanceIDs, bannerAIGenerated, logoAIGenerated,
 		dateFormat, timeFormatSite, tileToken, sameAs, homeIntro,
-		descBall, descWorkshop, descFestival, time.Now()
+		descBall, descWorkshop, descFestival,
+		securityContact, securityPolicy, securityExpires, time.Now()
 	c.placeCountries = placeCountries
 	c.mu.Unlock()
 }
@@ -382,4 +390,32 @@ func (c *siteSettingsCache) TimeFormatSite() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.timeFormatSite
+}
+
+// SecurityContact returns the webmin-configured security contact (mailto: or
+// https: URL) for security.txt (#1477), or "" when not set in the DB.
+func (c *siteSettingsCache) SecurityContact() string {
+	c.ensure()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.securityContact
+}
+
+// SecurityPolicy returns the optional webmin-configured security policy URL
+// for security.txt (#1477), or "" when not set.
+func (c *siteSettingsCache) SecurityPolicy() string {
+	c.ensure()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.securityPolicy
+}
+
+// SecurityExpires returns the stable RFC3339 Expires value for security.txt
+// (#1477). Empty string means unset — callers fall back to a dynamic 1-year
+// window only in that case.
+func (c *siteSettingsCache) SecurityExpires() string {
+	c.ensure()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.securityExpires
 }

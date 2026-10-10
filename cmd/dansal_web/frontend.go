@@ -431,6 +431,36 @@ const locationPastEventsLimit = 5
 // (#1436) checks for events — matches the proposal's "next 3 months".
 const locationNearbyMonths = 3
 
+// nearbyHint computes the "no upcoming events here, but N within X km"
+// fallback (#1436) around (lat, lon) — nil unless at least one radius has
+// >=1 published event in the next locationNearbyMonths. label is the town
+// or venue name shown on the /search deep link this builds. Shared by
+// locationHandler (venue pages) and cityHubHandler (#1506 — town pages with
+// no upcoming events).
+func nearbyHint(ctx context.Context, client *DansalClient, lat, lon float64, label string) *NearbyHint {
+	from := time.Now().Format("2006-01-02")
+	to := time.Now().AddDate(0, locationNearbyMonths, 0).Format("2006-01-02")
+	nc, err := client.GetNearbyCounts(ctx, lat, lon, from, to)
+	if err != nil {
+		log.Printf("nearbyHint(%s): could not load nearby counts: %v", label, err)
+		return nil
+	}
+	for _, radius := range nc.RadiiKm {
+		if n := nc.Counts[strconv.Itoa(radius)]; n >= 1 {
+			qs := url.Values{
+				"lat":    {strconv.FormatFloat(lat, 'f', -1, 64)},
+				"lng":    {strconv.FormatFloat(lon, 'f', -1, 64)},
+				"radius": {strconv.Itoa(radius)},
+				"from":   {from},
+				"to":     {to},
+				"label":  {label},
+			}
+			return &NearbyHint{Count: n, RadiusKm: radius, SearchURL: "/search?" + qs.Encode()}
+		}
+	}
+	return nil
+}
+
 type OrgListItem struct {
 	Org           Organization
 	Slug          string
@@ -1413,29 +1443,9 @@ func locationPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 
 		// #1436: when there's nothing upcoming, offer the nearest radius
 		// with at least one event instead of a dead end.
-		var nearbyHint *NearbyHint
+		var hint *NearbyHint
 		if len(events) == 0 && loc.Latitude != nil && loc.Longitude != nil {
-			from := time.Now().Format("2006-01-02")
-			to := time.Now().AddDate(0, locationNearbyMonths, 0).Format("2006-01-02")
-			nc, ncErr := client.GetNearbyCounts(r.Context(), *loc.Latitude, *loc.Longitude, from, to)
-			if ncErr != nil {
-				log.Printf("location %d: could not load nearby counts: %v", id, ncErr)
-			} else {
-				for _, radius := range nc.RadiiKm {
-					if n := nc.Counts[strconv.Itoa(radius)]; n >= 1 {
-						qs := url.Values{
-							"lat":    {strconv.FormatFloat(*loc.Latitude, 'f', -1, 64)},
-							"lng":    {strconv.FormatFloat(*loc.Longitude, 'f', -1, 64)},
-							"radius": {strconv.Itoa(radius)},
-							"from":   {from},
-							"to":     {to},
-							"label":  {title},
-						}
-						nearbyHint = &NearbyHint{Count: n, RadiusKm: radius, SearchURL: "/search?" + qs.Encode()}
-						break
-					}
-				}
-			}
+			hint = nearbyHint(r.Context(), client, *loc.Latitude, *loc.Longitude, title)
 		}
 
 		td := tmplData(r, cfg, i18n, title, LocationPageData{
@@ -1443,7 +1453,7 @@ func locationPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			Events:          events,
 			PastEvents:      pastEvents,
 			PastEventsTotal: pastTotal,
-			NearbyHint:      nearbyHint,
+			NearbyHint:      hint,
 		})
 		parts := []string{title}
 		if loc.Town != "" && loc.Town != title {

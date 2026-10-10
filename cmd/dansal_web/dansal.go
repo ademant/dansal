@@ -1200,6 +1200,17 @@ func (c *DansalClient) GetPastEventsByLocationWithTotal(ctx context.Context, loc
 	return events, total, err
 }
 
+// GetPastEventsByTownWithTotal is GetPastEventsByLocationWithTotal's town
+// equivalent, for /city/{slug} hub pages with no upcoming events (#1506).
+func (c *DansalClient) GetPastEventsByTownWithTotal(ctx context.Context, town string, limit int) ([]Event, int, error) {
+	var events []Event
+	total, err := c.getWithTotal(ctx, fmt.Sprintf(
+		"/api/v1/events?town=%s&include_past=true&end_time_before=%d&order=desc&limit=%d",
+		url.QueryEscape(town), time.Now().Unix(), limit,
+	), &events)
+	return events, total, err
+}
+
 // NearbyCounts is the /api/v1/events/nearby-counts response (#1436): how
 // many published events fall within each of RadiiKm, cumulatively, around a
 // point in a given date range.
@@ -4455,10 +4466,17 @@ func (c *DansalClient) TOTPDisable(ctx context.Context, token, code string) erro
 	return nil
 }
 
-// GetCities returns towns with geo-tagged venues and upcoming events (#965).
-func (c *DansalClient) GetCities(ctx context.Context) ([]City, error) {
+// GetCities returns towns with geo-tagged venues (#965). includeInactive
+// also returns towns with no upcoming published event (#1506) — used to
+// resolve /city/{slug} for towns whose only events are in the past; the
+// /cities directory and sitemap pass false to keep listing active towns only.
+func (c *DansalClient) GetCities(ctx context.Context, includeInactive bool) ([]City, error) {
+	path := "/api/v1/locations/cities"
+	if includeInactive {
+		path += "?include_inactive=true"
+	}
 	var cities []City
-	return cities, c.get(ctx, "/api/v1/locations/cities", &cities)
+	return cities, c.get(ctx, path, &cities)
 }
 
 // Syndication proxy helpers (#971, #953) — used by admin event handlers.

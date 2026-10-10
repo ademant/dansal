@@ -1759,10 +1759,17 @@ func townSlug(town string) string {
 // GET /api/v1/locations/cities — lists all towns that have at least one
 // geo-tagged location and at least one published future event. Results include
 // location_count and event_count per town. Used by /cities directory and
-// /city/{slug} hub pages.
+// sitemap (active towns only — no thin pages advertised).
+//
+// ?include_inactive=true drops the "at least one future event" requirement,
+// returning every town with a geo-tagged location regardless of event_count
+// (#1506) — used to resolve /city/{slug} for towns whose only events are in
+// the past, so the hub page can still show them (past events + nearby hint)
+// instead of 404ing.
 func getCities(w http.ResponseWriter, r *http.Request) {
+	includeInactive := r.URL.Query().Get("include_inactive") == "true"
 	now := time.Now().Unix()
-	rows, err := db.Query(`
+	query := `
 		SELECT l.town,
 		       COUNT(DISTINCT l.id) AS location_count,
 		       COUNT(DISTINCT e.id) AS event_count,
@@ -1774,10 +1781,14 @@ func getCities(w http.ResponseWriter, r *http.Request) {
 		    AND e.end_time >= ?
 		WHERE l.town IS NOT NULL AND l.town != ''
 		  AND l.latitude IS NOT NULL AND l.longitude IS NOT NULL
-		GROUP BY l.town
-		HAVING event_count > 0
-		ORDER BY l.town
-	`, now)
+		GROUP BY l.town`
+	if !includeInactive {
+		query += `
+		HAVING event_count > 0`
+	}
+	query += `
+		ORDER BY l.town`
+	rows, err := db.Query(query, now)
 	if err != nil {
 		writeInternalError(w, err)
 		return

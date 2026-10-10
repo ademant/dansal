@@ -299,8 +299,12 @@ func main() {
 		r.HandleFunc("GET /static/flatpickr/flatpickr.css", func(w http.ResponseWriter, r *http.Request) {
 			serveNegotiatedStatic(w, r, "text/css", flatpickrCSSMin, flatpickrCSSGzip, flatpickrCSSBrotli)
 		})
-		r.HandleFunc("GET /static/flatpickr/l10n/{locale}.js", func(w http.ResponseWriter, r *http.Request) {
-			asset, ok := flatpickrLocales[r.PathValue("locale")]
+		r.HandleFunc("GET /static/flatpickr/l10n/{locale}", func(w http.ResponseWriter, r *http.Request) {
+			// net/http's ServeMux wildcard must span the whole path segment
+			// ("{locale}.js" panics at startup: "bad wildcard segment") — so
+			// the ".js" suffix is stripped in the handler instead of the pattern.
+			locale := strings.TrimSuffix(r.PathValue("locale"), ".js")
+			asset, ok := flatpickrLocales[locale]
 			if !ok {
 				http.NotFound(w, r)
 				return

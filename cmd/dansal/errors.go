@@ -67,7 +67,7 @@ func readBodyOrError(w http.ResponseWriter, r *http.Request) (body []byte, ok bo
 		), http.StatusRequestEntityTooLarge)
 		return nil, false
 	}
-	writeError(w, err.Error(), http.StatusBadRequest)
+	writeError(w, "could not read request body", http.StatusBadRequest)
 	return nil, false
 }
 

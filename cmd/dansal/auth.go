@@ -371,6 +371,14 @@ func login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Admin accounts must use a passkey, magic link, OIDC, or mTLS — password
+	// login is disabled for them regardless of whether a password is set.
+	if user.Role == RoleAdmin {
+		log.Printf("auth failed from %s: password login attempted for admin user %d", clientIP, user.ID)
+		writeError(w, "Admin accounts cannot use password login — use a passkey or magic link", http.StatusForbidden)
+		return
+	}
+
 	// Reject empty password logins — user must use passkey or magic link.
 	if passwordHash == "" {
 		log.Printf("auth failed from %s: no password set for user %d", clientIP, user.ID)

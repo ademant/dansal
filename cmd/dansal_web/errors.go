@@ -64,3 +64,15 @@ func intPathValueOr400(w http.ResponseWriter, r *http.Request, key, errMsg strin
 	}
 	return v, true
 }
+
+// intPathValueOrJSON400 is intPathValueOr400's sibling for JSON admin
+// endpoints (#1514) that respond through writeJSONError (with its
+// error_id/logging) rather than a plain-text http.Error.
+func intPathValueOrJSON400(w http.ResponseWriter, r *http.Request, key, errMsg string) (int, bool) {
+	v, err := strconv.Atoi(r.PathValue(key))
+	if err != nil {
+		writeJSONError(w, r, http.StatusBadRequest, errMsg)
+		return 0, false
+	}
+	return v, true
+}

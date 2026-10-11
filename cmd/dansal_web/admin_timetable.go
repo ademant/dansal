@@ -6,7 +6,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"strconv"
 )
 
 // TimetableRoom is a room option for the timetable editor's room picker.
@@ -41,9 +40,8 @@ func adminTimetablePageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.Error(w, "invalid event id", http.StatusBadRequest)
+		id, ok := intPathValueOr400(w, r, "id", "invalid event id")
+		if !ok {
 			return
 		}
 		tok := getSessionToken(r)
@@ -56,7 +54,7 @@ func adminTimetablePageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 			instructors []Instructor
 		)
 
-		err = fetchParallel(
+		err := fetchParallel(
 			func() error { var err error; event, err = client.GetEventAuthed(ctx, id, tok); return err },
 			func() error {
 				var err error
@@ -252,9 +250,8 @@ func adminTimetableSaveHandler(client *DansalClient) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.Error(w, "invalid event id", http.StatusBadRequest)
+		id, ok := intPathValueOr400(w, r, "id", "invalid event id")
+		if !ok {
 			return
 		}
 		tok := getSessionToken(r)
@@ -286,9 +283,8 @@ func adminTimetableSyncTimesHandler(client *DansalClient) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.Error(w, "invalid event id", http.StatusBadRequest)
+		id, ok := intPathValueOr400(w, r, "id", "invalid event id")
+		if !ok {
 			return
 		}
 		tok := getSessionToken(r)
@@ -318,9 +314,8 @@ func adminTimetableTracksSaveHandler(client *DansalClient) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.Error(w, "invalid event id", http.StatusBadRequest)
+		id, ok := intPathValueOr400(w, r, "id", "invalid event id")
+		if !ok {
 			return
 		}
 		tok := getSessionToken(r)
@@ -350,9 +345,8 @@ func adminTimetableRoomOrderSaveHandler(client *DansalClient) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.Error(w, "invalid event id", http.StatusBadRequest)
+		id, ok := intPathValueOr400(w, r, "id", "invalid event id")
+		if !ok {
 			return
 		}
 		tok := getSessionToken(r)
@@ -381,9 +375,8 @@ func adminTimetableDeleteHandler(client *DansalClient) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.Error(w, "invalid event id", http.StatusBadRequest)
+		id, ok := intPathValueOr400(w, r, "id", "invalid event id")
+		if !ok {
 			return
 		}
 		tok := getSessionToken(r)

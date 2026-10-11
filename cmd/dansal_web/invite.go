@@ -18,7 +18,8 @@ type InvitePageData struct {
 func invitePageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := r.PathValue("token")
-		data := InvitePageData{Token: token, OIDCError: r.URL.Query().Get("error") == "oidc"}
+		flash := flashTake(r.URL.Query().Get("msg"))
+		data := InvitePageData{Token: token, OIDCError: flash.OIDCLoginError}
 
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()

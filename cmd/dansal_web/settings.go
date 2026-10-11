@@ -6,7 +6,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"strconv"
 )
 
 type PasskeyInfo struct {
@@ -66,9 +65,11 @@ func settingsPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 		oidcProviders, _ := client.GetOIDCProviders(r.Context(), nil)
 		oidcIdentities, _ := client.ListOIDCIdentities(r.Context(), token)
 		title := i18n.T(r, "settings_title")
+		flash := flashTake(r.URL.Query().Get("msg"))
 		renderTemplate(w, tmpls.settings, tmplData(r, cfg, i18n, title, SettingsData{
 			User:            u,
-			Saved:           r.URL.Query().Get("saved") == "1",
+			Saved:           flash.SettingsSaved,
+			ErrorKey:        flash.SettingsErrorKey,
 			TOTPNudge:       r.URL.Query().Get("totp_nudge") == "1",
 			VerifySent:      r.URL.Query().Get("verify_sent"),
 			VerifiedChannel: r.URL.Query().Get("verified"),
@@ -77,9 +78,9 @@ func settingsPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			Passkeys:        passkeys,
 			OIDCProviders:   oidcProviders,
 			OIDCIdentities:  oidcIdentities,
-			Linked:          r.URL.Query().Get("linked") == "1",
-			LinkError:       r.URL.Query().Get("linkerr") == "1",
-			UnlinkError:     r.URL.Query().Get("unlinkerr") == "1",
+			Linked:          flash.SettingsLinked,
+			LinkError:       flash.SettingsLinkError,
+			UnlinkError:     flash.SettingsUnlinkError,
 		}))
 	}
 }
@@ -114,7 +115,7 @@ func settingsUpdateHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			}))
 			return
 		}
-		http.Redirect(w, r, "/settings?saved=1", http.StatusSeeOther)
+		flashRedirect(w, r, "/settings", flashToken(nil), FlashMsg{SettingsSaved: true})
 	}
 }
 
@@ -236,9 +237,8 @@ func settingsSessionRevokeHandler(cfg *Config, client *DansalClient) http.Handle
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.Error(w, "bad id", http.StatusBadRequest)
+		id, ok := intPathValueOr400(w, r, "id", "bad id")
+		if !ok {
 			return
 		}
 		token := getSessionToken(r)
@@ -254,9 +254,8 @@ func settingsDeleteAPIKeyHandler(cfg *Config, client *DansalClient) http.Handler
 			return
 		}
 		token := getSessionToken(r)
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.Error(w, "bad id", http.StatusBadRequest)
+		id, ok := intPathValueOr400(w, r, "id", "bad id")
+		if !ok {
 			return
 		}
 		_ = client.DeleteAPIKey(r.Context(), token, id)
@@ -277,7 +276,7 @@ func settingsMagicLinkHandler(cfg *Config, client *DansalClient) http.HandlerFun
 		var result map[string]string
 		w.Header().Set("Content-Type", "application/json")
 		if err := client.do(r.Context(), "POST", "/api/v1/me/magic-link", token, nil, &result, http.StatusOK); err != nil {
-			http.Error(w, `{"error":"failed to generate link"}`, http.StatusInternalServerError)
+			writeJSONError(w, r, http.StatusInternalServerError, "failed to generate link")
 			return
 		}
 		json.NewEncoder(w).Encode(result)
@@ -296,7 +295,7 @@ func settingsExportHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		token := getSessionToken(r)
 		var result map[string]any
 		if err := client.do(r.Context(), "GET", "/api/v1/me/export", token, nil, &result, http.StatusOK); err != nil {
-			http.Error(w, `{"error":"failed to export data"}`, http.StatusInternalServerError)
+			writeJSONError(w, r, http.StatusInternalServerError, "failed to export data")
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -429,11 +428,11 @@ func settingsChangePasswordHandler(cfg *Config, tmpls *Templates, client *Dansal
 			}))
 			return
 		}
-		dest := "/settings?saved=1"
+		dest := "/settings"
 		if firstPassword {
-			dest += "&totp_nudge=1"
+			dest += "?totp_nudge=1"
 		}
-		http.Redirect(w, r, dest, http.StatusSeeOther)
+		flashRedirect(w, r, dest, flashToken(nil), FlashMsg{SettingsSaved: true})
 	}
 }
 
@@ -490,13 +489,13 @@ func settingsOIDCIdentityDeleteHandler(cfg *Config, client *DansalClient) http.H
 		token := getSessionToken(r)
 		resp, err := client.authed(r.Context(), "DELETE", "/api/v1/me/oidc-identities/"+id, token, nil)
 		if err != nil {
-			http.Redirect(w, r, "/settings?unlinkerr=1", http.StatusSeeOther)
+			flashRedirect(w, r, "/settings", flashToken(err), FlashMsg{SettingsUnlinkError: true})
 			return
 		}
 		io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
 		if resp.StatusCode >= 300 {
-			http.Redirect(w, r, "/settings?unlinkerr=1", http.StatusSeeOther)
+			flashRedirect(w, r, "/settings", flashToken(nil), FlashMsg{SettingsUnlinkError: true})
 			return
 		}
 		http.Redirect(w, r, "/settings", http.StatusSeeOther)
@@ -520,15 +519,17 @@ func settingsTOTPSetupHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		info, err := client.TOTPSetup(r.Context(), token)
 		if err != nil {
 			log.Printf("totp setup: %v", err)
-			http.Redirect(w, r, "/settings?error=totp_setup_failed", http.StatusSeeOther)
+			flashRedirect(w, r, "/settings", flashToken(err), FlashMsg{SettingsErrorKey: "settings_totp_setup_failed"})
 			return
 		}
 		keys, _ := client.ListAPIKeys(r.Context(), token)
 		sessions, _ := client.GetSessions(r.Context(), token)
 		passkeys, _ := client.ListPasskeys(r.Context(), token)
 		title := i18n.T(r, "settings_title")
+		flash := flashTake(r.URL.Query().Get("msg"))
 		renderTemplate(w, tmpls.settings, tmplData(r, cfg, i18n, title, SettingsData{
 			User:            u,
+			ErrorKey:        flash.SettingsErrorKey,
 			APIKeys:         keys,
 			Sessions:        sessions,
 			Passkeys:        passkeys,
@@ -552,10 +553,10 @@ func settingsTOTPConfirmHandler(cfg *Config, tmpls *Templates, client *DansalCli
 		token := getSessionToken(r)
 		code := r.FormValue("code")
 		if err := client.TOTPConfirm(r.Context(), token, code); err != nil {
-			http.Redirect(w, r, "/settings/totp/setup?error=invalid_code", http.StatusSeeOther)
+			flashRedirect(w, r, "/settings/totp/setup", flashToken(err), FlashMsg{SettingsErrorKey: "settings_totp_confirm_invalid_code"})
 			return
 		}
-		http.Redirect(w, r, "/settings?saved=1", http.StatusSeeOther)
+		flashRedirect(w, r, "/settings", flashToken(nil), FlashMsg{SettingsSaved: true})
 	}
 }
 
@@ -573,9 +574,9 @@ func settingsTOTPDisableHandler(cfg *Config, client *DansalClient) http.HandlerF
 		token := getSessionToken(r)
 		code := r.FormValue("code")
 		if err := client.TOTPDisable(r.Context(), token, code); err != nil {
-			http.Redirect(w, r, "/settings?error=totp_invalid_code", http.StatusSeeOther)
+			flashRedirect(w, r, "/settings", flashToken(err), FlashMsg{SettingsErrorKey: "settings_totp_disable_invalid_code"})
 			return
 		}
-		http.Redirect(w, r, "/settings?saved=1", http.StatusSeeOther)
+		flashRedirect(w, r, "/settings", flashToken(nil), FlashMsg{SettingsSaved: true})
 	}
 }

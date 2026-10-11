@@ -44,6 +44,26 @@ type FlashMsg struct {
 	// ("image", "avatar", "site_plan", …) for pages with more than one.
 	ImageUploadError  string
 	ImageUploadWidget string
+	// SettingsSaved/SettingsErrorKey (#1516) carry /settings' and
+	// /settings/totp/setup's post-redirect banners — replaces hand-encoded
+	// ?saved=1/?error=... query params, the latter of which were never
+	// actually read back by the GET handler (the error silently vanished).
+	// SettingsErrorKey is an i18n key.
+	SettingsSaved    bool
+	SettingsErrorKey string
+	// OIDCLoginError (#1516) is read by both /login and /invites/{token} —
+	// oidcErrorRedirect sends a failed login/invite-redemption OIDC flow to
+	// whichever of the two the flow started from.
+	OIDCLoginError bool
+	// SettingsLinked/SettingsLinkError/SettingsUnlinkError (#1516) report an
+	// OIDC identity link/unlink attempt back on /settings.
+	SettingsLinked      bool
+	SettingsLinkError   bool
+	SettingsUnlinkError bool
+	// LocationSaved (#1516) shows the "saved" banner back on the location
+	// edit page itself (its save flow stays on the edit form rather than
+	// navigating to a list, unlike the generic adminEntity[E] CRUD save).
+	LocationSaved bool
 	// PublishedUnusual (#1413) lists events just published whose date is in
 	// the past or more than 2 years ahead. Carried on its own ?pubmsg= token
 	// (publishFlashRedirect) and rendered by base.html for any page, since

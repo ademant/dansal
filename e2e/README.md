@@ -17,7 +17,7 @@ provide.
   A seed call rejected by either shows up as
   `POST /api/v1/… → 429: Rate limit exceeded…` (`helpers/seed.ts`).
 - **Mail capture** for the mail-dependent specs (auth-invite,
-  auth-magic-link, board, suggest-wizard): `smtp.sendmail` / `smtp_sendmail`
+  auth-magic-link, board, checkin, suggest-wizard): `smtp.sendmail` / `smtp_sendmail`
   pointing at `bin/fake-sendmail`, which appends to the mbox named by
   `DANSAL_MAIL_FILE`. For the dev instance:
   ```ini

@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
-	"strconv"
 )
 
 // #1427: resolving a flagged possible-duplicate pair (needs_duplicate_review
@@ -166,17 +165,12 @@ func duplicateCheckHandler(w http.ResponseWriter, r *http.Request) {
 	if !requireAdminCaller(w, r) {
 		return
 	}
-	id, err := strconv.Atoi(r.PathValue("id"))
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	id, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 	res, err := checkDuplicates(db, id)
-	if err == sql.ErrNoRows {
-		writeError(w, "event not found", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "event not found") {
 		return
 	}
 	writeJSON(w, res)
@@ -197,9 +191,8 @@ func duplicateResolveHandler(w http.ResponseWriter, r *http.Request) {
 	if !requireAdminCaller(w, r) {
 		return
 	}
-	id, err := strconv.Atoi(r.PathValue("id"))
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	id, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 	var req DuplicateResolveRequest
@@ -207,11 +200,7 @@ func duplicateResolveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res, err := checkDuplicates(db, id)
-	if err == sql.ErrNoRows {
-		writeError(w, "event not found", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "event not found") {
 		return
 	}
 	switch req.Mode {

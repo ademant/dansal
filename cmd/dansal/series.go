@@ -311,52 +311,43 @@ func getSeries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var rows *sql.Rows
-	var err error
-
 	orgIDFilter := r.URL.Query().Get("org_id")
 	musicianIDFilter := r.URL.Query().Get("musician_id")
 	instructorIDFilter := r.URL.Query().Get("instructor_id")
+
+	query := `SELECT ` + seriesSelectCols + `,
+		       (SELECT COUNT(*) FROM events WHERE series_id = event_series.id) AS event_count
+		FROM event_series`
+	var args []any
+	where := false
+	addWhere := newWhereAppender(&query, &where, &args)
 
 	if role == RoleAdmin {
 		switch {
 		case orgIDFilter != "":
 			oid, _ := strconv.Atoi(orgIDFilter)
-			rows, err = db.Query(`
-				SELECT `+seriesSelectCols+`,
-				       (SELECT COUNT(*) FROM events WHERE series_id = event_series.id) AS event_count
-				FROM event_series WHERE organization_id=? ORDER BY id DESC`, oid)
+			addWhere("organization_id=?", oid)
 		case musicianIDFilter != "":
 			mid, _ := strconv.Atoi(musicianIDFilter)
-			rows, err = db.Query(`
-				SELECT `+seriesSelectCols+`,
-				       (SELECT COUNT(*) FROM events WHERE series_id = event_series.id) AS event_count
-				FROM event_series WHERE musician_id=? ORDER BY id DESC`, mid)
+			addWhere("musician_id=?", mid)
 		case instructorIDFilter != "":
 			iid, _ := strconv.Atoi(instructorIDFilter)
-			rows, err = db.Query(`
-				SELECT `+seriesSelectCols+`,
-				       (SELECT COUNT(*) FROM events WHERE series_id = event_series.id) AS event_count
-				FROM event_series WHERE instructor_id=? ORDER BY id DESC`, iid)
-		default:
-			rows, err = db.Query(`
-				SELECT ` + seriesSelectCols + `,
-				       (SELECT COUNT(*) FROM events WHERE series_id = event_series.id) AS event_count
-				FROM event_series ORDER BY id DESC`)
+			addWhere("instructor_id=?", iid)
 		}
 	} else {
 		// Non-admins only see series for orgs they belong to, or series they
 		// own directly via a musician/instructor they created.
-		rows, err = db.Query(`
-			SELECT `+seriesSelectCols+`,
-			       (SELECT COUNT(*) FROM events WHERE series_id = event_series.id) AS event_count
-			FROM event_series
-			WHERE organization_id IN (
+		addWhere(`(organization_id IN (
 			      SELECT organization_id FROM organization_members WHERE user_id=?)
 			   OR musician_id IN (SELECT id FROM musicians WHERE created_by_id=?)
-			   OR instructor_id IN (SELECT id FROM instructors WHERE created_by_id=?)
-			ORDER BY id DESC`, callerID, callerID, callerID)
+			   OR instructor_id IN (SELECT id FROM instructors WHERE created_by_id=?))`,
+			callerID, callerID, callerID)
 	}
+
+	writeTotalCountHeader(w, query, args)
+	applyListPagination(r, "id DESC", &query, &args)
+
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		writeInternalError(w, err)
 		return
@@ -1106,11 +1097,7 @@ func addSeriesEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	evOrgID, err := eventOrgID(db, eventID)
-	if err == sql.ErrNoRows {
-		writeError(w, "Event not found", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "Event not found") {
 		return
 	}
 	if evOrgID.Valid && series.OrganizationID != nil && evOrgID.Int64 != int64(*series.OrganizationID) {

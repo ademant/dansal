@@ -448,6 +448,7 @@ func getLocations(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query += " GROUP BY l.id"
+	writeTotalCountHeader(w, query, args)
 	applyListPagination(r, "l.location ASC", &query, &args)
 
 	rows, err := db.Query(query, args...)
@@ -1121,12 +1122,7 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 	err := scanLocation(db.QueryRow(`SELECT `+locationCols+`
 		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id
 		WHERE l.id=? GROUP BY l.id`, id), &loc)
-	if err == sql.ErrNoRows {
-		writeError(w, "Location not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "Location not found") {
 		return
 	}
 	if checkIfMatchConflict(w, r, loc.UpdatedAt) {
@@ -1430,12 +1426,7 @@ func deleteLocation(w http.ResponseWriter, r *http.Request) {
 
 	var locationID int
 	err := db.QueryRow("SELECT id FROM locations WHERE id = ?", id).Scan(&locationID)
-	if err == sql.ErrNoRows {
-		writeError(w, "Location not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "Location not found") {
 		return
 	}
 
@@ -1637,12 +1628,7 @@ func getLocationChildren(w http.ResponseWriter, r *http.Request) {
 	err := scanLocation(db.QueryRow(`SELECT `+locationCols+`
 		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id
 		WHERE l.id=? GROUP BY l.id`, locID), &parent)
-	if err == sql.ErrNoRows {
-		writeError(w, "Location not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "Location not found") {
 		return
 	}
 

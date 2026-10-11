@@ -482,11 +482,7 @@ func patchPublisherWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cur, err := scanWebhook(db.QueryRow("SELECT "+webhookCols+" FROM publisher_webhooks WHERE id=? AND publisher_id=?", whID, pubID))
-	if err == sql.ErrNoRows {
-		writeError(w, "webhook not found", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "webhook not found") {
 		return
 	}
 	if req.URL != nil {

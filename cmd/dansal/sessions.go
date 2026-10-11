@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -73,12 +72,7 @@ func deleteSession(w http.ResponseWriter, r *http.Request) {
 	var ownerID int
 	var token string
 	err := db.QueryRow("SELECT user_id, token FROM tokens WHERE id=?", sessionID).Scan(&ownerID, &token)
-	if err == sql.ErrNoRows {
-		writeError(w, "Session not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "Session not found") {
 		return
 	}
 

@@ -120,6 +120,23 @@ type InviteLink struct {
 	CreatedAt  string `json:"created_at"`
 }
 
+// inviteLinkCols is the single column list for invite_links rows, shared by
+// listInvites and adminListInvites — previously hand-copied and drifted:
+// the admin.go copy was missing invite_type, so admin-CLI invite listings
+// always showed an empty type (#1509).
+const inviteLinkCols = "id, token, role, COALESCE(invite_type,'link'), org_id, expires_at, COALESCE(used_at,''), created_at"
+
+func scanInvite(row interface{ Scan(...any) error }) (InviteLink, error) {
+	var l InviteLink
+	var orgID sql.NullInt64
+	err := row.Scan(&l.ID, &l.Token, &l.Role, &l.InviteType, &orgID, &l.ExpiresAt, &l.UsedAt, &l.CreatedAt)
+	if err == nil && orgID.Valid {
+		id := int(orgID.Int64)
+		l.OrgID = &id
+	}
+	return l, err
+}
+
 type CreateInviteRequest struct {
 	Role       string `json:"role"`
 	InviteType string `json:"type"`
@@ -314,18 +331,16 @@ func listInvites(w http.ResponseWriter, r *http.Request) {
 
 	callerID, callerRole := callerFromRequest(r)
 
-	var rows *sql.Rows
-	var err error
-	if callerRole == RoleAdmin {
-		rows, err = db.Query(
-			"SELECT id, token, role, COALESCE(invite_type,'link'), org_id, expires_at, COALESCE(used_at,''), created_at FROM invite_links ORDER BY created_at DESC",
-		)
-	} else {
-		rows, err = db.Query(
-			"SELECT id, token, role, COALESCE(invite_type,'link'), org_id, expires_at, COALESCE(used_at,''), created_at FROM invite_links WHERE created_by=? ORDER BY created_at DESC",
-			callerID,
-		)
+	query := "SELECT " + inviteLinkCols + " FROM invite_links"
+	var args []any
+	if callerRole != RoleAdmin {
+		query += " WHERE created_by=?"
+		args = append(args, callerID)
 	}
+	writeTotalCountHeader(w, query, args)
+	applyListPagination(r, "created_at DESC", &query, &args)
+
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		writeInternalError(w, err)
 		return
@@ -334,18 +349,13 @@ func listInvites(w http.ResponseWriter, r *http.Request) {
 
 	links := []InviteLink{}
 	for rows.Next() {
-		var l InviteLink
-		var orgID sql.NullInt64
-		if err := rows.Scan(&l.ID, &l.Token, &l.Role, &l.InviteType, &orgID, &l.ExpiresAt, &l.UsedAt, &l.CreatedAt); err != nil {
+		l, err := scanInvite(rows)
+		if err != nil {
 			writeInternalError(w, err)
 			return
 		}
 		l.ExpiresAt = epochStrToRFC3339(l.ExpiresAt)
 		l.UsedAt = epochStrToRFC3339(l.UsedAt)
-		if orgID.Valid {
-			id := int(orgID.Int64)
-			l.OrgID = &id
-		}
 		links = append(links, l)
 	}
 	json.NewEncoder(w).Encode(links)
@@ -361,12 +371,7 @@ func revokeInvite(w http.ResponseWriter, r *http.Request) {
 	var ownerID int
 	var usedAt string
 	err := db.QueryRow("SELECT created_by, COALESCE(used_at,'') FROM invite_links WHERE token=?", token).Scan(&ownerID, &usedAt)
-	if err == sql.ErrNoRows {
-		writeError(w, "Invite link not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "Invite link not found") {
 		return
 	}
 	if usedAt != "" {
@@ -393,12 +398,7 @@ func getInviteInfo(w http.ResponseWriter, r *http.Request) {
 		`SELECT id, role, expires_at, COALESCE(used_at,''), COALESCE(preset_email,'')
 		 FROM invite_links WHERE token=?`, token,
 	).Scan(&id, &role, &expiresAt, &usedAt, &presetEmail)
-	if err == sql.ErrNoRows {
-		writeError(w, "Invalid invite link", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeError(w, "Internal server error", http.StatusInternalServerError)
+	if !rowOr404(w, err, "Invalid invite link") {
 		return
 	}
 	expired := false

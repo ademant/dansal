@@ -262,8 +262,7 @@ func telegramWebhookHandler(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/v1/users/{id}/telegram/message — admin sends a message to a verified user.
 func sendTelegramMessageToUser(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("X-User-Role") != RoleAdmin {
-		writeError(w, "Forbidden", http.StatusForbidden)
+	if !requireRole(w, r.Header.Get("X-User-Role"), RoleAdmin) {
 		return
 	}
 	id, ok := requireIntPathValue(w, r, "id", "invalid user ID")

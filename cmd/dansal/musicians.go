@@ -194,6 +194,7 @@ func getMusicians(w http.ResponseWriter, r *http.Request) {
 	if genre := q.Get("genre"); genre != "" {
 		addWhere(`LOWER(genre) LIKE LOWER(?) ESCAPE '\'`, "%"+escapeLike(genre)+"%")
 	}
+	writeTotalCountHeader(w, query, args)
 	applyListPagination(r, "bandname ASC", &query, &args)
 
 	rows, err := db.Query(query, args...)
@@ -269,11 +270,7 @@ func writeMusiciansAtom(w http.ResponseWriter, r *http.Request, musicians []Musi
 func getMusician(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	musician, err := scanMusician(db.QueryRow("SELECT "+musicianCols+" FROM musicians WHERE id = ?", id))
-	if err == sql.ErrNoRows {
-		writeError(w, "Musician not found", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "Musician not found") {
 		return
 	}
 
@@ -441,11 +438,7 @@ func patchMusician(w http.ResponseWriter, r *http.Request) {
 
 	id := r.PathValue("id")
 	m, err := scanMusician(db.QueryRow("SELECT "+musicianCols+" FROM musicians WHERE id = ?", id))
-	if err == sql.ErrNoRows {
-		writeError(w, "Musician not found", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "Musician not found") {
 		return
 	}
 

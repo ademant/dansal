@@ -29,6 +29,32 @@ type ContactPost struct {
 	ImageURLs        []string          `json:"image_urls,omitempty"`
 }
 
+// contactPostCols is the shared column list (no table alias) for the plain
+// contact_posts fields used by both listContactPosts and listAllContactPosts
+// — the latter joins events/locations for extra display columns scanned via
+// scanContactPost's extra... parameter (#1509).
+const contactPostCols = "id, event_id, type, city, osm_id, lat, lon, persons, COALESCE(message,''), nickname, COALESCE(telegram_username,''), email_verified, created_at"
+
+func scanContactPost(row interface{ Scan(...any) error }, extra ...any) (ContactPost, error) {
+	var p ContactPost
+	var ev int
+	var osmID sql.NullInt64
+	var lat, lon sql.NullFloat64
+	dest := []any{&p.ID, &p.EventID, &p.Type, &p.City, &osmID, &lat, &lon, &p.Persons, &p.Message, &p.Nickname, &p.TelegramUsername, &ev, &p.CreatedAt}
+	err := row.Scan(append(dest, extra...)...)
+	if err == nil {
+		p.EmailVerified = ev == 1
+		if osmID.Valid {
+			p.OsmID = &osmID.Int64
+		}
+		if lat.Valid && lon.Valid {
+			p.Lat = &lat.Float64
+			p.Lon = &lon.Float64
+		}
+	}
+	return p, err
+}
+
 // ContactPostEvent holds the event summary included in the global contact-post listing.
 type ContactPostEvent struct {
 	ID        int    `json:"id"`
@@ -297,13 +323,12 @@ func listContactPosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := db.Query(
-		`SELECT id, event_id, type, city, osm_id, lat, lon, persons, COALESCE(message,''), nickname, COALESCE(telegram_username,''), email_verified, created_at
-		 FROM contact_posts
-		 WHERE event_id=? AND email_verified=1 AND expires_at > ?
-		 ORDER BY created_at ASC`,
-		eventID, time.Now().UTC().Unix(),
-	)
+	query := "SELECT " + contactPostCols + " FROM contact_posts WHERE event_id=? AND email_verified=1 AND expires_at > ?"
+	args := []any{eventID, time.Now().UTC().Unix()}
+	writeTotalCountHeader(w, query, args)
+	applyListPagination(r, "created_at ASC", &query, &args)
+
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		writeInternalError(w, err)
 		return
@@ -312,21 +337,10 @@ func listContactPosts(w http.ResponseWriter, r *http.Request) {
 
 	posts := []ContactPost{}
 	for rows.Next() {
-		var p ContactPost
-		var ev int
-		var osmID sql.NullInt64
-		var lat, lon sql.NullFloat64
-		if err := rows.Scan(&p.ID, &p.EventID, &p.Type, &p.City, &osmID, &lat, &lon, &p.Persons, &p.Message, &p.Nickname, &p.TelegramUsername, &ev, &p.CreatedAt); err != nil {
+		p, err := scanContactPost(rows)
+		if err != nil {
 			writeInternalError(w, err)
 			return
-		}
-		p.EmailVerified = ev == 1
-		if osmID.Valid {
-			p.OsmID = &osmID.Int64
-		}
-		if lat.Valid && lon.Valid {
-			p.Lat = &lat.Float64
-			p.Lon = &lon.Float64
 		}
 		posts = append(posts, p)
 	}
@@ -637,12 +651,7 @@ func getContactPostByToken(w http.ResponseWriter, r *http.Request) {
 		        COALESCE(telegram_username,''), email_verified, expires_at
 		 FROM contact_posts WHERE manage_token=?`, token,
 	).Scan(&id, &eventID, &postType, &city, &persons, &message, &nickname, &tgUsername, &emailVerified, &expiresAtStr)
-	if err == sql.ErrNoRows {
-		writeError(w, "post not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeError(w, "internal server error", http.StatusInternalServerError)
+	if !rowOr404(w, err, "post not found") {
 		return
 	}
 
@@ -691,12 +700,7 @@ func checkContactPostManageToken(w http.ResponseWriter, postID int, token string
 	var storedToken, expiresAtStr string
 	err := db.QueryRow("SELECT manage_token, expires_at FROM contact_posts WHERE id=?", postID).
 		Scan(&storedToken, &expiresAtStr)
-	if err == sql.ErrNoRows {
-		writeError(w, "post not found", http.StatusNotFound)
-		return false
-	}
-	if err != nil {
-		writeError(w, "internal server error", http.StatusInternalServerError)
+	if !rowOr404(w, err, "post not found") {
 		return false
 	}
 	if storedToken != token {
@@ -873,12 +877,7 @@ func deleteContactPostByManageToken(w http.ResponseWriter, r *http.Request) {
 	var expiresAtStr string
 	err := db.QueryRow("SELECT id, expires_at FROM contact_posts WHERE manage_token=?", token).
 		Scan(&id, &expiresAtStr)
-	if err == sql.ErrNoRows {
-		writeError(w, "invalid manage link", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeError(w, "internal server error", http.StatusInternalServerError)
+	if !rowOr404(w, err, "invalid manage link") {
 		return
 	}
 	exp, err := parseTokenExpiration(expiresAtStr)
@@ -907,12 +906,7 @@ func deleteContactPost(w http.ResponseWriter, r *http.Request) {
 
 	var eventID int
 	err := db.QueryRow("SELECT event_id FROM contact_posts WHERE id=?", postID).Scan(&eventID)
-	if err == sql.ErrNoRows {
-		writeError(w, "post not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeError(w, "internal server error", http.StatusInternalServerError)
+	if !rowOr404(w, err, "post not found") {
 		return
 	}
 
@@ -967,12 +961,7 @@ func contactPoster(w http.ResponseWriter, r *http.Request) {
 	err := db.QueryRow(
 		"SELECT email, nickname, email_verified, expires_at, COALESCE(poster_telegram_chat_id,'') FROM contact_posts WHERE id=?", postID,
 	).Scan(&posterEmail, &posterNick, &emailVerified, &expiresAt, &posterChatID)
-	if err == sql.ErrNoRows {
-		writeError(w, "post not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeError(w, "internal server error", http.StatusInternalServerError)
+	if !rowOr404(w, err, "post not found") {
 		return
 	}
 	if emailVerified == 0 {
@@ -1106,12 +1095,7 @@ func verifyContactRequest(w http.ResponseWriter, r *http.Request) {
 		"SELECT id, post_id, sender_email, sender_telegram, message, expires_at FROM contact_requests WHERE verify_token=?",
 		token,
 	).Scan(&reqID, &postID, &senderEmail, &senderTelegram, &message, &expiresAt)
-	if err == sql.ErrNoRows {
-		writeError(w, "invalid or already used verification link", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeError(w, "internal server error", http.StatusInternalServerError)
+	if !rowOr404(w, err, "invalid or already used verification link") {
 		return
 	}
 
@@ -1166,15 +1150,6 @@ func listAllContactPosts(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	q := r.URL.Query()
 
-	limit := 50
-	if n, err := strconv.Atoi(q.Get("limit")); err == nil && n > 0 && n <= 200 {
-		limit = n
-	}
-	offset := 0
-	if n, err := strconv.Atoi(q.Get("offset")); err == nil && n >= 0 {
-		offset = n
-	}
-
 	now := time.Now().UTC().Unix()
 	query := `SELECT cp.id, cp.event_id, cp.type, cp.city, cp.osm_id, cp.lat, cp.lon, cp.persons,
 	                 COALESCE(cp.message,''), cp.nickname, COALESCE(cp.telegram_username,''),
@@ -1210,8 +1185,8 @@ func listAllContactPosts(w http.ResponseWriter, r *http.Request) {
 		args = append(args, like, like)
 	}
 
-	query += " ORDER BY cp.created_at DESC LIMIT ? OFFSET ?"
-	args = append(args, limit, offset)
+	writeTotalCountHeader(w, query, args)
+	applyListPagination(r, "cp.created_at DESC", &query, &args)
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
@@ -1222,28 +1197,12 @@ func listAllContactPosts(w http.ResponseWriter, r *http.Request) {
 
 	posts := []ContactPost{}
 	for rows.Next() {
-		var cp ContactPost
-		var ev int
-		var osmID sql.NullInt64
-		var lat, lon sql.NullFloat64
 		var startEpoch int64
 		var evTitle, evTown, evCountry string
-		if err := rows.Scan(
-			&cp.ID, &cp.EventID, &cp.Type, &cp.City, &osmID, &lat, &lon, &cp.Persons,
-			&cp.Message, &cp.Nickname, &cp.TelegramUsername,
-			&ev, &cp.CreatedAt,
-			&evTitle, &startEpoch, &evTown, &evCountry,
-		); err != nil {
+		cp, err := scanContactPost(rows, &evTitle, &startEpoch, &evTown, &evCountry)
+		if err != nil {
 			writeInternalError(w, err)
 			return
-		}
-		cp.EmailVerified = ev == 1
-		if osmID.Valid {
-			cp.OsmID = &osmID.Int64
-		}
-		if lat.Valid && lon.Valid {
-			cp.Lat = &lat.Float64
-			cp.Lon = &lon.Float64
 		}
 		cp.Event = &ContactPostEvent{
 			ID:        cp.EventID,

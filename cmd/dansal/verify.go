@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -71,12 +70,7 @@ func sendVerification(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := getUserByID(targetID)
-	if err == sql.ErrNoRows {
-		writeError(w, "User not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "User not found") {
 		return
 	}
 
@@ -178,12 +172,7 @@ func consumeVerification(w http.ResponseWriter, r *http.Request) {
 	err := db.QueryRow(
 		"SELECT id, user_id, channel, expires_at FROM verification_tokens WHERE token=?", token,
 	).Scan(&id, &userID, &channel, &expiresAt)
-	if err == sql.ErrNoRows {
-		writeError(w, "Invalid or expired verification link", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeError(w, "Internal server error", http.StatusInternalServerError)
+	if !rowOr404(w, err, "Invalid or expired verification link") {
 		return
 	}
 

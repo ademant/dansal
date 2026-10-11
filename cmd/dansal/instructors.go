@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -108,6 +107,7 @@ func getInstructors(w http.ResponseWriter, r *http.Request) {
 			)`, orgID)
 		}
 	}
+	writeTotalCountHeader(w, query, args)
 	applyListPagination(r, "name ASC", &query, &args)
 
 	rows, err := db.Query(query, args...)
@@ -141,11 +141,7 @@ func getInstructors(w http.ResponseWriter, r *http.Request) {
 func getInstructor(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	inst, err := scanInstructor(db.QueryRow("SELECT "+instructorCols+" FROM instructors WHERE id=?", id))
-	if errors.Is(err, sql.ErrNoRows) {
-		writeError(w, "Instructor not found", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "Instructor not found") {
 		return
 	}
 	writeJSON(w, inst)
@@ -264,11 +260,7 @@ func patchInstructor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	inst, err := scanInstructor(db.QueryRow("SELECT "+instructorCols+" FROM instructors WHERE id=?", id))
-	if errors.Is(err, sql.ErrNoRows) {
-		writeError(w, "Instructor not found", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "Instructor not found") {
 		return
 	}
 

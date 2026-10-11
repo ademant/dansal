@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -132,6 +133,26 @@ func requireIntPathValue(w http.ResponseWriter, r *http.Request, key, errMsg str
 		return 0, false
 	}
 	return v, true
+}
+
+// rowOr404 handles the result of a single-row lookup (db.QueryRow/scanX):
+// writes a 404 with msg for sql.ErrNoRows, a generic 500 (writeInternalError)
+// for any other error, and returns ok=true only when err is nil. Callers
+// should `return` immediately when this returns false. Consolidates the bulk
+// of the ~125 hand-written `if err == sql.ErrNoRows {...}; if err != nil
+// {...}` pairs (#1508) — sites with extra branches (e.g. a 410 Gone check
+// ahead of the plain 404) keep their own handling, since that's distinct
+// tombstone semantics (#1433), not a not-found.
+func rowOr404(w http.ResponseWriter, err error, msg string) bool {
+	if err == nil {
+		return true
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		writeError(w, msg, http.StatusNotFound)
+	} else {
+		writeInternalError(w, err)
+	}
+	return false
 }
 
 // requireRole writes a 403 and returns false unless userRole is one of

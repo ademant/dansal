@@ -31,8 +31,7 @@ func createMagicToken(userID int) (token string, expiresAt time.Time, err error)
 // For email-less users with no messaging contact the URL is returned for the admin to share manually.
 func generateAdminMagicLink(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	if r.Header.Get("X-User-Role") != "admin" {
-		writeError(w, "Forbidden", http.StatusForbidden)
+	if !requireRole(w, r.Header.Get("X-User-Role"), RoleAdmin) {
 		return
 	}
 	targetID, ok := requireIntPathValue(w, r, "id", "Invalid user ID")
@@ -47,12 +46,7 @@ func generateAdminMagicLink(w http.ResponseWriter, r *http.Request) {
 		 COALESCE(matrix,''), COALESCE(matrix_verified,0)
 		 FROM users WHERE id=? AND disabled=0`, targetID,
 	).Scan(&userID, &userEmail, &telegramChatID, &telegramVerified, &matrixID, &matrixVerified)
-	if err == sql.ErrNoRows {
-		writeError(w, "User not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeError(w, "Internal error", http.StatusInternalServerError)
+	if !rowOr404(w, err, "User not found") {
 		return
 	}
 	token, expiresAt, err := createMagicToken(userID)
@@ -257,12 +251,7 @@ func useMagicLogin(w http.ResponseWriter, r *http.Request) {
 	err := db.QueryRow(
 		"SELECT id, user_id, expires_at FROM magic_login_tokens WHERE token=?", sha256Hex(token),
 	).Scan(&id, &userID, &expiresAt)
-	if err == sql.ErrNoRows {
-		writeError(w, "Invalid or expired login link", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeError(w, "Internal server error", http.StatusInternalServerError)
+	if !rowOr404(w, err, "Invalid or expired login link") {
 		return
 	}
 

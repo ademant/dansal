@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -21,6 +20,14 @@ type Booking struct {
 	Status    string `json:"status"`
 	QRToken   string `json:"qr_token,omitempty"`
 	CreatedAt string `json:"created_at"`
+}
+
+const bookingCols = "id, event_id, name, email, persons, COALESCE(message,''), status, COALESCE(qr_token,''), created_at"
+
+func scanBooking(row interface{ Scan(...any) error }) (Booking, error) {
+	var b Booking
+	err := row.Scan(&b.ID, &b.EventID, &b.Name, &b.Email, &b.Persons, &b.Message, &b.Status, &b.QRToken, &b.CreatedAt)
+	return b, err
 }
 
 // updateEventAvailability recalculates events.availability from approved/checked_in booking counts.
@@ -177,12 +184,7 @@ func bookingLongExpiry(eventID int) time.Time {
 func bookingAuthCheck(w http.ResponseWriter, bookingID, callerID int, callerRole string) (int, bool) {
 	var eventID int
 	err := db.QueryRow("SELECT event_id FROM bookings WHERE id=?", bookingID).Scan(&eventID)
-	if err == sql.ErrNoRows {
-		writeError(w, "booking not found", http.StatusNotFound)
-		return 0, false
-	}
-	if err != nil {
-		writeError(w, "internal server error", http.StatusInternalServerError)
+	if !rowOr404(w, err, "booking not found") {
 		return 0, false
 	}
 	if callerRole != RoleAdmin && !isOrgMemberOfEvent(callerID, eventID) {
@@ -206,10 +208,12 @@ func listBookings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := db.Query(
-		`SELECT id, event_id, name, email, persons, COALESCE(message,''), status, COALESCE(qr_token,''), created_at
-		 FROM bookings WHERE event_id=? ORDER BY created_at ASC`, eventID,
-	)
+	query := "SELECT " + bookingCols + " FROM bookings WHERE event_id=?"
+	args := []any{eventID}
+	writeTotalCountHeader(w, query, args)
+	applyListPagination(r, "created_at ASC", &query, &args)
+
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		writeInternalError(w, err)
 		return
@@ -218,8 +222,8 @@ func listBookings(w http.ResponseWriter, r *http.Request) {
 
 	out := []Booking{}
 	for rows.Next() {
-		var b Booking
-		if err := rows.Scan(&b.ID, &b.EventID, &b.Name, &b.Email, &b.Persons, &b.Message, &b.Status, &b.QRToken, &b.CreatedAt); err != nil {
+		b, err := scanBooking(rows)
+		if err != nil {
 			writeInternalError(w, err)
 			return
 		}
@@ -239,12 +243,7 @@ func createBooking(w http.ResponseWriter, r *http.Request) {
 	// Check event exists and booking is enabled.
 	var bookingEnabled int
 	err := db.QueryRow("SELECT COALESCE(booking_enabled,0) FROM events WHERE id=?", eventID).Scan(&bookingEnabled)
-	if err == sql.ErrNoRows {
-		writeError(w, "event not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeError(w, "internal server error", http.StatusInternalServerError)
+	if !rowOr404(w, err, "event not found") {
 		return
 	}
 	if bookingEnabled == 0 {
@@ -362,12 +361,7 @@ func verifyBooking(w http.ResponseWriter, r *http.Request) {
 	err := db.QueryRow(
 		"SELECT id, event_id, expires_at, name, email, COALESCE(lang,'') FROM bookings WHERE verify_token=? AND status='pending'", token,
 	).Scan(&id, &eventID, &expiresAt, &name, &email, &lang)
-	if err == sql.ErrNoRows {
-		writeError(w, "invalid or already used verification link", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeError(w, "internal server error", http.StatusInternalServerError)
+	if !rowOr404(w, err, "invalid or already used verification link") {
 		return
 	}
 
@@ -496,12 +490,7 @@ func checkinBooking(w http.ResponseWriter, r *http.Request) {
 		`SELECT id, event_id, name, persons, COALESCE(message,''), status, created_at
 		 FROM bookings WHERE qr_token=?`, qrToken,
 	).Scan(&b.ID, &b.EventID, &b.Name, &b.Persons, &b.Message, &b.Status, &b.CreatedAt)
-	if err == sql.ErrNoRows {
-		writeError(w, "booking not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeError(w, "internal server error", http.StatusInternalServerError)
+	if !rowOr404(w, err, "booking not found") {
 		return
 	}
 

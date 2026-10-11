@@ -150,6 +150,19 @@ func scanLocation(s scanner, loc *Location, extra ...any) error {
 	return nil
 }
 
+// getLocationByID loads a single location row by primary key, consolidating
+// the locationCols+scanLocation query that was hand-copied at every
+// by-id call site (#1511). id is typically an int, but a handler's raw
+// r.PathValue("id") string works too — SQLite's INTEGER affinity on l.id
+// coerces a numeric string on comparison.
+func getLocationByID(q querier, id any) (Location, error) {
+	var loc Location
+	err := scanLocation(q.QueryRow(`SELECT `+locationCols+`
+		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id
+		WHERE l.id=? GROUP BY l.id`, id), &loc)
+	return loc, err
+}
+
 // inheritLocationFields fills child's empty address/coordinate fields from
 // an already-loaded parent. A room (child location) is stored without its
 // own address/geo so building corrections propagate automatically instead
@@ -194,10 +207,7 @@ func resolvedLocation(loc *Location) {
 	if loc.ParentID == nil {
 		return
 	}
-	var parent Location
-	err := scanLocation(db.QueryRow(`SELECT `+locationCols+`
-		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id
-		WHERE l.id=? GROUP BY l.id`, *loc.ParentID), &parent)
+	parent, err := getLocationByID(db, *loc.ParentID)
 	if err != nil {
 		return
 	}
@@ -736,10 +746,7 @@ func attachSitePlanData(loc *Location) {
 func getLocation(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	var location Location
-	err := scanLocation(db.QueryRow(`SELECT `+locationCols+`
-		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id
-		WHERE l.id=? GROUP BY l.id`, id), &location)
+	location, err := getLocationByID(db, id)
 
 	if err == sql.ErrNoRows {
 		if idWasAllocated("locations", id) {
@@ -1060,10 +1067,8 @@ func putLocation(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var loc Location
-	if err := scanLocation(db.QueryRow(`SELECT `+locationCols+`
-		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id
-		WHERE l.id=? GROUP BY l.id`, id), &loc); err != nil {
+	loc, err := getLocationByID(db, id)
+	if err != nil {
 		writeInternalError(w, err)
 		return
 	}
@@ -1118,10 +1123,7 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var loc Location
-	err := scanLocation(db.QueryRow(`SELECT `+locationCols+`
-		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id
-		WHERE l.id=? GROUP BY l.id`, id), &loc)
+	loc, err := getLocationByID(db, id)
 	if !rowOr404(w, err, "Location not found") {
 		return
 	}
@@ -1495,12 +1497,13 @@ func mergeLocations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var keep, merge Location
-	if err := scanLocation(db.QueryRow(`SELECT `+locationCols+` FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id WHERE l.id=? GROUP BY l.id`, req.KeepID), &keep); err != nil {
+	keep, err := getLocationByID(db, req.KeepID)
+	if err != nil {
 		writeError(w, "keep location not found", http.StatusNotFound)
 		return
 	}
-	if err := scanLocation(db.QueryRow(`SELECT `+locationCols+` FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id WHERE l.id=? GROUP BY l.id`, req.MergeID), &merge); err != nil {
+	merge, err := getLocationByID(db, req.MergeID)
+	if err != nil {
 		writeError(w, "merge location not found", http.StatusNotFound)
 		return
 	}
@@ -1624,10 +1627,7 @@ func getLocationChildren(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var parent Location
-	err := scanLocation(db.QueryRow(`SELECT `+locationCols+`
-		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id
-		WHERE l.id=? GROUP BY l.id`, locID), &parent)
+	parent, err := getLocationByID(db, locID)
 	if !rowOr404(w, err, "Location not found") {
 		return
 	}

@@ -34,7 +34,7 @@ func getSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 	if !rowOr404(w, err, "token not found or expired") {
 		return
 	}
-	event, err := fetchEventByID(db, eventID)
+	event, err := getEventByID(db, eventID)
 	if err != nil {
 		writeInternalError(w, err)
 		return

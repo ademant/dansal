@@ -597,8 +597,8 @@ func scanEventRow(s scanner) (Event, error) {
 	return event, nil
 }
 
-// fetchEventByID loads a single event by primary key using the shared eventListSelect query.
-func fetchEventByID(q querier, id int) (Event, error) {
+// getEventByID loads a single event by primary key using the shared eventListSelect query.
+func getEventByID(q querier, id int) (Event, error) {
 	return scanEventRow(q.QueryRow(eventListSelect+" WHERE e.id = ?", id))
 }
 
@@ -1453,7 +1453,7 @@ func createEventFromRequest(q querier, req EventCreateRequest, locationID int64,
 			return nil, counts, err
 		}
 
-		event, err := fetchEventByID(q, id)
+		event, err := getEventByID(q, id)
 		if err != nil {
 			return nil, counts, err
 		}
@@ -2576,7 +2576,7 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 	syncEventLocationGeohash(id)
 	recheckDuplicatePair(db, id) // #1427: a by-hand fix of date/room/venue resolves the flag
 
-	event, err := fetchEventByID(db, id)
+	event, err := getEventByID(db, id)
 	if err != nil {
 		writeInternalError(w, err)
 		return
@@ -2914,7 +2914,7 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 	syncEventLocationGeohash(id)
 	recheckDuplicatePair(db, id) // #1427: a by-hand fix of date/room/venue resolves the flag
 
-	event, err := fetchEventByID(db, id)
+	event, err := getEventByID(db, id)
 	if err != nil {
 		writeInternalError(w, err)
 		return
@@ -3244,7 +3244,7 @@ func cloneEvent(w http.ResponseWriter, r *http.Request) {
 	json.NewDecoder(r.Body).Decode(&req)
 
 	// Fetch the source event.
-	src, err := fetchEventByID(db, srcID)
+	src, err := getEventByID(db, srcID)
 	if !rowOr404(w, err, "Event not found") {
 		return
 	}
@@ -3377,7 +3377,7 @@ func cloneEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	event, err := fetchEventByID(db, cloneID)
+	event, err := getEventByID(db, cloneID)
 	if err != nil {
 		writeInternalError(w, err)
 		return
@@ -3451,7 +3451,7 @@ func getEventICS(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	event, err := fetchEventByID(db, id)
+	event, err := getEventByID(db, id)
 	if err != nil {
 		http.NotFound(w, r)
 		return

@@ -178,6 +178,13 @@ func scanOrg(row interface{ Scan(...any) error }, extra ...any) (Organization, e
 	return o, nil
 }
 
+// getOrganizationByID loads a single organization row by primary key,
+// consolidating the orgSelectCols+scanOrg query hand-copied at every by-id
+// call site (#1511).
+func getOrganizationByID(q querier, id any) (Organization, error) {
+	return scanOrg(q.QueryRow("SELECT "+orgSelectCols+" FROM organizations WHERE id = ?", id))
+}
+
 type orgStatRow struct {
 	ID              int `json:"id"`
 	EventCount      int `json:"event_count"`
@@ -441,7 +448,7 @@ func createOrganization(w http.ResponseWriter, r *http.Request) {
 // GET /api/v1/organizations/{id}
 func getOrganization(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	o, err := scanOrg(db.QueryRow("SELECT "+orgSelectCols+" FROM organizations WHERE id = ?", id))
+	o, err := getOrganizationByID(db, id)
 	if !rowOr404(w, err, "Organization not found") {
 		return
 	}
@@ -527,7 +534,7 @@ func updateOrganization(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden: you must be a member of this organization", http.StatusForbidden)
 		return
 	}
-	o, err := scanOrg(db.QueryRow("SELECT "+orgSelectCols+" FROM organizations WHERE id = ?", id))
+	o, err := getOrganizationByID(db, id)
 	if !rowOr404(w, err, "Organization not found") {
 		return
 	}
@@ -607,7 +614,7 @@ func patchOrganization(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden: you must be a member of this organization", http.StatusForbidden)
 		return
 	}
-	o, err := scanOrg(db.QueryRow("SELECT "+orgSelectCols+" FROM organizations WHERE id = ?", id))
+	o, err := getOrganizationByID(db, id)
 	if !rowOr404(w, err, "Organization not found") {
 		return
 	}

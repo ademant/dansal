@@ -80,7 +80,7 @@ func oidcDiscover(ctx context.Context, issuerURL string) (*oidc.Provider, error)
 	return p, nil
 }
 
-func loadOIDCProvider(id int) (OIDCProvider, string, error) {
+func getOIDCProviderByID(id int) (OIDCProvider, string, error) {
 	var p OIDCProvider
 	var orgID sql.NullInt64
 	var secret string
@@ -508,7 +508,7 @@ func oidcStart(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "redirect_uri is required", http.StatusBadRequest)
 		return
 	}
-	p, secret, err := loadOIDCProvider(req.ProviderID)
+	p, secret, err := getOIDCProviderByID(req.ProviderID)
 	if !rowOr404(w, err, "Unknown OIDC provider") {
 		return
 	}
@@ -566,7 +566,7 @@ func oidcLinkStart(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "redirect_uri is required", http.StatusBadRequest)
 		return
 	}
-	p, secret, err := loadOIDCProvider(req.ProviderID)
+	p, secret, err := getOIDCProviderByID(req.ProviderID)
 	if !rowOr404(w, err, "Unknown OIDC provider") {
 		return
 	}
@@ -713,7 +713,7 @@ func oidcCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p, secret, err := loadOIDCProvider(flow.ProviderID)
+	p, secret, err := getOIDCProviderByID(flow.ProviderID)
 	if err != nil {
 		writeInternalError(w, err)
 		return

@@ -1,4 +1,17 @@
 {{template "base" .}}
+{{/* #1506: the past-event <li> markup is shared by the direct (no-upcoming)
+     section below and could be reused by future on-demand loading — one
+     partial, following location.html's "loc-past-event-item" pattern.
+     {{define}} must be top-level, not nested inside {{with .Data}}. */}}
+{{define "city-event-item"}}
+<li class="city-event{{if .Event.IsCancelled}} cancelled{{end}}">
+  <a href="/events/{{.Event.ID}}" class="city-event-link">
+    <span class="city-event-date">{{formatDate .LangCode .DateFormat .Event.StartTime}}</span>
+    <span class="city-event-title">{{.Event.Title}}</span>
+    {{with .Event.Location}}<span class="city-event-venue">{{.Location}}</span>{{end}}
+  </a>
+</li>
+{{end}}
 {{define "head_extra"}}
 <script type="application/ld+json">
 {
@@ -25,28 +38,37 @@
 <script nonce="{{$.Nonce}}" defer src="/static/leaflet/leaflet.js"></script>
 
 {{if .GeoJSON}}
-<div id="city-map" style="height:300px;border-radius:.4rem;margin-bottom:1rem"></div>
+<div id="city-map" class="city-map"></div>
 {{end}}
 
 {{if .Events}}
 <ul class="city-event-list">
-  {{range .Events}}
-  <li class="city-event{{if .IsCancelled}} cancelled{{end}}">
-    <a href="/events/{{.ID}}" class="city-event-link">
-      <span class="city-event-date">{{formatDate $.LangCode $.DateFormat .StartTime}}</span>
-      <span class="city-event-title">{{.Title}}</span>
-      {{with .Location}}<span class="city-event-venue">{{.Location}}</span>{{end}}
-    </a>
-  </li>
-  {{end}}
+  {{range .Events}}{{template "city-event-item" (dict "Event" . "LangCode" $.LangCode "DateFormat" $.DateFormat)}}{{end}}
 </ul>
-{{else}}
-<p class="no-results">{{$.Strings.T "search_no_results"}}</p>
-{{end}}
 
 {{if not .IncludePast}}
 <button type="button" id="city-past-btn" class="btn-secondary">{{$.Strings.T "city_past_events"}}</button>
 <ul id="city-past-list" class="city-event-list" hidden></ul>
+{{end}}
+
+{{else}}
+{{/* #1506: no upcoming events — a nearby-radius fallback (#1436) instead of
+     a 404, plus this town's recent past events shown directly, same pattern
+     as location.html's no-upcoming-events branch. */}}
+<p class="empty-msg">
+  {{$.Strings.TF "city_no_upcoming" .City.Town}}
+  {{if .NearbyHint}} <a href="{{.NearbyHint.SearchURL}}">{{$.Strings.TF "loc_nearby_hint" .NearbyHint.Count .NearbyHint.RadiusKm}}</a>{{end}}
+</p>
+
+{{if .PastEvents}}
+<div class="loc-past-events">
+  <h2 class="section-heading">{{$.Strings.T "city_past_events"}}</h2>
+  <ul class="city-event-list">
+    {{range .PastEvents}}{{template "city-event-item" (dict "Event" . "LangCode" $.LangCode "DateFormat" $.DateFormat)}}{{end}}
+  </ul>
+  {{if .PastEventsTotal}}<p class="loc-events-total">{{$.Strings.TF "loc_events_total" .PastEventsTotal}}</p>{{end}}
+</div>
+{{end}}
 {{end}}
 
 <script nonce="{{$.Nonce}}">
@@ -138,6 +160,11 @@
   .city-event-venue { text-align: left; }
 }
 #city-past-btn { margin: .5rem 0 1rem; }
+.city-map { height: 300px; border-radius: .4rem; margin-bottom: 1rem; }
+.empty-msg { color: var(--fg-faint); font-size: .9rem; }
+.empty-msg a { color: var(--link); font-weight: 600; }
+.loc-past-events { margin-top: 1.25rem; }
+.loc-events-total { color: var(--fg-faint); font-size: .85rem; margin-top: .5rem; }
 </style>
 {{end}}
 {{end}}

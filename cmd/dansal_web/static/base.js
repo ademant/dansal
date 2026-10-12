@@ -407,22 +407,44 @@ function renderMiniCalendar(containerId, calEvents, months, opts){
       if(prevBtn) prevBtn.disabled=cal.scrollLeft<=2;
       if(nextBtn) nextBtn.disabled=cal.scrollLeft+cal.clientWidth>=cal.scrollWidth-2;
     }
+    if(opts.startMonth){
+      var startIdx=-1;
+      for(var mi=0;mi<months.length;mi++){
+        if(months[mi].getMonth()+1===opts.startMonth){startIdx=mi;break;}
+      }
+      if(startIdx>0){
+        var prevBehavior=cal.style.scrollBehavior;
+        cal.style.scrollBehavior='auto';
+        cal.scrollLeft=startIdx*step();
+        cal.style.scrollBehavior=prevBehavior;
+      }
+    }
     if(prevBtn) prevBtn.onclick=function(){cal.scrollBy({left:-step(),behavior:'smooth'});};
     if(nextBtn) nextBtn.onclick=function(){cal.scrollBy({left:step(),behavior:'smooth'});};
-    cal.addEventListener('scroll',updateBtns);
+    // #1519: /festivals re-renders this same container on every carousel<->grid
+    // breakpoint crossing (innerHTML only, the container node itself persists),
+    // so guard against rebinding scroll/touch listeners on every re-render —
+    // prevBtn/nextBtn.onclick above is a plain assignment and safe to redo,
+    // but addEventListener would otherwise stack a duplicate handler per call.
+    if(!cal._miniCalCarouselBound){
+      cal.addEventListener('scroll',updateBtns);
+      // #1171: touch swipe, same threshold/pattern as the homepage week-table
+      // swipe (index.html). overflow-x is hidden (paging is arrow/swipe-only,
+      // no visible scrollbar drag), so without this a touch drag would do
+      // nothing on mobile — the arrows alone aren't the "swipe like the main
+      // page" the carousel was expected to support.
+      var sx=null;
+      cal.addEventListener('touchstart',function(e){sx=e.touches[0].clientX;},{passive:true});
+      cal.addEventListener('touchend',function(e){
+        if(sx===null)return;
+        var dx=e.changedTouches[0].clientX-sx; sx=null;
+        if(Math.abs(dx)>50) cal.scrollBy({left:dx<0?step():-step(),behavior:'smooth'});
+      },{passive:true});
+      cal._miniCalCarouselBound=true;
+    }
     updateBtns();
-    // #1171: touch swipe, same threshold/pattern as the homepage week-table
-    // swipe (index.html). overflow-x is hidden (paging is arrow/swipe-only,
-    // no visible scrollbar drag), so without this a touch drag would do
-    // nothing on mobile — the arrows alone aren't the "swipe like the main
-    // page" the carousel was expected to support.
-    var sx=null;
-    cal.addEventListener('touchstart',function(e){sx=e.touches[0].clientX;},{passive:true});
-    cal.addEventListener('touchend',function(e){
-      if(sx===null)return;
-      var dx=e.changedTouches[0].clientX-sx; sx=null;
-      if(Math.abs(dx)>50) cal.scrollBy({left:dx<0?step():-step(),behavior:'smooth'});
-    },{passive:true});
+  } else {
+    cal.classList.remove('fest-carousel');
   }
 }
 function attachTileLayer(map){

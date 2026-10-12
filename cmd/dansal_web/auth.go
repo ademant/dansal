@@ -129,12 +129,13 @@ func loginPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 			log.Printf("login page: could not load OIDC providers: %v", err)
 		}
 		title := i18n.T(r, "login_title")
+		flash := flashTake(r.URL.Query().Get("msg"))
 		renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{
 			MagicSent:     r.URL.Query().Get("magic_sent"),
 			Next:          r.URL.Query().Get("next"),
 			FormToken:     tok,
 			OIDCProviders: providers,
-			OIDCError:     r.URL.Query().Get("error") == "oidc",
+			OIDCError:     flash.OIDCLoginError,
 		}))
 	}
 }

@@ -31,14 +31,10 @@ func suggestManageLookup(token string) (eventID int, err error) {
 func getSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
 	eventID, err := suggestManageLookup(token)
-	if err == sql.ErrNoRows {
-		writeError(w, "token not found or expired", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "token not found or expired") {
 		return
 	}
-	event, err := fetchEventByID(db, eventID)
+	event, err := getEventByID(db, eventID)
 	if err != nil {
 		writeInternalError(w, err)
 		return
@@ -86,11 +82,7 @@ func (p pendingEditFields) isEmpty() bool {
 func patchSuggestManageEvent(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
 	eventID, err := suggestManageLookup(token)
-	if err == sql.ErrNoRows {
-		writeError(w, "token not found or expired", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "token not found or expired") {
 		return
 	}
 
@@ -663,11 +655,7 @@ func urlChanged(q querier, eventID int, submitted string) bool {
 func postSuggestManageImage(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
 	eventID, err := suggestManageLookup(token)
-	if err == sql.ErrNoRows {
-		writeError(w, "token not found or expired", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "token not found or expired") {
 		return
 	}
 	if err := r.ParseMultipartForm(config.Server.MaxBodyBytes); err != nil {

@@ -436,11 +436,15 @@ th.sortable-th:hover{background:#e8eef7}
 .fest-month-grid td.fest-day:hover{opacity:.85}
 /* Carousel mode (#1167): a fixed number of months on one row, paged with
    arrow buttons instead of wrapping onto a second line. Opt-in via
-   renderMiniCalendar's opts.carousel — /org/{slug}'s 6-month window uses it,
-   /festivals' 12-month grid still wraps freely. */
+   renderMiniCalendar's opts.carousel — /org/{slug}'s 6-month window always
+   uses it; /festivals (#1519) uses the 12-month grid on desktop and switches
+   to this carousel, one month at a time, at <=600px. flex/min-width on the
+   plain .fest-calendar-wrap .fest-calendar rule (not just the .fest-carousel
+   one) is what lets the 2x6 grid still stretch to fill the row when it's the
+   sole flex child and the nav buttons are hidden. */
 .fest-calendar-wrap{display:flex;align-items:center;gap:.5rem;margin-bottom:1.5rem}
-.fest-calendar-wrap .fest-calendar{margin-bottom:0}
-.fest-calendar.fest-carousel{display:flex;flex-wrap:nowrap;overflow-x:hidden;scroll-behavior:smooth;flex:1;min-width:0}
+.fest-calendar-wrap .fest-calendar{margin-bottom:0;flex:1;min-width:0}
+.fest-calendar.fest-carousel{display:flex;flex-wrap:nowrap;overflow-x:hidden;scroll-behavior:smooth}
 .fest-calendar.fest-carousel .fest-month{flex:0 0 220px}
 @media(max-width:600px){
   .fest-calendar.fest-carousel .fest-month{flex:0 0 100%}

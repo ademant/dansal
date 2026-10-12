@@ -150,6 +150,19 @@ func scanLocation(s scanner, loc *Location, extra ...any) error {
 	return nil
 }
 
+// getLocationByID loads a single location row by primary key, consolidating
+// the locationCols+scanLocation query that was hand-copied at every
+// by-id call site (#1511). id is typically an int, but a handler's raw
+// r.PathValue("id") string works too — SQLite's INTEGER affinity on l.id
+// coerces a numeric string on comparison.
+func getLocationByID(q querier, id any) (Location, error) {
+	var loc Location
+	err := scanLocation(q.QueryRow(`SELECT `+locationCols+`
+		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id
+		WHERE l.id=? GROUP BY l.id`, id), &loc)
+	return loc, err
+}
+
 // inheritLocationFields fills child's empty address/coordinate fields from
 // an already-loaded parent. A room (child location) is stored without its
 // own address/geo so building corrections propagate automatically instead
@@ -194,10 +207,7 @@ func resolvedLocation(loc *Location) {
 	if loc.ParentID == nil {
 		return
 	}
-	var parent Location
-	err := scanLocation(db.QueryRow(`SELECT `+locationCols+`
-		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id
-		WHERE l.id=? GROUP BY l.id`, *loc.ParentID), &parent)
+	parent, err := getLocationByID(db, *loc.ParentID)
 	if err != nil {
 		return
 	}
@@ -448,6 +458,7 @@ func getLocations(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query += " GROUP BY l.id"
+	writeTotalCountHeader(w, query, args)
 	applyListPagination(r, "l.location ASC", &query, &args)
 
 	rows, err := db.Query(query, args...)
@@ -735,10 +746,7 @@ func attachSitePlanData(loc *Location) {
 func getLocation(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	var location Location
-	err := scanLocation(db.QueryRow(`SELECT `+locationCols+`
-		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id
-		WHERE l.id=? GROUP BY l.id`, id), &location)
+	location, err := getLocationByID(db, id)
 
 	if err == sql.ErrNoRows {
 		if idWasAllocated("locations", id) {
@@ -1059,10 +1067,8 @@ func putLocation(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var loc Location
-	if err := scanLocation(db.QueryRow(`SELECT `+locationCols+`
-		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id
-		WHERE l.id=? GROUP BY l.id`, id), &loc); err != nil {
+	loc, err := getLocationByID(db, id)
+	if err != nil {
 		writeInternalError(w, err)
 		return
 	}
@@ -1117,16 +1123,8 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var loc Location
-	err := scanLocation(db.QueryRow(`SELECT `+locationCols+`
-		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id
-		WHERE l.id=? GROUP BY l.id`, id), &loc)
-	if err == sql.ErrNoRows {
-		writeError(w, "Location not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeInternalError(w, err)
+	loc, err := getLocationByID(db, id)
+	if !rowOr404(w, err, "Location not found") {
 		return
 	}
 	if checkIfMatchConflict(w, r, loc.UpdatedAt) {
@@ -1430,12 +1428,7 @@ func deleteLocation(w http.ResponseWriter, r *http.Request) {
 
 	var locationID int
 	err := db.QueryRow("SELECT id FROM locations WHERE id = ?", id).Scan(&locationID)
-	if err == sql.ErrNoRows {
-		writeError(w, "Location not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "Location not found") {
 		return
 	}
 
@@ -1504,12 +1497,13 @@ func mergeLocations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var keep, merge Location
-	if err := scanLocation(db.QueryRow(`SELECT `+locationCols+` FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id WHERE l.id=? GROUP BY l.id`, req.KeepID), &keep); err != nil {
+	keep, err := getLocationByID(db, req.KeepID)
+	if err != nil {
 		writeError(w, "keep location not found", http.StatusNotFound)
 		return
 	}
-	if err := scanLocation(db.QueryRow(`SELECT `+locationCols+` FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id WHERE l.id=? GROUP BY l.id`, req.MergeID), &merge); err != nil {
+	merge, err := getLocationByID(db, req.MergeID)
+	if err != nil {
 		writeError(w, "merge location not found", http.StatusNotFound)
 		return
 	}
@@ -1633,16 +1627,8 @@ func getLocationChildren(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var parent Location
-	err := scanLocation(db.QueryRow(`SELECT `+locationCols+`
-		FROM locations l LEFT JOIN location_organizations lo ON l.id=lo.location_id
-		WHERE l.id=? GROUP BY l.id`, locID), &parent)
-	if err == sql.ErrNoRows {
-		writeError(w, "Location not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeInternalError(w, err)
+	parent, err := getLocationByID(db, locID)
+	if !rowOr404(w, err, "Location not found") {
 		return
 	}
 
@@ -1759,10 +1745,17 @@ func townSlug(town string) string {
 // GET /api/v1/locations/cities — lists all towns that have at least one
 // geo-tagged location and at least one published future event. Results include
 // location_count and event_count per town. Used by /cities directory and
-// /city/{slug} hub pages.
+// sitemap (active towns only — no thin pages advertised).
+//
+// ?include_inactive=true drops the "at least one future event" requirement,
+// returning every town with a geo-tagged location regardless of event_count
+// (#1506) — used to resolve /city/{slug} for towns whose only events are in
+// the past, so the hub page can still show them (past events + nearby hint)
+// instead of 404ing.
 func getCities(w http.ResponseWriter, r *http.Request) {
+	includeInactive := r.URL.Query().Get("include_inactive") == "true"
 	now := time.Now().Unix()
-	rows, err := db.Query(`
+	query := `
 		SELECT l.town,
 		       COUNT(DISTINCT l.id) AS location_count,
 		       COUNT(DISTINCT e.id) AS event_count,
@@ -1774,10 +1767,14 @@ func getCities(w http.ResponseWriter, r *http.Request) {
 		    AND e.end_time >= ?
 		WHERE l.town IS NOT NULL AND l.town != ''
 		  AND l.latitude IS NOT NULL AND l.longitude IS NOT NULL
-		GROUP BY l.town
-		HAVING event_count > 0
-		ORDER BY l.town
-	`, now)
+		GROUP BY l.town`
+	if !includeInactive {
+		query += `
+		HAVING event_count > 0`
+	}
+	query += `
+		ORDER BY l.town`
+	rows, err := db.Query(query, now)
 	if err != nil {
 		writeInternalError(w, err)
 		return

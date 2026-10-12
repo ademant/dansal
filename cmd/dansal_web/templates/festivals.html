@@ -14,7 +14,11 @@
 
 <div id="map-container"></div>
 
-<div id="fest-calendar" class="fest-calendar"></div>
+<div class="fest-calendar-wrap" id="fest-cal-wrap" hidden>
+  <button type="button" class="fest-nav" id="fest-cal-prev" aria-label="{{$.Strings.T "pagination_prev"}}" hidden>‹</button>
+  <div id="fest-calendar" class="fest-calendar" hidden></div>
+  <button type="button" class="fest-nav" id="fest-cal-next" aria-label="{{$.Strings.T "pagination_next"}}" hidden>›</button>
+</div>
 
 {{if .YearEvents}}
 <div class="table-wrap">
@@ -135,10 +139,37 @@ table.fest-folded .col-time,table.fest-folded .col-venue{color:var(--fg-muted)}
   // shared with the /org/{slug} rolling-month calendar.
   // #1330: base.js now loads with defer, so renderMiniCalendar isn't defined
   // yet at plain top-level script time — wait for DOMContentLoaded.
+  // #1519: desktop keeps the full 12-month grid; mobile (<=600px) switches to
+  // the carousel (one month, swipe/arrows), opened on the current calendar
+  // month rather than always January. Re-renders on breakpoint crossing so
+  // rotating a tablet or resizing a desktop window doesn't need a reload.
   document.addEventListener('DOMContentLoaded', function(){
+    var wrap = document.getElementById('fest-cal-wrap');
+    var prevBtn = document.getElementById('fest-cal-prev');
+    var nextBtn = document.getElementById('fest-cal-next');
+    var mq = window.matchMedia('(max-width:600px)');
     var months = [];
     for (var m = 0; m < 12; m++) months.push(new Date(year, m, 1));
-    renderMiniCalendar('fest-calendar', calEvents, months);
+
+    function render(){
+      var mobile = mq.matches;
+      if (prevBtn) prevBtn.hidden = !mobile;
+      if (nextBtn) nextBtn.hidden = !mobile;
+      if (wrap) wrap.hidden = false;
+      if (mobile) {
+        renderMiniCalendar('fest-calendar', calEvents, months, {
+          carousel: true,
+          startMonth: new Date().getMonth() + 1,
+          prevId: 'fest-cal-prev',
+          nextId: 'fest-cal-next',
+          wrapId: 'fest-cal-wrap'
+        });
+      } else {
+        renderMiniCalendar('fest-calendar', calEvents, months, {wrapId: 'fest-cal-wrap'});
+      }
+    }
+    render();
+    mq.addEventListener('change', render);
   });
 })();
 </script>

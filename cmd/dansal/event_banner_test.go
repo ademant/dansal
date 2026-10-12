@@ -112,9 +112,9 @@ func TestEventBannerTierSelection(t *testing.T) {
 
 func mustFetchEvent(t *testing.T, id int) Event {
 	t.Helper()
-	event, err := fetchEventByID(db, id)
+	event, err := getEventByID(db, id)
 	if err != nil {
-		t.Fatalf("fetchEventByID(%d): %v", id, err)
+		t.Fatalf("getEventByID(%d): %v", id, err)
 	}
 	return event
 }

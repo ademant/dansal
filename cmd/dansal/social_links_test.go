@@ -14,7 +14,7 @@ func TestFilterChatLinks(t *testing.T) {
 	in := []ChatLink{
 		{Platform: "telegram", URL: "https://t.me/+abc"},
 		{Platform: "myspace", URL: "https://myspace.com/whatever"}, // unknown platform
-		{Platform: "signal", URL: "  "},                           // blank URL
+		{Platform: "signal", URL: "  "},                            // blank URL
 		{Platform: "mailing_list", URL: "https://lists.example.org/postorius/lists/balfolk-koeln.example.org/"},
 	}
 	want := []ChatLink{

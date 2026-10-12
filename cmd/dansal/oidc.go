@@ -80,7 +80,7 @@ func oidcDiscover(ctx context.Context, issuerURL string) (*oidc.Provider, error)
 	return p, nil
 }
 
-func loadOIDCProvider(id int) (OIDCProvider, string, error) {
+func getOIDCProviderByID(id int) (OIDCProvider, string, error) {
 	var p OIDCProvider
 	var orgID sql.NullInt64
 	var secret string
@@ -456,9 +456,8 @@ func deleteOIDCProvider(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden: only admins and org members may manage OIDC providers", http.StatusForbidden)
 		return
 	}
-	id, err := strconv.Atoi(r.PathValue("id"))
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	id, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 	if role != RoleAdmin {
@@ -509,13 +508,8 @@ func oidcStart(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "redirect_uri is required", http.StatusBadRequest)
 		return
 	}
-	p, secret, err := loadOIDCProvider(req.ProviderID)
-	if err == sql.ErrNoRows {
-		writeError(w, "Unknown OIDC provider", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeInternalError(w, err)
+	p, secret, err := getOIDCProviderByID(req.ProviderID)
+	if !rowOr404(w, err, "Unknown OIDC provider") {
 		return
 	}
 	if !p.Enabled {
@@ -572,13 +566,8 @@ func oidcLinkStart(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "redirect_uri is required", http.StatusBadRequest)
 		return
 	}
-	p, secret, err := loadOIDCProvider(req.ProviderID)
-	if err == sql.ErrNoRows {
-		writeError(w, "Unknown OIDC provider", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeInternalError(w, err)
+	p, secret, err := getOIDCProviderByID(req.ProviderID)
+	if !rowOr404(w, err, "Unknown OIDC provider") {
 		return
 	}
 	if !p.Enabled {
@@ -724,7 +713,7 @@ func oidcCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p, secret, err := loadOIDCProvider(flow.ProviderID)
+	p, secret, err := getOIDCProviderByID(flow.ProviderID)
 	if err != nil {
 		writeInternalError(w, err)
 		return
@@ -801,12 +790,7 @@ func oidcLoginExisting(w http.ResponseWriter, r *http.Request, issuer, subject s
 		 FROM user_identities i JOIN users u ON u.id = i.user_id
 		 WHERE i.issuer_url=? AND i.subject=?`, issuer, subject,
 	).Scan(&userID, &email, &role, &disabled)
-	if err == sql.ErrNoRows {
-		writeError(w, "No dansal account is linked to this identity — use an invite link first", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "No dansal account is linked to this identity — use an invite link first") {
 		return
 	}
 	if disabled != 0 {

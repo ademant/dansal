@@ -379,7 +379,7 @@ func adminListInvites(req adminRequest) adminResponse {
 	var err error
 	if req.Email == "" {
 		rows, err = db.Query(
-			"SELECT id, token, role, org_id, expires_at, COALESCE(used_at,''), created_at FROM invite_links ORDER BY created_at DESC",
+			"SELECT " + inviteLinkCols + " FROM invite_links ORDER BY created_at DESC",
 		)
 	} else {
 		u, lookupErr := getUserByEmail(req.Email)
@@ -387,7 +387,7 @@ func adminListInvites(req adminRequest) adminResponse {
 			return adminResponse{OK: false, Error: "user not found"}
 		}
 		rows, err = db.Query(
-			"SELECT id, token, role, org_id, expires_at, COALESCE(used_at,''), created_at FROM invite_links WHERE created_by=? ORDER BY created_at DESC",
+			"SELECT "+inviteLinkCols+" FROM invite_links WHERE created_by=? ORDER BY created_at DESC",
 			u.ID,
 		)
 	}
@@ -397,14 +397,9 @@ func adminListInvites(req adminRequest) adminResponse {
 	defer rows.Close()
 	links := []InviteLink{}
 	for rows.Next() {
-		var l InviteLink
-		var orgID sql.NullInt64
-		if err := rows.Scan(&l.ID, &l.Token, &l.Role, &orgID, &l.ExpiresAt, &l.UsedAt, &l.CreatedAt); err != nil {
+		l, err := scanInvite(rows)
+		if err != nil {
 			return adminResponse{OK: false, Error: err.Error()}
-		}
-		if orgID.Valid {
-			id := int(orgID.Int64)
-			l.OrgID = &id
 		}
 		links = append(links, l)
 	}

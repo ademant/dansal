@@ -182,6 +182,8 @@ func main() {
 		cmdEnableUser(rest)
 	case "disable-user":
 		cmdDisableUser(rest)
+	case "magic-link":
+		cmdMagicLink(rest)
 	case "list-orgs":
 		cmdListOrgs(rest)
 	case "list-members":
@@ -287,6 +289,7 @@ User management:
   set-email    --email STR --new-email STR           Change a user's email address
   enable-user  --email STR                           Re-enable a disabled user
   disable-user --email STR                           Disable a user account
+  magic-link   --email STR                           Generate a one-time passwordless login link
 
 Invite links:
   list-invites   [--email STR]                       List invite links (all, or by creator)
@@ -473,6 +476,15 @@ Admin accounts cannot be disabled.
 
 Flags:
   --email  Email address of the account to disable (required)`,
+
+	"magic-link": `Usage: dansal_admin magic-link --email STR
+
+Generate a one-time passwordless login link for a user and print its URL.
+The link works even when password login is disabled (e.g. admin accounts),
+and does not require the user's email to be verified.
+
+Flags:
+  --email  Email address of the account (required)`,
 
 	"list-orgs": `Usage: dansal_admin list-orgs
 
@@ -966,6 +978,23 @@ func cmdSetPassword(args []string) {
 		die("%s", resp.Error)
 	}
 	fmt.Printf("password updated for %s\n", *email)
+}
+
+func cmdMagicLink(args []string) {
+	fs := flag.NewFlagSet("magic-link", flag.ExitOnError)
+	fs.Usage = func() { fmt.Println(commandHelp["magic-link"]) }
+	email := fs.String("email", "", "email address")
+	fs.Parse(args)
+	if *email == "" {
+		die("--email is required")
+	}
+	resp := send(socketPath, request{Cmd: "magic-link", Email: *email})
+	if !resp.OK {
+		die("%s", resp.Error)
+	}
+	var data map[string]string
+	json.Unmarshal(resp.Data, &data)
+	fmt.Println(data["url"])
 }
 
 func cmdSetRole(args []string) {

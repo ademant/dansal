@@ -431,6 +431,36 @@ const locationPastEventsLimit = 5
 // (#1436) checks for events — matches the proposal's "next 3 months".
 const locationNearbyMonths = 3
 
+// nearbyHint computes the "no upcoming events here, but N within X km"
+// fallback (#1436) around (lat, lon) — nil unless at least one radius has
+// >=1 published event in the next locationNearbyMonths. label is the town
+// or venue name shown on the /search deep link this builds. Shared by
+// locationHandler (venue pages) and cityHubHandler (#1506 — town pages with
+// no upcoming events).
+func nearbyHint(ctx context.Context, client *DansalClient, lat, lon float64, label string) *NearbyHint {
+	from := time.Now().Format("2006-01-02")
+	to := time.Now().AddDate(0, locationNearbyMonths, 0).Format("2006-01-02")
+	nc, err := client.GetNearbyCounts(ctx, lat, lon, from, to)
+	if err != nil {
+		log.Printf("nearbyHint(%s): could not load nearby counts: %v", label, err)
+		return nil
+	}
+	for _, radius := range nc.RadiiKm {
+		if n := nc.Counts[strconv.Itoa(radius)]; n >= 1 {
+			qs := url.Values{
+				"lat":    {strconv.FormatFloat(lat, 'f', -1, 64)},
+				"lng":    {strconv.FormatFloat(lon, 'f', -1, 64)},
+				"radius": {strconv.Itoa(radius)},
+				"from":   {from},
+				"to":     {to},
+				"label":  {label},
+			}
+			return &NearbyHint{Count: n, RadiusKm: radius, SearchURL: "/search?" + qs.Encode()}
+		}
+	}
+	return nil
+}
+
 type OrgListItem struct {
 	Org           Organization
 	Slug          string
@@ -717,6 +747,16 @@ var tmplFuncMap = func() template.FuncMap {
 	m := template.FuncMap{}
 	for _, part := range []template.FuncMap{tmplFuncsTime, tmplFuncsLocation, tmplFuncsTags, tmplFuncsChat, tmplFuncsMisc} {
 		for k, v := range part {
+			// #1518: a name reused across two templatefuncs_*.go fragments
+			// would otherwise have the second silently win, hiding a
+			// collision behind whichever slice order happens to iterate
+			// last. Panicking at init time catches it at build/test time
+			// (this var initializer runs as soon as the package loads, so
+			// any `go test ./cmd/dansal_web/...` run exercises it) rather
+			// than at some unrelated page render.
+			if _, dup := m[k]; dup {
+				panic("tmplFuncMap: duplicate template func name " + k)
+			}
 			m[k] = v
 		}
 	}
@@ -806,6 +846,7 @@ type Templates struct {
 	embedLocations            *template.Template
 	dashboard                 *template.Template
 	festivals                 *template.Template
+	errorPage                 *template.Template
 }
 
 func loadTemplates() *Templates {
@@ -913,6 +954,7 @@ func loadTemplates() *Templates {
 		embedLocations:            loadEmbed("embed_locations"),
 		dashboard:                 load("dashboard"),
 		festivals:                 load("festivals"),
+		errorPage:                 load("error"),
 	}
 }
 
@@ -965,7 +1007,7 @@ func legacyGancioRedirect(target string) http.HandlerFunc {
 // redirect to the homepage is a crawler soft-404 and sends visitors somewhere
 // unrelated; 410 lets both clients stop retrying the dead URL (#1433).
 func legacyGancioGone(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "This legacy URL is gone", http.StatusGone)
+	htmlError(w, r, http.StatusGone)
 }
 
 func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -1051,7 +1093,7 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		// as if it were relative, requesting /events/geo:lat,lon -- a 410
 		// drains their retry queue faster than a plain 404 would.
 		if strings.HasPrefix(idStr, "geo:") {
-			http.Error(w, "not a navigable URL", http.StatusGone)
+			htmlError(w, r, http.StatusGone)
 			return
 		}
 		id, err := strconv.Atoi(idStr)
@@ -1094,7 +1136,7 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 					return
 				}
 				if errors.Is(err, errExpired) {
-					http.Error(w, "event is gone", http.StatusGone)
+					htmlError(w, r, http.StatusGone)
 				} else {
 					http.NotFound(w, r)
 				}
@@ -1125,7 +1167,6 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		// the banner forever.
 		flash := flashTake(r.URL.Query().Get("msg"))
 
-		clientIP := getClientIP(r)
 		lang := i18n.detectLang(r)
 		pageTitle := eventPageTitle(event, lang)
 
@@ -1166,8 +1207,6 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			BookingErrorMsg:        flash.BookingErrorMsg,
 			BookingErrorID:         flash.BookingErrorID,
 			UserOrgs:               epd.userOrgs,
-			BookFormToken:          issueFormToken(clientIP),
-			BoardFormToken:         issueFormToken(clientIP),
 			GeoToken:               newFormToken(),
 			PrevEvent:              epd.prevEvent,
 			NextEvent:              epd.nextEvent,
@@ -1205,18 +1244,18 @@ func eventAssignOrgHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			return
 		}
 		if err := r.ParseForm(); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
+			logHTTPError(w, r, "bad request", http.StatusBadRequest)
 			return
 		}
 		orgID, err := strconv.Atoi(r.FormValue("org_id"))
 		if err != nil || orgID == 0 {
-			http.Error(w, "invalid org_id", http.StatusBadRequest)
+			logHTTPError(w, r, "invalid org_id", http.StatusBadRequest)
 			return
 		}
 		token := getSessionToken(r)
 		members, err := client.GetOrganizationMembers(r.Context(), orgID, token)
 		if err != nil {
-			http.Error(w, "forbidden", http.StatusForbidden)
+			logHTTPError(w, r, "forbidden", http.StatusForbidden)
 			return
 		}
 		isMember := false
@@ -1227,7 +1266,7 @@ func eventAssignOrgHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			}
 		}
 		if !isMember {
-			http.Error(w, "forbidden", http.StatusForbidden)
+			logHTTPError(w, r, "forbidden", http.StatusForbidden)
 			return
 		}
 		if err := client.AssignEventOrg(r.Context(), id, orgID, token); err != nil {
@@ -1266,7 +1305,7 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 				// #1462: no live org claims this slug — it may be a renamed
 				// or deleted org's old URL rather than one that never existed.
 				if target, gone := resolveOrgSlugRedirect(db, slug); gone {
-					http.Error(w, "this organization is gone", http.StatusGone)
+					htmlError(w, r, http.StatusGone)
 					return
 				} else if target != "" {
 					http.Redirect(w, r, "/org/"+target, http.StatusMovedPermanently)
@@ -1287,7 +1326,7 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 			// deleted org's old slug reaches here rather than the actor==nil
 			// branch above.
 			if target, gone := resolveOrgSlugRedirect(db, actor.OrgSlug); gone {
-				http.Error(w, "this organization is gone", http.StatusGone)
+				htmlError(w, r, http.StatusGone)
 				return
 			} else if target != "" {
 				http.Redirect(w, r, "/org/"+target, http.StatusMovedPermanently)
@@ -1342,7 +1381,7 @@ func locationPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 		// /location/geo:lat,lon -- a 410 drains their retry queue faster
 		// than a plain 404 would.
 		if strings.HasPrefix(r.PathValue("id"), "geo:") {
-			http.Error(w, "not a navigable URL", http.StatusGone)
+			htmlError(w, r, http.StatusGone)
 			return
 		}
 		id, ok := intPathValueOr404(w, r, "id")
@@ -1357,7 +1396,7 @@ func locationPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 					return
 				}
 				if errors.Is(err, errExpired) {
-					http.Error(w, "location is gone", http.StatusGone)
+					htmlError(w, r, http.StatusGone)
 				} else {
 					http.NotFound(w, r)
 				}
@@ -1416,29 +1455,9 @@ func locationPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 
 		// #1436: when there's nothing upcoming, offer the nearest radius
 		// with at least one event instead of a dead end.
-		var nearbyHint *NearbyHint
+		var hint *NearbyHint
 		if len(events) == 0 && loc.Latitude != nil && loc.Longitude != nil {
-			from := time.Now().Format("2006-01-02")
-			to := time.Now().AddDate(0, locationNearbyMonths, 0).Format("2006-01-02")
-			nc, ncErr := client.GetNearbyCounts(r.Context(), *loc.Latitude, *loc.Longitude, from, to)
-			if ncErr != nil {
-				log.Printf("location %d: could not load nearby counts: %v", id, ncErr)
-			} else {
-				for _, radius := range nc.RadiiKm {
-					if n := nc.Counts[strconv.Itoa(radius)]; n >= 1 {
-						qs := url.Values{
-							"lat":    {strconv.FormatFloat(*loc.Latitude, 'f', -1, 64)},
-							"lng":    {strconv.FormatFloat(*loc.Longitude, 'f', -1, 64)},
-							"radius": {strconv.Itoa(radius)},
-							"from":   {from},
-							"to":     {to},
-							"label":  {title},
-						}
-						nearbyHint = &NearbyHint{Count: n, RadiusKm: radius, SearchURL: "/search?" + qs.Encode()}
-						break
-					}
-				}
-			}
+			hint = nearbyHint(r.Context(), client, *loc.Latitude, *loc.Longitude, title)
 		}
 
 		td := tmplData(r, cfg, i18n, title, LocationPageData{
@@ -1446,7 +1465,7 @@ func locationPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			Events:          events,
 			PastEvents:      pastEvents,
 			PastEventsTotal: pastTotal,
-			NearbyHint:      nearbyHint,
+			NearbyHint:      hint,
 		})
 		parts := []string{title}
 		if loc.Town != "" && loc.Town != title {
@@ -1775,7 +1794,6 @@ func boardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		sort.Strings(towns)
 
 		title := i18n.T(r, "nav_board")
-		ip := getClientIP(r)
 		data := BoardData{
 			Posts:         posts,
 			TownFilter:    townFilter,
@@ -1785,12 +1803,10 @@ func boardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			ShowSleep:     showSleep,
 			ShowTickets:   showTickets,
 			ShowLostFound: showLostFound,
-			FormToken:     issueFormToken(ip), // contact forms
-			ResendToken:   issueFormToken(ip), // resend-manage form (#1303)
-			RenewToken:    issueFormToken(ip), // renew-session form (#1303)
-			ResendSent:    q.Get("resend") == "1",
-			RenewSent:     q.Get("renew") == "1",
-			RenewDone:     q.Get("renewed") == "1",
+			// #1486: tokens issued lazily in JS on first user interaction
+			ResendSent: q.Get("resend") == "1",
+			RenewSent:  q.Get("renew") == "1",
+			RenewDone:  q.Get("renewed") == "1",
 		}
 		renderTemplate(w, tmpls.board, tmplData(r, cfg, i18n, title, data))
 	}

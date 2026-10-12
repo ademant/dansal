@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"log"
 	"net/http"
 
 	"github.com/ademant/dansal/internal/strutil"
@@ -55,10 +56,13 @@ func citiesMapJSON(cities []City) template.JS {
 }
 
 type CityData struct {
-	City        City
-	Events      []Event
-	GeoJSON     template.JS // compact JSON for map markers
-	IncludePast bool
+	City            City
+	Events          []Event
+	GeoJSON         template.JS // compact JSON for map markers
+	IncludePast     bool
+	PastEvents      []Event     // #1506: most recent past events, shown directly when there's nothing upcoming
+	PastEventsTotal int         // #1506: total past events ever held in this town (X-Total-Count)
+	NearbyHint      *NearbyHint // #1506: "no upcoming events here, but N within X km" fallback
 }
 
 type cityGeoEvent struct {
@@ -100,7 +104,7 @@ func cityEventsGeoJSON(events []Event) template.JS {
 
 func citiesHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		cities, err := client.GetCities(r.Context())
+		cities, err := client.GetCities(r.Context(), false)
 		if err != nil {
 			http.Error(w, "could not load cities", http.StatusBadGateway)
 			return
@@ -116,8 +120,10 @@ func cityHubHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I
 	return func(w http.ResponseWriter, r *http.Request) {
 		slug := r.PathValue("slug")
 
-		// Resolve slug → town name via city list.
-		cities, err := client.GetCities(r.Context())
+		// Resolve slug → town name via the full city list, including towns
+		// with no upcoming event (#1506) — otherwise a town whose only
+		// events are in the past 404s even though it has a venue and history.
+		cities, err := client.GetCities(r.Context(), true)
 		if err != nil {
 			http.Error(w, "could not load cities", http.StatusBadGateway)
 			return
@@ -146,12 +152,32 @@ func cityHubHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I
 			events = []Event{}
 		}
 
+		// #1506: no upcoming events — load the town's recent past events
+		// directly (like location.html) and offer a nearby-radius fallback
+		// (#1436's helper) instead of a dead end.
+		var pastEvents []Event
+		var pastTotal int
+		var hint *NearbyHint
+		if len(events) == 0 && !includePast {
+			var pErr error
+			pastEvents, pastTotal, pErr = client.GetPastEventsByTownWithTotal(r.Context(), city.Town, locationPastEventsLimit)
+			if pErr != nil {
+				log.Printf("city %q: could not load past events: %v", city.Town, pErr)
+			}
+			if city.Latitude != nil && city.Longitude != nil {
+				hint = nearbyHint(r.Context(), client, *city.Latitude, *city.Longitude, city.Town)
+			}
+		}
+
 		title := i18n.T(r, "city_title_prefix") + city.Town
 		td := tmplData(r, cfg, i18n, title, CityData{
-			City:        city,
-			Events:      events,
-			GeoJSON:     cityEventsGeoJSON(events),
-			IncludePast: includePast,
+			City:            city,
+			Events:          events,
+			GeoJSON:         cityEventsGeoJSON(events),
+			IncludePast:     includePast,
+			PastEvents:      pastEvents,
+			PastEventsTotal: pastTotal,
+			NearbyHint:      hint,
 		})
 		td.MetaDescription = metaDesc(title, metaDescMaxLen)
 		renderTemplate(w, tmpls.city, td)
@@ -164,7 +190,7 @@ func cityPastEventsHandler(tmpls *Templates, i18n *I18n, client *DansalClient) h
 	return func(w http.ResponseWriter, r *http.Request) {
 		slug := r.PathValue("slug")
 
-		cities, err := client.GetCities(r.Context())
+		cities, err := client.GetCities(r.Context(), true)
 		if err != nil {
 			http.Error(w, "could not load cities", http.StatusBadGateway)
 			return

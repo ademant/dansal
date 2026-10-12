@@ -41,6 +41,13 @@ jobs:
       - name: Start services
         run: |
           sudo mkdir -p /var/lib/dansal/e2e /var/lib/dansal-web/e2e /etc/dansal/e2e
+          # packaging/config.yaml's db_path/images_dir/admin_socket/backup_dir
+          # (and web.yaml's db_path/images_dir) all point directly under
+          # /var/lib/dansal(-web), not the .../e2e leaf just created above —
+          # same root-owned-parent issue as #1522's sed fix, one level up:
+          # the unprivileged dansal/dansal_web processes below need to create
+          # their socket/DB/images there themselves (#1526).
+          sudo chown -R "$(id -u):$(id -g)" /var/lib/dansal /var/lib/dansal-web
           sudo cp packaging/config.yaml /etc/dansal/e2e/config.yaml
           sudo cp packaging/web.yaml /etc/dansal/e2e/web.yaml
           sudo cp packaging/webmin.yaml /etc/dansal/e2e/webmin.yaml
@@ -124,6 +131,13 @@ jobs:
       - name: Start services
         run: |
           sudo mkdir -p /var/lib/dansal/e2e /var/lib/dansal-web/e2e /etc/dansal/e2e
+          # packaging/config.yaml's db_path/images_dir/admin_socket/backup_dir
+          # (and web.yaml's db_path/images_dir) all point directly under
+          # /var/lib/dansal(-web), not the .../e2e leaf just created above —
+          # same root-owned-parent issue as #1522's sed fix, one level up:
+          # the unprivileged dansal/dansal_web processes below need to create
+          # their socket/DB/images there themselves (#1526).
+          sudo chown -R "$(id -u):$(id -g)" /var/lib/dansal /var/lib/dansal-web
           sudo cp packaging/config.yaml /etc/dansal/e2e/config.yaml
           sudo cp packaging/web.yaml /etc/dansal/e2e/web.yaml
           sudo cp packaging/webmin.yaml /etc/dansal/e2e/webmin.yaml

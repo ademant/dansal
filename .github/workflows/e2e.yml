@@ -67,9 +67,14 @@ jobs:
           grep -q '^  account_mutation_rate_limit: 600$' /etc/dansal/e2e/config.yaml
           sudo sed -i 's/listen: :8080/listen: :18080/' /etc/dansal/e2e/web.yaml
           sudo sed -i 's/listen: :8090/listen: :18090/' /etc/dansal/e2e/webmin.yaml
-          ./dansal --config /etc/dansal/e2e/config.yaml &
+          # Redirected (rather than left on the step's own stdout) because a
+          # background `&` process's output isn't captured once this step's
+          # synchronous commands finish — a startup failure here otherwise
+          # surfaces only indirectly, several steps later, as a Playwright
+          # connection-refused error with no indication of why.
+          ./dansal --config /etc/dansal/e2e/config.yaml > /tmp/dansal.log 2>&1 &
           sleep 2
-          ./dansal_web --config /etc/dansal/e2e/web.yaml &
+          ./dansal_web --config /etc/dansal/e2e/web.yaml > /tmp/dansal_web.log 2>&1 &
           sleep 2
 
       - name: Run journey tests
@@ -86,6 +91,12 @@ jobs:
           # at the repo root ($GITHUB_WORKSPACE), not e2e/ (#1524).
           ADMIN_CLI: ${{ github.workspace }}/dansal_admin
           WEB_DB_PATH: /var/lib/dansal-web/web.db
+
+      - name: Dump service logs on failure
+        if: failure()
+        run: |
+          echo "=== dansal.log ==="; cat /tmp/dansal.log || true
+          echo "=== dansal_web.log ==="; cat /tmp/dansal_web.log || true
 
       - name: Upload test results
         if: always()
@@ -157,9 +168,14 @@ jobs:
           grep -q '^  account_mutation_rate_limit: 600$' /etc/dansal/e2e/config.yaml
           sudo sed -i 's/listen: :8080/listen: :18080/' /etc/dansal/e2e/web.yaml
           sudo sed -i 's/listen: :8090/listen: :18090/' /etc/dansal/e2e/webmin.yaml
-          ./dansal --config /etc/dansal/e2e/config.yaml &
+          # Redirected (rather than left on the step's own stdout) because a
+          # background `&` process's output isn't captured once this step's
+          # synchronous commands finish — a startup failure here otherwise
+          # surfaces only indirectly, several steps later, as a Playwright
+          # connection-refused error with no indication of why.
+          ./dansal --config /etc/dansal/e2e/config.yaml > /tmp/dansal.log 2>&1 &
           sleep 2
-          ./dansal_web --config /etc/dansal/e2e/web.yaml &
+          ./dansal_web --config /etc/dansal/e2e/web.yaml > /tmp/dansal_web.log 2>&1 &
           sleep 2
 
       - name: Run accessibility sweep
@@ -175,6 +191,12 @@ jobs:
           # name "dansal_admin", which isn't on PATH — the built binary sits
           # at the repo root ($GITHUB_WORKSPACE), not e2e/ (#1524).
           ADMIN_CLI: ${{ github.workspace }}/dansal_admin
+
+      - name: Dump service logs on failure
+        if: failure()
+        run: |
+          echo "=== dansal.log ==="; cat /tmp/dansal.log || true
+          echo "=== dansal_web.log ==="; cat /tmp/dansal_web.log || true
 
       - name: Upload test results
         if: always()

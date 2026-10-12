@@ -65,8 +65,18 @@ jobs:
           # per account (#1423) — same value the dev e2e target uses.
           sudo sed -i 's/^  account_mutation_rate_limit: 0$/  account_mutation_rate_limit: 600/' /etc/dansal/e2e/config.yaml
           grep -q '^  account_mutation_rate_limit: 600$' /etc/dansal/e2e/config.yaml
-          sudo sed -i 's/listen: :8080/listen: :18080/' /etc/dansal/e2e/web.yaml
-          sudo sed -i 's/listen: :8090/listen: :18090/' /etc/dansal/e2e/webmin.yaml
+          # packaging/web.yaml's actual format is `listen: "127.0.0.1:8080"`
+          # (quoted, with a host) — the old bare `listen: :8080` pattern
+          # never matched it, so this sed silently no-op'ed and dansal_web
+          # always bound to the untouched default port instead of :18080,
+          # while every spec points BASE_URL at :18080 (#1528). grep -q
+          # verifies the match the same way the rate_limit sed above already
+          # does, so a future packaging format change fails loudly instead
+          # of silently drifting out of sync again.
+          sudo sed -i 's/listen: "127.0.0.1:8080"/listen: "127.0.0.1:18080"/' /etc/dansal/e2e/web.yaml
+          grep -q 'listen: "127.0.0.1:18080"' /etc/dansal/e2e/web.yaml
+          sudo sed -i 's/listen: "127.0.0.1:8090"/listen: "127.0.0.1:18090"/' /etc/dansal/e2e/webmin.yaml
+          grep -q 'listen: "127.0.0.1:18090"' /etc/dansal/e2e/webmin.yaml
           # Redirected (rather than left on the step's own stdout) because a
           # background `&` process's output isn't captured once this step's
           # synchronous commands finish — a startup failure here otherwise
@@ -166,8 +176,18 @@ jobs:
           # per account (#1423) — same value the dev e2e target uses.
           sudo sed -i 's/^  account_mutation_rate_limit: 0$/  account_mutation_rate_limit: 600/' /etc/dansal/e2e/config.yaml
           grep -q '^  account_mutation_rate_limit: 600$' /etc/dansal/e2e/config.yaml
-          sudo sed -i 's/listen: :8080/listen: :18080/' /etc/dansal/e2e/web.yaml
-          sudo sed -i 's/listen: :8090/listen: :18090/' /etc/dansal/e2e/webmin.yaml
+          # packaging/web.yaml's actual format is `listen: "127.0.0.1:8080"`
+          # (quoted, with a host) — the old bare `listen: :8080` pattern
+          # never matched it, so this sed silently no-op'ed and dansal_web
+          # always bound to the untouched default port instead of :18080,
+          # while every spec points BASE_URL at :18080 (#1528). grep -q
+          # verifies the match the same way the rate_limit sed above already
+          # does, so a future packaging format change fails loudly instead
+          # of silently drifting out of sync again.
+          sudo sed -i 's/listen: "127.0.0.1:8080"/listen: "127.0.0.1:18080"/' /etc/dansal/e2e/web.yaml
+          grep -q 'listen: "127.0.0.1:18080"' /etc/dansal/e2e/web.yaml
+          sudo sed -i 's/listen: "127.0.0.1:8090"/listen: "127.0.0.1:18090"/' /etc/dansal/e2e/webmin.yaml
+          grep -q 'listen: "127.0.0.1:18090"' /etc/dansal/e2e/webmin.yaml
           # Redirected (rather than left on the step's own stdout) because a
           # background `&` process's output isn't captured once this step's
           # synchronous commands finish — a startup failure here otherwise

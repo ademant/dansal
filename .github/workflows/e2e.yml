@@ -44,18 +44,22 @@ jobs:
           sudo cp packaging/config.yaml /etc/dansal/e2e/config.yaml
           sudo cp packaging/web.yaml /etc/dansal/e2e/web.yaml
           sudo cp packaging/webmin.yaml /etc/dansal/e2e/webmin.yaml
-          sed -i 's/port: 8000/port: 18000/' /etc/dansal/e2e/config.yaml
+          # These configs were just copied in with `sudo cp`, so they (and the
+          # /etc/dansal/e2e dir sed -i needs to write its temp file into) are
+          # root-owned — every in-place edit below needs sudo too, or sed
+          # fails with "Permission denied" creating that temp file (#1522).
+          sudo sed -i 's/port: 8000/port: 18000/' /etc/dansal/e2e/config.yaml
           # The suite drives the API directly on loopback (no shared-secret
           # exemption), so every spec's seed calls share one per-IP bucket;
           # the packaging default of 100/min is exhausted mid-run (#1345).
-          sed -i 's/^  rate_limit: 100$/  rate_limit: 1000/' /etc/dansal/e2e/config.yaml
+          sudo sed -i 's/^  rate_limit: 100$/  rate_limit: 1000/' /etc/dansal/e2e/config.yaml
           grep -q '^  rate_limit: 1000$' /etc/dansal/e2e/config.yaml
           # Seeding alone exceeds the default 30 creates/updates per minute
           # per account (#1423) — same value the dev e2e target uses.
-          sed -i 's/^  account_mutation_rate_limit: 0$/  account_mutation_rate_limit: 600/' /etc/dansal/e2e/config.yaml
+          sudo sed -i 's/^  account_mutation_rate_limit: 0$/  account_mutation_rate_limit: 600/' /etc/dansal/e2e/config.yaml
           grep -q '^  account_mutation_rate_limit: 600$' /etc/dansal/e2e/config.yaml
-          sed -i 's/listen: :8080/listen: :18080/' /etc/dansal/e2e/web.yaml
-          sed -i 's/listen: :8090/listen: :18090/' /etc/dansal/e2e/webmin.yaml
+          sudo sed -i 's/listen: :8080/listen: :18080/' /etc/dansal/e2e/web.yaml
+          sudo sed -i 's/listen: :8090/listen: :18090/' /etc/dansal/e2e/webmin.yaml
           ./dansal --config /etc/dansal/e2e/config.yaml &
           sleep 2
           ./dansal_web --config /etc/dansal/e2e/web.yaml &
@@ -119,18 +123,22 @@ jobs:
           sudo cp packaging/config.yaml /etc/dansal/e2e/config.yaml
           sudo cp packaging/web.yaml /etc/dansal/e2e/web.yaml
           sudo cp packaging/webmin.yaml /etc/dansal/e2e/webmin.yaml
-          sed -i 's/port: 8000/port: 18000/' /etc/dansal/e2e/config.yaml
+          # These configs were just copied in with `sudo cp`, so they (and the
+          # /etc/dansal/e2e dir sed -i needs to write its temp file into) are
+          # root-owned — every in-place edit below needs sudo too, or sed
+          # fails with "Permission denied" creating that temp file (#1522).
+          sudo sed -i 's/port: 8000/port: 18000/' /etc/dansal/e2e/config.yaml
           # The suite drives the API directly on loopback (no shared-secret
           # exemption), so every spec's seed calls share one per-IP bucket;
           # the packaging default of 100/min is exhausted mid-run (#1345).
-          sed -i 's/^  rate_limit: 100$/  rate_limit: 1000/' /etc/dansal/e2e/config.yaml
+          sudo sed -i 's/^  rate_limit: 100$/  rate_limit: 1000/' /etc/dansal/e2e/config.yaml
           grep -q '^  rate_limit: 1000$' /etc/dansal/e2e/config.yaml
           # Seeding alone exceeds the default 30 creates/updates per minute
           # per account (#1423) — same value the dev e2e target uses.
-          sed -i 's/^  account_mutation_rate_limit: 0$/  account_mutation_rate_limit: 600/' /etc/dansal/e2e/config.yaml
+          sudo sed -i 's/^  account_mutation_rate_limit: 0$/  account_mutation_rate_limit: 600/' /etc/dansal/e2e/config.yaml
           grep -q '^  account_mutation_rate_limit: 600$' /etc/dansal/e2e/config.yaml
-          sed -i 's/listen: :8080/listen: :18080/' /etc/dansal/e2e/web.yaml
-          sed -i 's/listen: :8090/listen: :18090/' /etc/dansal/e2e/webmin.yaml
+          sudo sed -i 's/listen: :8080/listen: :18080/' /etc/dansal/e2e/web.yaml
+          sudo sed -i 's/listen: :8090/listen: :18090/' /etc/dansal/e2e/webmin.yaml
           ./dansal --config /etc/dansal/e2e/config.yaml &
           sleep 2
           ./dansal_web --config /etc/dansal/e2e/web.yaml &

@@ -225,7 +225,12 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := db.Query("SELECT " + userSelectCols + " FROM users")
+	query := "SELECT " + userSelectCols + " FROM users"
+	var args []any
+	writeTotalCountHeader(w, query, args)
+	applyListPagination(r, "id ASC", &query, &args)
+
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		log.Printf("getUsers: db query: %v", err)
 		writeError(w, "internal error", http.StatusInternalServerError)
@@ -330,12 +335,7 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := scanUser(db.QueryRow("SELECT "+userSelectCols+" FROM users WHERE id = ?", id))
-	if err == sql.ErrNoRows {
-		writeError(w, "User not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "User not found") {
 		return
 	}
 	wasDisabled := user.Disabled
@@ -546,8 +546,7 @@ func deleteOwnAccount(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/v1/pending-invites/{id}/resend — admin; generates a fresh invite for an existing preset_email invite.
 func resendInvite(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("X-User-Role") != RoleAdmin {
-		writeError(w, "Forbidden", http.StatusForbidden)
+	if !requireRole(w, r.Header.Get("X-User-Role"), RoleAdmin) {
 		return
 	}
 	callerID, _ := callerFromRequest(r)
@@ -605,8 +604,7 @@ func resendInvite(w http.ResponseWriter, r *http.Request) {
 // GET /api/v1/pending-invites — admin; lists unused invite_links with preset_email set.
 func listPendingInvites(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	if r.Header.Get("X-User-Role") != RoleAdmin {
-		writeError(w, "Forbidden", http.StatusForbidden)
+	if !requireRole(w, r.Header.Get("X-User-Role"), RoleAdmin) {
 		return
 	}
 	rows, err := db.Query(

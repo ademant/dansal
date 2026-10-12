@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
-	"strconv"
 )
 
 // #1427: resolving a flagged possible-duplicate pair (needs_duplicate_review
@@ -34,7 +33,7 @@ type dupEvent struct {
 	DuplicateOf int
 }
 
-func loadDupEvent(q querier, id int) (dupEvent, error) {
+func getDupEventByID(q querier, id int) (dupEvent, error) {
 	var e dupEvent
 	var loc, src, dupOf sql.NullInt64
 	err := q.QueryRow(`SELECT id, title, start_time, location_id, fetch_source_id,
@@ -87,13 +86,13 @@ type DuplicateCheck struct {
 }
 
 func checkDuplicates(q querier, id int) (DuplicateCheck, error) {
-	ev, err := loadDupEvent(q, id)
+	ev, err := getDupEventByID(q, id)
 	if err != nil {
 		return DuplicateCheck{}, err
 	}
 	res := DuplicateCheck{EventID: id, Flagged: ev.Flagged, PartnerID: ev.DuplicateOf, Reasons: []string{}, Others: []DuplicateConflict{}}
 	if ev.DuplicateOf > 0 {
-		if partner, err := loadDupEvent(q, ev.DuplicateOf); err == nil {
+		if partner, err := getDupEventByID(q, ev.DuplicateOf); err == nil {
 			res.PartnerTitle = partner.Title
 			res.Collides, res.Reasons = pairCollision(ev, partner)
 			if res.Reasons == nil {
@@ -122,7 +121,7 @@ func checkDuplicates(q querier, id int) (DuplicateCheck, error) {
 	}
 	rows.Close()
 	for _, oid := range ids {
-		other, err := loadDupEvent(q, oid)
+		other, err := getDupEventByID(q, oid)
 		if err != nil {
 			continue
 		}
@@ -166,17 +165,12 @@ func duplicateCheckHandler(w http.ResponseWriter, r *http.Request) {
 	if !requireAdminCaller(w, r) {
 		return
 	}
-	id, err := strconv.Atoi(r.PathValue("id"))
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	id, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 	res, err := checkDuplicates(db, id)
-	if err == sql.ErrNoRows {
-		writeError(w, "event not found", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "event not found") {
 		return
 	}
 	writeJSON(w, res)
@@ -197,9 +191,8 @@ func duplicateResolveHandler(w http.ResponseWriter, r *http.Request) {
 	if !requireAdminCaller(w, r) {
 		return
 	}
-	id, err := strconv.Atoi(r.PathValue("id"))
-	if err != nil {
-		writeError(w, "invalid id", http.StatusBadRequest)
+	id, ok := requireIntPathValue(w, r, "id", "invalid id")
+	if !ok {
 		return
 	}
 	var req DuplicateResolveRequest
@@ -207,11 +200,7 @@ func duplicateResolveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res, err := checkDuplicates(db, id)
-	if err == sql.ErrNoRows {
-		writeError(w, "event not found", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "event not found") {
 		return
 	}
 	switch req.Mode {

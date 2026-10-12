@@ -99,8 +99,7 @@ func updateDance(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/v1/dances/{id}
 func deleteDance(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("X-User-Role") != RoleAdmin {
-		writeError(w, "Forbidden: only admins may delete dances", http.StatusForbidden)
+	if !requireRole(w, r.Header.Get("X-User-Role"), RoleAdmin) {
 		return
 	}
 	id := r.PathValue("id")

@@ -178,6 +178,13 @@ func scanOrg(row interface{ Scan(...any) error }, extra ...any) (Organization, e
 	return o, nil
 }
 
+// getOrganizationByID loads a single organization row by primary key,
+// consolidating the orgSelectCols+scanOrg query hand-copied at every by-id
+// call site (#1511).
+func getOrganizationByID(q querier, id any) (Organization, error) {
+	return scanOrg(q.QueryRow("SELECT "+orgSelectCols+" FROM organizations WHERE id = ?", id))
+}
+
 type orgStatRow struct {
 	ID              int `json:"id"`
 	EventCount      int `json:"event_count"`
@@ -250,6 +257,7 @@ func getOrganizations(w http.ResponseWriter, r *http.Request) {
 	if name := q.Get("name"); name != "" {
 		addWhere(`LOWER(organizations.name) LIKE LOWER(?) ESCAPE '\'`, "%"+escapeLike(name)+"%")
 	}
+	writeTotalCountHeader(w, query, args)
 	applyListPagination(r, "organizations.name ASC", &query, &args)
 
 	rows, err := db.Query(query, args...)
@@ -440,13 +448,8 @@ func createOrganization(w http.ResponseWriter, r *http.Request) {
 // GET /api/v1/organizations/{id}
 func getOrganization(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	o, err := scanOrg(db.QueryRow("SELECT "+orgSelectCols+" FROM organizations WHERE id = ?", id))
-	if err == sql.ErrNoRows {
-		writeError(w, "Organization not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeInternalError(w, err)
+	o, err := getOrganizationByID(db, id)
+	if !rowOr404(w, err, "Organization not found") {
 		return
 	}
 	// #1160: a fetch source can either be explicitly linked to this org
@@ -531,13 +534,8 @@ func updateOrganization(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden: you must be a member of this organization", http.StatusForbidden)
 		return
 	}
-	o, err := scanOrg(db.QueryRow("SELECT "+orgSelectCols+" FROM organizations WHERE id = ?", id))
-	if err == sql.ErrNoRows {
-		writeError(w, "Organization not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeInternalError(w, err)
+	o, err := getOrganizationByID(db, id)
+	if !rowOr404(w, err, "Organization not found") {
 		return
 	}
 	if checkIfMatchConflict(w, r, o.UpdatedAt) {
@@ -616,13 +614,8 @@ func patchOrganization(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden: you must be a member of this organization", http.StatusForbidden)
 		return
 	}
-	o, err := scanOrg(db.QueryRow("SELECT "+orgSelectCols+" FROM organizations WHERE id = ?", id))
-	if err == sql.ErrNoRows {
-		writeError(w, "Organization not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeInternalError(w, err)
+	o, err := getOrganizationByID(db, id)
+	if !rowOr404(w, err, "Organization not found") {
 		return
 	}
 	if checkIfMatchConflict(w, r, o.UpdatedAt) {
@@ -700,8 +693,7 @@ func patchOrganization(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/v1/organizations/{id}
 func deleteOrganization(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("X-User-Role") != RoleAdmin {
-		writeError(w, "Forbidden: only admins may delete organizations", http.StatusForbidden)
+	if !requireRole(w, r.Header.Get("X-User-Role"), RoleAdmin) {
 		return
 	}
 	id := r.PathValue("id")

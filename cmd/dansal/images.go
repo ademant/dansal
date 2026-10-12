@@ -526,11 +526,7 @@ func deleteEventImage(w http.ResponseWriter, r *http.Request) {
 
 	if userRole != RoleAdmin {
 		orgID, err := eventOrgID(db, eventID)
-		if err == sql.ErrNoRows {
-			writeError(w, "Event not found", http.StatusNotFound)
-			return
-		} else if err != nil {
-			writeInternalError(w, err)
+		if !rowOr404(w, err, "Event not found") {
 			return
 		}
 		if !requireExistingOrgMember(w, callerID, orgID) {

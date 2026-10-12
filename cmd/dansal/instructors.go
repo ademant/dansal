@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -67,6 +66,13 @@ func scanInstructor(row interface{ Scan(...any) error }, extra ...any) (Instruct
 	return i, err
 }
 
+// getInstructorByID loads a single instructor row by primary key,
+// consolidating the instructorCols+scanInstructor query hand-copied at
+// every by-id call site (#1511).
+func getInstructorByID(q querier, id any) (Instructor, error) {
+	return scanInstructor(q.QueryRow("SELECT "+instructorCols+" FROM instructors WHERE id=?", id))
+}
+
 // GET /api/v1/instructors
 func getInstructors(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -108,6 +114,7 @@ func getInstructors(w http.ResponseWriter, r *http.Request) {
 			)`, orgID)
 		}
 	}
+	writeTotalCountHeader(w, query, args)
 	applyListPagination(r, "name ASC", &query, &args)
 
 	rows, err := db.Query(query, args...)
@@ -140,12 +147,8 @@ func getInstructors(w http.ResponseWriter, r *http.Request) {
 // GET /api/v1/instructors/{id}
 func getInstructor(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	inst, err := scanInstructor(db.QueryRow("SELECT "+instructorCols+" FROM instructors WHERE id=?", id))
-	if errors.Is(err, sql.ErrNoRows) {
-		writeError(w, "Instructor not found", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeInternalError(w, err)
+	inst, err := getInstructorByID(db, id)
+	if !rowOr404(w, err, "Instructor not found") {
 		return
 	}
 	writeJSON(w, inst)
@@ -237,7 +240,7 @@ func updateInstructor(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Instructor not found", http.StatusNotFound)
 		return
 	}
-	inst, err := scanInstructor(db.QueryRow("SELECT "+instructorCols+" FROM instructors WHERE id=?", id))
+	inst, err := getInstructorByID(db, id)
 	if err != nil {
 		writeInternalError(w, err)
 		return
@@ -263,12 +266,8 @@ func patchInstructor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inst, err := scanInstructor(db.QueryRow("SELECT "+instructorCols+" FROM instructors WHERE id=?", id))
-	if errors.Is(err, sql.ErrNoRows) {
-		writeError(w, "Instructor not found", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeInternalError(w, err)
+	inst, err := getInstructorByID(db, id)
+	if !rowOr404(w, err, "Instructor not found") {
 		return
 	}
 
@@ -315,7 +314,7 @@ func patchInstructor(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Instructor not found", http.StatusNotFound)
 		return
 	}
-	updated, err := scanInstructor(db.QueryRow("SELECT "+instructorCols+" FROM instructors WHERE id=?", id))
+	updated, err := getInstructorByID(db, id)
 	if err != nil {
 		writeInternalError(w, err)
 		return

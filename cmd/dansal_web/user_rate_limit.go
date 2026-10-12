@@ -212,7 +212,7 @@ func adminRateLimit(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if adminAllowedHost != "" && !checkAdminOrigin(r) {
 			log.Printf("dansal-web: CSRF_BLOCK ip=%s origin=%q referer=%q", getClientIP(r), r.Header.Get("Origin"), r.Header.Get("Referer"))
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			htmlError(w, r, http.StatusForbidden)
 			return
 		}
 		su := getSessionUser(r)

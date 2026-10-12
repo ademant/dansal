@@ -702,16 +702,16 @@ func getFetchSources(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var rows *sql.Rows
-	var err error
-	if callerRole == RoleAdmin {
-		rows, err = db.Query("SELECT " + fetchSourceCols + " FROM fetch_sources ORDER BY id ASC")
-	} else {
-		rows, err = db.Query(`
-			SELECT `+fetchSourceCols+` FROM fetch_sources
-			WHERE organization_id IN (SELECT organization_id FROM organization_members WHERE user_id = ?)
-			ORDER BY id ASC`, callerID)
+	query := "SELECT " + fetchSourceCols + " FROM fetch_sources"
+	var args []any
+	if callerRole != RoleAdmin {
+		query += " WHERE organization_id IN (SELECT organization_id FROM organization_members WHERE user_id = ?)"
+		args = append(args, callerID)
 	}
+	writeTotalCountHeader(w, query, args)
+	applyListPagination(r, "id ASC", &query, &args)
+
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		writeInternalError(w, err)
 		return
@@ -742,11 +742,7 @@ func getFetchSource(w http.ResponseWriter, r *http.Request) {
 	src, err := scanFetchSource(db.QueryRow(
 		"SELECT "+fetchSourceCols+" FROM fetch_sources WHERE id = ?", id,
 	))
-	if err == sql.ErrNoRows {
-		writeError(w, "Fetch source not found", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "Fetch source not found") {
 		return
 	}
 	if callerRole != RoleAdmin {
@@ -769,11 +765,7 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 	src, err := scanFetchSource(db.QueryRow(
 		"SELECT "+fetchSourceCols+" FROM fetch_sources WHERE id = ?", id,
 	))
-	if err == sql.ErrNoRows {
-		writeError(w, "not found", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "not found") {
 		return
 	}
 	if callerRole != RoleAdmin {
@@ -1679,11 +1671,7 @@ func deleteFetchSource(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if callerRole != RoleAdmin {
 		src, err := scanFetchSource(db.QueryRow("SELECT "+fetchSourceCols+" FROM fetch_sources WHERE id = ?", id))
-		if err == sql.ErrNoRows {
-			writeError(w, "Fetch source not found", http.StatusNotFound)
-			return
-		} else if err != nil {
-			writeInternalError(w, err)
+		if !rowOr404(w, err, "Fetch source not found") {
 			return
 		}
 		if !requireExistingOrgMember(w, callerID, nullIntFromPtr(src.OrganizationID)) {
@@ -1867,11 +1855,7 @@ func fetchURLByID(w http.ResponseWriter, r *http.Request) {
 	src, err := scanFetchSource(db.QueryRow(
 		"SELECT "+fetchSourceCols+" FROM fetch_sources WHERE id = ?", id,
 	))
-	if err == sql.ErrNoRows {
-		writeError(w, "Fetch source not found", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "Fetch source not found") {
 		return
 	}
 	if callerRole != RoleAdmin {

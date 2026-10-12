@@ -166,6 +166,7 @@ func main() {
 	// buildHandler constructs all route closures from the given cfg and i18n.
 	// Called at startup and again on each SIGHUP reload.
 	buildHandler := func(cfg *Config, i18n *I18n) http.Handler {
+		setErrorPageDeps(cfg, tmpls, i18n)
 		r := http.NewServeMux()
 		help := newHelpSystem(cfg.HelpDir)
 
@@ -299,8 +300,12 @@ func main() {
 		r.HandleFunc("GET /static/flatpickr/flatpickr.css", func(w http.ResponseWriter, r *http.Request) {
 			serveNegotiatedStatic(w, r, "text/css", flatpickrCSSMin, flatpickrCSSGzip, flatpickrCSSBrotli)
 		})
-		r.HandleFunc("GET /static/flatpickr/l10n/{locale}.js", func(w http.ResponseWriter, r *http.Request) {
-			asset, ok := flatpickrLocales[r.PathValue("locale")]
+		r.HandleFunc("GET /static/flatpickr/l10n/{locale}", func(w http.ResponseWriter, r *http.Request) {
+			// net/http's ServeMux wildcard must span the whole path segment
+			// ("{locale}.js" panics at startup: "bad wildcard segment") — so
+			// the ".js" suffix is stripped in the handler instead of the pattern.
+			locale := strings.TrimSuffix(r.PathValue("locale"), ".js")
+			asset, ok := flatpickrLocales[locale]
 			if !ok {
 				http.NotFound(w, r)
 				return
@@ -649,7 +654,7 @@ func main() {
 		r.HandleFunc("GET /embed/locations", embedLocationsHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /embed/manifest.json", embedManifestHandler(cfg))
 
-		return authRefreshMiddleware(client)(dashboardAttentionMiddleware(client)(certAuthMiddleware(client)(feedRouter(cfg, db, client, i18n)(r))))
+		return authRefreshMiddleware(client)(dashboardAttentionMiddleware(client)(certAuthMiddleware(client)(adminAuthMiddleware(feedRouter(cfg, db, client, i18n)(r)))))
 	}
 
 	i18n := loadI18n(cfg.I18nFile)
@@ -888,7 +893,7 @@ func fetchMetadataMiddleware(next http.Handler) http.Handler {
 		if site := r.Header.Get("Sec-Fetch-Site"); site == "cross-site" {
 			switch r.Method {
 			case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
-				http.Error(w, "Forbidden", http.StatusForbidden)
+				htmlError(w, r, http.StatusForbidden)
 				return
 			}
 		}

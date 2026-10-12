@@ -69,6 +69,14 @@ func scanWebhook(sc interface{ Scan(...any) error }) (PublisherWebhook, error) {
 	return wh, err
 }
 
+// getWebhookByID loads a single webhook row by primary key, consolidating
+// the webhookCols+scanWebhook query hand-copied at every by-id call site
+// (#1511). The variant scoped to a publisher (WHERE id=? AND publisher_id=?)
+// stays separate — it's an authz-scoped lookup, not a plain accessor.
+func getWebhookByID(q querier, id any) (PublisherWebhook, error) {
+	return scanWebhook(q.QueryRow("SELECT "+webhookCols+" FROM publisher_webhooks WHERE id=?", id))
+}
+
 // ── config accessors ───────────────────────────────────────────────────────
 
 func webhookTimeout() time.Duration {
@@ -441,7 +449,7 @@ func createPublisherWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := res.LastInsertId()
-	wh, err := scanWebhook(db.QueryRow("SELECT "+webhookCols+" FROM publisher_webhooks WHERE id=?", id))
+	wh, err := getWebhookByID(db, id)
 	if err != nil {
 		writeInternalError(w, err)
 		return
@@ -482,11 +490,7 @@ func patchPublisherWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cur, err := scanWebhook(db.QueryRow("SELECT "+webhookCols+" FROM publisher_webhooks WHERE id=? AND publisher_id=?", whID, pubID))
-	if err == sql.ErrNoRows {
-		writeError(w, "webhook not found", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "webhook not found") {
 		return
 	}
 	if req.URL != nil {
@@ -521,7 +525,7 @@ func patchPublisherWebhook(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err)
 		return
 	}
-	cur, _ = scanWebhook(db.QueryRow("SELECT "+webhookCols+" FROM publisher_webhooks WHERE id=?", whID))
+	cur, _ = getWebhookByID(db, whID)
 	writeJSON(w, cur)
 }
 

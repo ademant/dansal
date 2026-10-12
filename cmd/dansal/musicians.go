@@ -133,6 +133,13 @@ func scanMusician(row interface{ Scan(...any) error }, extra ...any) (Musician, 
 	return m, err
 }
 
+// getMusicianByID loads a single musician row by primary key, consolidating
+// the musicianCols+scanMusician query hand-copied at every by-id call site
+// (#1511).
+func getMusicianByID(q querier, id any) (Musician, error) {
+	return scanMusician(q.QueryRow("SELECT "+musicianCols+" FROM musicians WHERE id = ?", id))
+}
+
 // GET /api/v1/musicians - List all musicians; optional filters
 func getMusicians(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -194,6 +201,7 @@ func getMusicians(w http.ResponseWriter, r *http.Request) {
 	if genre := q.Get("genre"); genre != "" {
 		addWhere(`LOWER(genre) LIKE LOWER(?) ESCAPE '\'`, "%"+escapeLike(genre)+"%")
 	}
+	writeTotalCountHeader(w, query, args)
 	applyListPagination(r, "bandname ASC", &query, &args)
 
 	rows, err := db.Query(query, args...)
@@ -268,12 +276,8 @@ func writeMusiciansAtom(w http.ResponseWriter, r *http.Request, musicians []Musi
 // GET /api/v1/musicians/{id} - Get single musician
 func getMusician(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	musician, err := scanMusician(db.QueryRow("SELECT "+musicianCols+" FROM musicians WHERE id = ?", id))
-	if err == sql.ErrNoRows {
-		writeError(w, "Musician not found", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeInternalError(w, err)
+	musician, err := getMusicianByID(db, id)
+	if !rowOr404(w, err, "Musician not found") {
 		return
 	}
 
@@ -416,7 +420,7 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	musician, err := scanMusician(db.QueryRow("SELECT "+musicianCols+" FROM musicians WHERE id = ?", id))
+	musician, err := getMusicianByID(db, id)
 	if err != nil {
 		writeInternalError(w, err)
 		return
@@ -440,12 +444,8 @@ func patchMusician(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := r.PathValue("id")
-	m, err := scanMusician(db.QueryRow("SELECT "+musicianCols+" FROM musicians WHERE id = ?", id))
-	if err == sql.ErrNoRows {
-		writeError(w, "Musician not found", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeInternalError(w, err)
+	m, err := getMusicianByID(db, id)
+	if !rowOr404(w, err, "Musician not found") {
 		return
 	}
 
@@ -544,7 +544,7 @@ func patchMusician(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	musician, err := scanMusician(db.QueryRow("SELECT "+musicianCols+" FROM musicians WHERE id = ?", id))
+	musician, err := getMusicianByID(db, id)
 	if err != nil {
 		writeInternalError(w, err)
 		return

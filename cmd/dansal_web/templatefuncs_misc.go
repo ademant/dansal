@@ -18,6 +18,19 @@ import (
 // reURLAttr matches href="..." and src="..." produced by goldmark's renderer.
 var reURLAttr = regexp.MustCompile(`(?i)(href|src)="([^"]*)"`)
 
+// marshalJS json.Marshals v and wraps it as template.JS, the shared
+// implementation behind both "jsStr" and "json" (#1518): html/template
+// recognizes template.JS as pre-escaped and skips its contextual
+// auto-escaper, which is what lets either one sit inside a <script> block
+// without double-escaping (see breadcrumb_smoke_test.go's #1406 note). The
+// two funcmap entries stay distinct for call-site readability — `| jsStr`
+// reads as "this becomes a JS string", `| json` as "this becomes a JS
+// value" — not because the underlying behavior differs.
+func marshalJS(v any) template.JS {
+	b, _ := json.Marshal(v)
+	return template.JS(b)
+}
+
 // reAnchorTag matches a goldmark-rendered <a ...>...</a>, capturing its inner
 // text. Non-greedy and scoped to <a> specifically, so it doesn't need to
 // understand HTML generally -- goldmark's own output is simple/well-formed
@@ -79,8 +92,7 @@ var tmplFuncsMisc = template.FuncMap{
 	"emailLocal":         emailLocal,
 	"displayNameOrEmail": displayNameOrEmail,
 	"jsStr": func(s string) template.JS {
-		b, _ := json.Marshal(s)
-		return template.JS(b)
+		return marshalJS(s)
 	},
 	// plainTextDesc (#1280) strips markdown syntax and decodes stray
 	// leftover HTML entities (e.g. a pasted "&nbsp;") — used by event.html's
@@ -354,10 +366,7 @@ var tmplFuncsMisc = template.FuncMap{
 		}
 		return string(b), nil
 	},
-	"json": func(v any) template.JS {
-		b, _ := json.Marshal(v)
-		return template.JS(b)
-	},
+	"json":     marshalJS,
 	"townSlug": townSlug,
 	// showRescheduledBadge reports whether the public "Rescheduled" badge
 	// should show for an event: it must have a recorded previous_start_time

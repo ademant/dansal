@@ -89,6 +89,12 @@ var tmplFuncsLocation = template.FuncMap{
 		}
 		return ""
 	},
+	// derefInt also covers what a separate "intVal" (*int -> string) used to
+	// do (#1518): html/template stringifies an int the same way
+	// strconv.Itoa did, so {{derefInt .X}} in text or an attribute value
+	// renders identically — a dedicated string-returning variant added
+	// nothing. Keep it int-typed for callers like `index $map (derefInt .X)`
+	// that need an actual int, not a formatted one.
 	"derefInt": func(p *int) int {
 		if p == nil {
 			return 0
@@ -102,12 +108,6 @@ var tmplFuncsLocation = template.FuncMap{
 			return l.ShortName
 		}
 		return l.Location
-	},
-	"intVal": func(p *int) string {
-		if p == nil {
-			return ""
-		}
-		return strconv.Itoa(*p)
 	},
 	"floatVal": func(f *float64) string {
 		if f == nil {

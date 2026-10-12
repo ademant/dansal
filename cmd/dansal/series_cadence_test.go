@@ -151,9 +151,9 @@ func TestEventResponseIncludesSeriesCadence(t *testing.T) {
 		t.Fatalf("attach event to series: %v", err)
 	}
 
-	event, err := fetchEventByID(db, eventID)
+	event, err := getEventByID(db, eventID)
 	if err != nil {
-		t.Fatalf("fetchEventByID: %v", err)
+		t.Fatalf("getEventByID: %v", err)
 	}
 	if event.SeriesCadence != "every 2nd + 4th Thursday, except holidays" {
 		t.Fatalf("event.SeriesCadence = %q, want the series' cadence", event.SeriesCadence)
@@ -166,9 +166,9 @@ func TestEventResponseIncludesSeriesCadence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("insert second event: %v", err)
 	}
-	event2, err := fetchEventByID(db, eventID2)
+	event2, err := getEventByID(db, eventID2)
 	if err != nil {
-		t.Fatalf("fetchEventByID: %v", err)
+		t.Fatalf("getEventByID: %v", err)
 	}
 	if event2.SeriesCadence != "" {
 		t.Fatalf("event2.SeriesCadence = %q, want empty for a non-series event", event2.SeriesCadence)

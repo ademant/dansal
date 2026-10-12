@@ -140,12 +140,7 @@ func uploadContactPostImage(w http.ResponseWriter, r *http.Request) {
 	err := db.QueryRow(
 		"SELECT COALESCE(manage_token,''), type, expires_at FROM contact_posts WHERE id=?", postID,
 	).Scan(&storedToken, &postType, &expiresAt)
-	if err == sql.ErrNoRows {
-		writeError(w, "post not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "post not found") {
 		return
 	}
 	if !storedToken.Valid || storedToken.String != token {
@@ -250,12 +245,7 @@ func deleteContactPostImage(w http.ResponseWriter, r *http.Request) {
 	err = db.QueryRow(
 		"SELECT id FROM contact_post_images WHERE id=? AND contact_post_id=?", imgID, postID,
 	).Scan(&dummy)
-	if err == sql.ErrNoRows {
-		writeError(w, "image not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "image not found") {
 		return
 	}
 

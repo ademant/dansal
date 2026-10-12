@@ -718,7 +718,7 @@ func suggestManageSubmitHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			return
 		}
 		token := r.PathValue("token")
-		if err := r.ParseMultipartForm(32 << 20); err != nil {
+		if err := parseMultipartWithLimit(r, maxEventImageMultipartSize); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}

@@ -86,6 +86,20 @@ export function deleteUser(email: string): void {
   }
 }
 
+// Mints a one-time passwordless login token for a user via the local admin
+// socket (`dansal_admin magic-link`) and returns just the token. Admin-role
+// accounts can no longer log in with a password (#1495, cmd/dansal/auth.go),
+// and the public /magic flow requires a verified email, so global-setup uses
+// this admin-channel link to establish the suite's admin session instead.
+// The URL returned by the API is built from its own base_url (which may be a
+// different origin than the web frontend), so only the token path is used.
+export function adminMagicLinkToken(email: string): string {
+  const out = cli(`magic-link --email ${email}`);
+  const m = out.match(/\/login\/magic\/([A-Za-z0-9_-]+)/);
+  if (!m) throw new Error(`Cannot extract magic-login token from: ${out}`);
+  return m[1];
+}
+
 // Adds an existing user to an org (dansal_admin add-member), the same
 // membership a real org invite/registration would grant — used by specs
 // exercising org-member-scoped approval flows (e.g. feed-suggestion

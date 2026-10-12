@@ -84,6 +84,14 @@ jobs:
           grep -q 'listen: "127.0.0.1:18080"' /etc/dansal/e2e/web.yaml
           sudo sed -i 's/listen: "127.0.0.1:8090"/listen: "127.0.0.1:18090"/' /etc/dansal/e2e/webmin.yaml
           grep -q 'listen: "127.0.0.1:18090"' /etc/dansal/e2e/webmin.yaml
+          # web.yaml's dansal_url is a separate field from its own listen:
+          # above — it's where dansal_web reaches the *API* (dansal, not
+          # itself), which now binds :18000 per the config.yaml listen fix
+          # above. Without this, dansal_web can't verify a magic-login
+          # token (calls the API internally), so global-setup's login never
+          # reaches /dashboard and just times out after 30s (#1530).
+          sudo sed -i 's|dansal_url: "http://127.0.0.1:8000"|dansal_url: "http://127.0.0.1:18000"|' /etc/dansal/e2e/web.yaml
+          grep -q 'dansal_url: "http://127.0.0.1:18000"' /etc/dansal/e2e/web.yaml
           # Redirected (rather than left on the step's own stdout) because a
           # background `&` process's output isn't captured once this step's
           # synchronous commands finish — a startup failure here otherwise
@@ -202,6 +210,14 @@ jobs:
           grep -q 'listen: "127.0.0.1:18080"' /etc/dansal/e2e/web.yaml
           sudo sed -i 's/listen: "127.0.0.1:8090"/listen: "127.0.0.1:18090"/' /etc/dansal/e2e/webmin.yaml
           grep -q 'listen: "127.0.0.1:18090"' /etc/dansal/e2e/webmin.yaml
+          # web.yaml's dansal_url is a separate field from its own listen:
+          # above — it's where dansal_web reaches the *API* (dansal, not
+          # itself), which now binds :18000 per the config.yaml listen fix
+          # above. Without this, dansal_web can't verify a magic-login
+          # token (calls the API internally), so global-setup's login never
+          # reaches /dashboard and just times out after 30s (#1530).
+          sudo sed -i 's|dansal_url: "http://127.0.0.1:8000"|dansal_url: "http://127.0.0.1:18000"|' /etc/dansal/e2e/web.yaml
+          grep -q 'dansal_url: "http://127.0.0.1:18000"' /etc/dansal/e2e/web.yaml
           # Redirected (rather than left on the step's own stdout) because a
           # background `&` process's output isn't captured once this step's
           # synchronous commands finish — a startup failure here otherwise

@@ -74,6 +74,10 @@ jobs:
           API_URL: http://localhost:18000
           ADMIN_SOCKET: /var/lib/dansal/dansal.sock
           ADMIN_NO_SUDO: "1"
+          # Without this, helpers/seed.ts's ADMIN_CLI defaults to the bare
+          # name "dansal_admin", which isn't on PATH — the built binary sits
+          # at the repo root ($GITHUB_WORKSPACE), not e2e/ (#1524).
+          ADMIN_CLI: ${{ github.workspace }}/dansal_admin
           WEB_DB_PATH: /var/lib/dansal-web/web.db
 
       - name: Upload test results
@@ -153,6 +157,10 @@ jobs:
           API_URL: http://localhost:18000
           ADMIN_SOCKET: /var/lib/dansal/dansal.sock
           ADMIN_NO_SUDO: "1"
+          # Without this, helpers/seed.ts's ADMIN_CLI defaults to the bare
+          # name "dansal_admin", which isn't on PATH — the built binary sits
+          # at the repo root ($GITHUB_WORKSPACE), not e2e/ (#1524).
+          ADMIN_CLI: ${{ github.workspace }}/dansal_admin
 
       - name: Upload test results
         if: always()

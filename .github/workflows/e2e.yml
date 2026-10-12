@@ -56,6 +56,13 @@ jobs:
           # root-owned — every in-place edit below needs sudo too, or sed
           # fails with "Permission denied" creating that temp file (#1522).
           sudo sed -i 's/port: 8000/port: 18000/' /etc/dansal/e2e/config.yaml
+          # Server.Listen (set explicitly below) takes precedence over
+          # Server.Port for the actual bind address — Port only defaults
+          # Listen when Listen is empty (cmd/dansal/config.go) — so the
+          # port: sed above never affected what dansal actually binds to.
+          # Without this, dansal always listened on :8000, not :18000 (#1529).
+          sudo sed -i 's/listen: "127.0.0.1:8000"/listen: "127.0.0.1:18000"/' /etc/dansal/e2e/config.yaml
+          grep -q 'listen: "127.0.0.1:18000"' /etc/dansal/e2e/config.yaml
           # The suite drives the API directly on loopback (no shared-secret
           # exemption), so every spec's seed calls share one per-IP bucket;
           # the packaging default of 100/min is exhausted mid-run (#1345).
@@ -167,6 +174,13 @@ jobs:
           # root-owned — every in-place edit below needs sudo too, or sed
           # fails with "Permission denied" creating that temp file (#1522).
           sudo sed -i 's/port: 8000/port: 18000/' /etc/dansal/e2e/config.yaml
+          # Server.Listen (set explicitly below) takes precedence over
+          # Server.Port for the actual bind address — Port only defaults
+          # Listen when Listen is empty (cmd/dansal/config.go) — so the
+          # port: sed above never affected what dansal actually binds to.
+          # Without this, dansal always listened on :8000, not :18000 (#1529).
+          sudo sed -i 's/listen: "127.0.0.1:8000"/listen: "127.0.0.1:18000"/' /etc/dansal/e2e/config.yaml
+          grep -q 'listen: "127.0.0.1:18000"' /etc/dansal/e2e/config.yaml
           # The suite drives the API directly on loopback (no shared-secret
           # exemption), so every spec's seed calls share one per-IP bucket;
           # the packaging default of 100/min is exhausted mid-run (#1345).

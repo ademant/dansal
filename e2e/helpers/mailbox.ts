@@ -96,3 +96,12 @@ export async function waitForVerifyToken(timeoutMs = 15_000): Promise<string> {
 export async function waitForMagicLoginToken(timeoutMs = 15_000): Promise<string> {
   return waitForMailboxURL("/login/magic/", timeoutMs);
 }
+
+/** A booking's email-verification link (POST /api/v1/events/{id}/bookings,
+ *  cmd/dansal/bookings.go) — e.g.
+ *  http://localhost:8080/api/v1/bookings/verify/<token>. The emailed link
+ *  points at the API directly; the web frontend's own confirmation page is
+ *  at /bookings/verify/<token> (same token, different host/path). */
+export async function waitForBookingVerifyToken(timeoutMs = 15_000): Promise<string> {
+  return waitForMailboxURL("/api/v1/bookings/verify/", timeoutMs);
+}

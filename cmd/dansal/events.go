@@ -597,8 +597,8 @@ func scanEventRow(s scanner) (Event, error) {
 	return event, nil
 }
 
-// fetchEventByID loads a single event by primary key using the shared eventListSelect query.
-func fetchEventByID(q querier, id int) (Event, error) {
+// getEventByID loads a single event by primary key using the shared eventListSelect query.
+func getEventByID(q querier, id int) (Event, error) {
 	return scanEventRow(q.QueryRow(eventListSelect+" WHERE e.id = ?", id))
 }
 
@@ -910,6 +910,20 @@ func applyListPagination(r *http.Request, orderBy string, query *string, args *[
 	}
 	*query += " ORDER BY " + orderBy + " LIMIT ? OFFSET ?"
 	*args = append(*args, limit, offset)
+}
+
+// writeTotalCountHeader sets X-Total-Count to the number of rows listQuery
+// would return before pagination, by wrapping it as a subquery. Must be
+// called with listQuery/args exactly as they stand right before
+// applyListPagination appends "ORDER BY ... LIMIT ? OFFSET ?" to the same
+// query string and the same two args — call this first (#1510). Silently
+// omits the header on a count-query error, matching db.QueryRow usage
+// elsewhere in list handlers.
+func writeTotalCountHeader(w http.ResponseWriter, listQuery string, args []any) {
+	var n int
+	if err := db.QueryRow("SELECT COUNT(*) FROM ("+listQuery+")", args...).Scan(&n); err == nil {
+		w.Header().Set("X-Total-Count", strconv.Itoa(n))
+	}
 }
 
 // GET /api/v1/vocabulary
@@ -1439,7 +1453,7 @@ func createEventFromRequest(q querier, req EventCreateRequest, locationID int64,
 			return nil, counts, err
 		}
 
-		event, err := fetchEventByID(q, id)
+		event, err := getEventByID(q, id)
 		if err != nil {
 			return nil, counts, err
 		}
@@ -1747,11 +1761,7 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 			event, err := scanEventRow(db.QueryRow(
 				eventListSelect+" WHERE e.short_code = ? AND e.is_published = 1", shortCode,
 			))
-			if err == sql.ErrNoRows {
-				writeError(w, "Event not found", http.StatusNotFound)
-				return
-			} else if err != nil {
-				writeInternalError(w, err)
+			if !rowOr404(w, err, "Event not found") {
 				return
 			}
 			json.NewEncoder(w).Encode(event)
@@ -2566,7 +2576,7 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 	syncEventLocationGeohash(id)
 	recheckDuplicatePair(db, id) // #1427: a by-hand fix of date/room/venue resolves the flag
 
-	event, err := fetchEventByID(db, id)
+	event, err := getEventByID(db, id)
 	if err != nil {
 		writeInternalError(w, err)
 		return
@@ -2655,11 +2665,7 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 		&contactName, &contactEmail, &existingCreatedBy, &existingChangedAt, &ttTracksRaw, &ttRoomOrderRaw,
 		&reservationRequested,
 	)
-	if err == sql.ErrNoRows {
-		writeError(w, "Event not found", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "Event not found") {
 		return
 	}
 	// Captured before startUnix/isPublished/isCancelled are overwritten below by
@@ -2908,7 +2914,7 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 	syncEventLocationGeohash(id)
 	recheckDuplicatePair(db, id) // #1427: a by-hand fix of date/room/venue resolves the flag
 
-	event, err := fetchEventByID(db, id)
+	event, err := getEventByID(db, id)
 	if err != nil {
 		writeInternalError(w, err)
 		return
@@ -3110,11 +3116,7 @@ func declineEventHandler(w http.ResponseWriter, r *http.Request) {
 	var isPublished int
 	err := db.QueryRow("SELECT COALESCE(suggester_email,''), COALESCE(title,''), organization_id, is_published FROM events WHERE id=?", id).
 		Scan(&suggesterEmail, &title, &orgID, &isPublished)
-	if err == sql.ErrNoRows {
-		writeError(w, "Event not found", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "Event not found") {
 		return
 	}
 	if userRole != RoleAdmin && !requireExistingOrgMember(w, callerID, orgID) {
@@ -3197,11 +3199,7 @@ func cancelEvent(w http.ResponseWriter, r *http.Request) {
 		// unrestricted
 	case RoleUser, RolePublisher:
 		orgID, err := eventOrgID(db, id)
-		if err == sql.ErrNoRows {
-			writeError(w, "Event not found", http.StatusNotFound)
-			return
-		} else if err != nil {
-			writeInternalError(w, err)
+		if !rowOr404(w, err, "Event not found") {
 			return
 		}
 		if !requireExistingOrgMember(w, callerID, orgID) {
@@ -3246,12 +3244,8 @@ func cloneEvent(w http.ResponseWriter, r *http.Request) {
 	json.NewDecoder(r.Body).Decode(&req)
 
 	// Fetch the source event.
-	src, err := fetchEventByID(db, srcID)
-	if err == sql.ErrNoRows {
-		writeError(w, "Event not found", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeInternalError(w, err)
+	src, err := getEventByID(db, srcID)
+	if !rowOr404(w, err, "Event not found") {
 		return
 	}
 
@@ -3383,7 +3377,7 @@ func cloneEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	event, err := fetchEventByID(db, cloneID)
+	event, err := getEventByID(db, cloneID)
 	if err != nil {
 		writeInternalError(w, err)
 		return
@@ -3457,7 +3451,7 @@ func getEventICS(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	event, err := fetchEventByID(db, id)
+	event, err := getEventByID(db, id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -4224,11 +4218,7 @@ func setEventOrganizationRef(w http.ResponseWriter, r *http.Request) {
 	// below was reimplementing exactly what this call already expresses
 	// (#1245).
 	existingOrgID, err := eventOrgID(db, eventID)
-	if err == sql.ErrNoRows {
-		writeError(w, "Event not found", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "Event not found") {
 		return
 	}
 	var req EventOrganizationRefRequest

@@ -22,38 +22,53 @@ type PendingFetchSuggestion struct {
 	CreatedAt  string `json:"created_at"`
 }
 
+// pendingFetchSuggestionListCols is the shared column list for the listing
+// query's two branches (admin vs org-member), scanned by scanPending (#1509).
+const pendingFetchSuggestionListCols = "pfs.id, pfs.email, pfs.feed_url, pfs.feed_type, pfs.event_count, pfs.org_id, COALESCE(NULLIF(pfs.org_name,''), o.name, ''), pfs.created_at"
+
+func scanPending(row interface{ Scan(...any) error }) (PendingFetchSuggestion, error) {
+	var s PendingFetchSuggestion
+	var orgID sql.NullInt64
+	err := row.Scan(&s.ID, &s.Email, &s.FeedURL, &s.FeedType, &s.EventCount, &orgID, &s.OrgName, &s.CreatedAt)
+	if err == nil {
+		if orgID.Valid {
+			id := int(orgID.Int64)
+			s.OrgID = &id
+		} else {
+			s.IsNewOrg = true
+		}
+		s.Status = "pending"
+	}
+	return s, err
+}
+
 // GET /api/v1/fetchurl-suggestions — mirrors listPendingRegsHandler's own
 // admin-vs-org-member split: admins see every pending suggestion including
 // new-org proposals; a non-admin only sees suggestions targeting an existing
 // org they belong to (a new-org proposal has no org membership to check
 // against, so it stays admin-only, same rule pending_registrations applies).
 func listPendingFetchSuggestionsHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
 	callerID, callerRole := callerFromRequest(r)
 
-	var rows *sql.Rows
-	var err error
+	var query string
+	var args []any
 	if callerRole == RoleAdmin {
-		rows, err = db.Query(
-			`SELECT pfs.id, pfs.email, pfs.feed_url, pfs.feed_type, pfs.event_count,
-			 pfs.org_id, COALESCE(NULLIF(pfs.org_name,''), o.name, ''), pfs.created_at
+		query = `SELECT ` + pendingFetchSuggestionListCols + `
 			 FROM pending_fetch_suggestions pfs
 			 LEFT JOIN organizations o ON o.id = pfs.org_id
-			 WHERE pfs.status = 'pending'
-			 ORDER BY pfs.created_at ASC`,
-		)
+			 WHERE pfs.status = 'pending'`
 	} else {
-		rows, err = db.Query(
-			`SELECT pfs.id, pfs.email, pfs.feed_url, pfs.feed_type, pfs.event_count,
-			 pfs.org_id, COALESCE(NULLIF(pfs.org_name,''), o.name, ''), pfs.created_at
+		query = `SELECT ` + pendingFetchSuggestionListCols + `
 			 FROM pending_fetch_suggestions pfs
 			 JOIN organizations o ON o.id = pfs.org_id
 			 JOIN organization_members om ON om.organization_id = pfs.org_id AND om.user_id = ?
-			 WHERE pfs.status = 'pending'
-			 ORDER BY pfs.created_at ASC`,
-			callerID,
-		)
+			 WHERE pfs.status = 'pending'`
+		args = []any{callerID}
 	}
+	writeTotalCountHeader(w, query, args)
+	applyListPagination(r, "pfs.created_at ASC", &query, &args)
+
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		writeError(w, "db error", http.StatusInternalServerError)
 		return
@@ -62,21 +77,13 @@ func listPendingFetchSuggestionsHandler(w http.ResponseWriter, r *http.Request) 
 
 	suggestions := []PendingFetchSuggestion{}
 	for rows.Next() {
-		var s PendingFetchSuggestion
-		var orgID sql.NullInt64
-		if err := rows.Scan(&s.ID, &s.Email, &s.FeedURL, &s.FeedType, &s.EventCount, &orgID, &s.OrgName, &s.CreatedAt); err != nil {
+		s, err := scanPending(rows)
+		if err != nil {
 			continue
 		}
-		if orgID.Valid {
-			id := int(orgID.Int64)
-			s.OrgID = &id
-		} else {
-			s.IsNewOrg = true
-		}
-		s.Status = "pending"
 		suggestions = append(suggestions, s)
 	}
-	json.NewEncoder(w).Encode(suggestions)
+	writeJSON(w, suggestions)
 }
 
 // pendingFetchSuggestionRow is the full row loaded by loadPendingFetchSuggestion.
@@ -124,11 +131,7 @@ func approveFetchSuggestionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	row, err := loadPendingFetchSuggestion(id)
-	if err == sql.ErrNoRows {
-		writeError(w, "pending suggestion not found", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeError(w, "db error", http.StatusInternalServerError)
+	if !rowOr404(w, err, "pending suggestion not found") {
 		return
 	}
 	if row.Status != "pending" {
@@ -241,11 +244,7 @@ func rejectFetchSuggestionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	row, err := loadPendingFetchSuggestion(id)
-	if err == sql.ErrNoRows {
-		writeError(w, "pending suggestion not found", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeError(w, "db error", http.StatusInternalServerError)
+	if !rowOr404(w, err, "pending suggestion not found") {
 		return
 	}
 	if row.Status != "pending" {

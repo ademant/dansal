@@ -4,6 +4,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -241,4 +242,44 @@ func requireAdmin(w http.ResponseWriter, r *http.Request) (*SessionUser, bool) {
 		return nil, false
 	}
 	return u, true
+}
+
+// requireRole is requireLogin plus a check that the user's role is one of
+// allowed, writing a uniform 403 (via forbidden) otherwise. Consolidates
+// repeated `requireLogin` + `if user.Role != "admin" && user.Role != "user"
+// { forbidden(w, r) }` sequences (#1513) — the dansal_web analogue of the
+// API package's requireRole (cmd/dansal/errors.go). requireAdmin stays as
+// its own function rather than requireRole(w, r, "admin") — it's by far the
+// most common single-role case and reads better un-variadic at call sites.
+func requireRole(w http.ResponseWriter, r *http.Request, allowed ...string) (*SessionUser, bool) {
+	u, ok := requireLogin(w, r)
+	if !ok {
+		return nil, false
+	}
+	if !slices.Contains(allowed, u.Role) {
+		forbidden(w, r)
+		return nil, false
+	}
+	return u, true
+}
+
+// adminAuthMiddleware (#1513) is a defense-in-depth backstop for the whole
+// /admin/* subtree: every /admin handler already calls requireLogin or
+// requireAdmin itself, so this doesn't change effective access for any of
+// them today — it exists so a *future* handler that forgets its own check
+// doesn't silently expose admin data instead of failing closed. Checks
+// requireLogin only, not requireAdmin: plenty of /admin/* pages are open to
+// any logged-in role (a publisher/user managing their own org's events),
+// not just true admins — the stricter admin-only gate still lives on each
+// handler that needs it (requireAdmin, or a role check that should itself
+// go through requireAdmin — see admin.go's own raw-role-check cleanup).
+func adminAuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/admin/") {
+			if _, ok := requireLogin(w, r); !ok {
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }

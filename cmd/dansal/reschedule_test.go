@@ -113,9 +113,9 @@ func TestInsertEventRecordsReschedule(t *testing.T) {
 		t.Fatalf("previous_start_time = %v, want %d", prev, minorShift)
 	}
 
-	event, err := fetchEventByID(db, id)
+	event, err := getEventByID(db, id)
 	if err != nil {
-		t.Fatalf("fetchEventByID: %v", err)
+		t.Fatalf("getEventByID: %v", err)
 	}
 	if event.PreviousStartTime == "" {
 		t.Fatalf("Event.PreviousStartTime not populated: %+v", event)

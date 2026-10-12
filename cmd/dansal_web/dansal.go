@@ -393,32 +393,72 @@ func (c *DansalClient) doWithTimeout(ctx context.Context, timeout time.Duration,
 				break
 			}
 		}
-		if !ok {
-			if attempt+1 < attempts && (resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable) {
-				lastErr = apiErr(resp)
-				resp.Body.Close()
-				continue
-			}
-			defer resp.Body.Close()
-			switch resp.StatusCode {
-			case http.StatusNotFound:
-				return errNotFound
-			case http.StatusForbidden:
-				return errForbidden
-			case http.StatusGone:
-				return errExpired
-			}
-			return apiErr(resp)
+		if !ok && attempt+1 < attempts && (resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable) {
+			lastErr = apiErr(resp)
+			resp.Body.Close()
+			continue
 		}
-		defer resp.Body.Close()
-		if out != nil {
-			if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-				return err
-			}
-		}
-		return nil
+		return decodeAPIResponse(resp, out, okStatus...)
 	}
 	return lastErr
+}
+
+// decodeAPIResponse is the shared tail of a dansal API request once its
+// response has arrived: closes resp.Body, maps the status onto a sentinel
+// (404→errNotFound, 403→errForbidden, 410→errExpired) when it's not one of
+// okStatus (default 200 OK), and otherwise decodes resp.Body into out (when
+// out != nil). Used by do()/doWithTimeout and by doMergePatch, so a
+// non-default Content-Type caller doesn't have to hand-roll the same status
+// switch (#1517).
+func decodeAPIResponse(resp *http.Response, out any, okStatus ...int) error {
+	defer resp.Body.Close()
+	if len(okStatus) == 0 {
+		okStatus = []int{http.StatusOK}
+	}
+	for _, s := range okStatus {
+		if resp.StatusCode == s {
+			if out != nil {
+				return json.NewDecoder(resp.Body).Decode(out)
+			}
+			return nil
+		}
+	}
+	switch resp.StatusCode {
+	case http.StatusNotFound:
+		return errNotFound
+	case http.StatusForbidden:
+		return errForbidden
+	case http.StatusGone:
+		return errExpired
+	}
+	return apiErr(resp)
+}
+
+// doMergePatch issues a PATCH with an application/merge-patch+json body
+// (RFC 7396 partial update — only the fields the caller marshaled are
+// touched, letting a sparse struct/map patch over existing values instead
+// of resetting omitted fields to their zero value) through the same
+// auth+status-check+decode path do() uses for application/json. Collapses
+// the ~7 call sites that each hand-rolled do()'s request/response handling
+// just to set this one non-default header (#1517). Not retried — do()
+// already only retries GET, and PATCH isn't safe to resend blindly either.
+func (c *DansalClient) doMergePatch(ctx context.Context, path, token string, body []byte, out any, okStatus ...int) error {
+	ctx, cancel := context.WithTimeout(ctx, fastCallTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, c.BaseURL+path, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	c.setInternalHeader(req)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	return decodeAPIResponse(resp, out, okStatus...)
 }
 
 type Event struct {
@@ -1393,7 +1433,7 @@ func (c *DansalClient) AssignEventOrg(ctx context.Context, id, orgID int, token 
 func (c *DansalClient) GetOrganizations(ctx context.Context) ([]Organization, error) {
 	return cached(&c.mu, &c.orgsCache, orgsTTL, func() ([]Organization, error) {
 		var orgs []Organization
-		return orgs, c.get(ctx, "/api/v1/organizations?limit=1000", &orgs)
+		return orgs, c.get(ctx, fmt.Sprintf("/api/v1/organizations?limit=%d", apiListLimit), &orgs)
 	})
 }
 
@@ -1468,7 +1508,7 @@ func (c *DansalClient) GetAllPublicEventsByInstructor(ctx context.Context, instr
 func (c *DansalClient) GetMusicians(ctx context.Context) ([]Musician, error) {
 	return cached(&c.mu, &c.musiciansCache, musiciansTTL, func() ([]Musician, error) {
 		var ms []Musician
-		return ms, c.get(ctx, "/api/v1/musicians?limit=1000&with_event_counts=true", &ms)
+		return ms, c.get(ctx, fmt.Sprintf("/api/v1/musicians?limit=%d&with_event_counts=true", apiListLimit), &ms)
 	})
 }
 
@@ -1518,7 +1558,7 @@ func (c *DansalClient) DeleteMusician(ctx context.Context, id int, token string)
 
 func (c *DansalClient) GetInstructors(ctx context.Context) ([]Instructor, error) {
 	var out []Instructor
-	return out, c.get(ctx, "/api/v1/instructors?limit=1000&with_event_counts=true", &out)
+	return out, c.get(ctx, fmt.Sprintf("/api/v1/instructors?limit=%d&with_event_counts=true", apiListLimit), &out)
 }
 
 func (c *DansalClient) GetInstructor(ctx context.Context, id int) (Instructor, error) {
@@ -1606,23 +1646,8 @@ func (c *DansalClient) UpdateLocationPlanPosition(ctx context.Context, id int, x
 		PlanX *float64 `json:"plan_x"`
 		PlanY *float64 `json:"plan_y"`
 	}{PlanX: &x, PlanY: &y})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("%s/api/v1/locations/%d", c.BaseURL, id), bytes.NewReader(body))
-	if err != nil {
+	if err := c.doMergePatch(ctx, fmt.Sprintf("/api/v1/locations/%d", id), token, body, nil); err != nil {
 		return err
-	}
-	req.Header.Set("Content-Type", "application/merge-patch+json")
-	req.Header.Set("Authorization", "Bearer "+token)
-	c.setInternalHeader(req)
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusForbidden {
-		return fmt.Errorf("forbidden")
-	}
-	if resp.StatusCode != http.StatusOK {
-		return apiErr(resp)
 	}
 	c.invalidateLocations()
 	return nil
@@ -1749,7 +1774,7 @@ func (c *DansalClient) UpdateFetchSource(ctx context.Context, id int, u FetchSou
 func (c *DansalClient) GetLocations(ctx context.Context) ([]Location, error) {
 	return cached(&c.mu, &c.locationsCache, locationsTTL, func() ([]Location, error) {
 		var locs []Location
-		return locs, c.get(ctx, "/api/v1/locations?limit=1000", &locs)
+		return locs, c.get(ctx, fmt.Sprintf("/api/v1/locations?limit=%d", apiListLimit), &locs)
 	})
 }
 
@@ -1757,7 +1782,7 @@ func (c *DansalClient) GetLocations(ctx context.Context) ([]Location, error) {
 // counts; used by the /embed/locations map.
 func (c *DansalClient) GetLocationsWithEventCounts(ctx context.Context) ([]Location, error) {
 	var locs []Location
-	return locs, c.get(ctx, "/api/v1/locations?with_event_counts=true&limit=1000", &locs)
+	return locs, c.get(ctx, fmt.Sprintf("/api/v1/locations?with_event_counts=true&limit=%d", apiListLimit), &locs)
 }
 
 func (c *DansalClient) GetLocationEventCounts(ctx context.Context, token string) (map[int]int, error) {
@@ -1853,20 +1878,8 @@ func (c *DansalClient) UpdateLocation(ctx context.Context, id int, loc Location,
 // PatchLocationAttrs sends a raw JSON merge-patch to PATCH /api/v1/locations/{id}.
 // body must be valid JSON; only the fields it contains are updated.
 func (c *DansalClient) PatchLocationAttrs(ctx context.Context, id int, body []byte, token string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("%s/api/v1/locations/%d", c.BaseURL, id), bytes.NewReader(body))
-	if err != nil {
+	if err := c.doMergePatch(ctx, fmt.Sprintf("/api/v1/locations/%d", id), token, body, nil); err != nil {
 		return err
-	}
-	req.Header.Set("Content-Type", "application/merge-patch+json")
-	req.Header.Set("Authorization", "Bearer "+token)
-	c.setInternalHeader(req)
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return apiErr(resp)
 	}
 	c.invalidateLocations()
 	return nil
@@ -2270,26 +2283,20 @@ type GalleryItemUpdate struct {
 
 // UploadMusicianGalleryImage adds one picture to a musician's gallery.
 func (c *DansalClient) UploadMusicianGalleryImage(ctx context.Context, id int, data []byte, filename, caption string, ai bool, token string) error {
-	var buf bytes.Buffer
-	mw := multipart.NewWriter(&buf)
-	fw, err := mw.CreateFormFile("image", filename)
+	fields := []string{"caption", caption}
+	if ai {
+		fields = append(fields, "ai_generated", "1")
+	}
+	body, contentType, err := multipartForm(filename, data, fields...)
 	if err != nil {
 		return err
 	}
-	if _, err := fw.Write(data); err != nil {
-		return err
-	}
-	mw.WriteField("caption", caption)
-	if ai {
-		mw.WriteField("ai_generated", "1")
-	}
-	mw.Close()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+fmt.Sprintf("/api/v1/musicians/%d/gallery-images", id), &buf)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+fmt.Sprintf("/api/v1/musicians/%d/gallery-images", id), bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("Content-Type", contentType)
 	c.setInternalHeader(req)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
@@ -2329,8 +2336,10 @@ func (c *DansalClient) DeleteSeriesImage(ctx context.Context, id int, token stri
 }
 
 // multipartForm builds a single-file multipart body with the form field
-// "image", returning the body bytes and the Content-Type to send.
-func multipartForm(filename string, data []byte) ([]byte, string, error) {
+// "image" plus any extraFields (a flat key, value, key, value, ... list —
+// e.g. a gallery upload's caption/ai_generated), returning the body bytes
+// and the Content-Type to send (#1517).
+func multipartForm(filename string, data []byte, extraFields ...string) ([]byte, string, error) {
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
 	fw, err := mw.CreateFormFile("image", filename)
@@ -2339,6 +2348,9 @@ func multipartForm(filename string, data []byte) ([]byte, string, error) {
 	}
 	if _, err := fw.Write(data); err != nil {
 		return nil, "", err
+	}
+	for i := 0; i+1 < len(extraFields); i += 2 {
+		mw.WriteField(extraFields[i], extraFields[i+1])
 	}
 	mw.Close()
 	return buf.Bytes(), mw.FormDataContentType(), nil
@@ -2465,23 +2477,7 @@ func (c *DansalClient) SetEventExtraLocationPrimary(ctx context.Context, eventID
 // need to resubmit the whole event form.
 func (c *DansalClient) PatchEventDescription(ctx context.Context, eventID int, description, token string) error {
 	body, _ := json.Marshal(map[string]string{"description": description})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPatch,
-		fmt.Sprintf("%s/api/v1/events/%d", c.BaseURL, eventID), bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/merge-patch+json")
-	req.Header.Set("Authorization", "Bearer "+token)
-	c.setInternalHeader(req)
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("patch event description: %s: %s", resp.Status, apiErrorMessage(resp))
-	}
-	return nil
+	return c.doMergePatch(ctx, fmt.Sprintf("/api/v1/events/%d", eventID), token, body, nil)
 }
 
 // PatchEventTimetableTracks replaces an event's timetable track palette
@@ -2489,23 +2485,7 @@ func (c *DansalClient) PatchEventDescription(ctx context.Context, eventID int, d
 // reset a custom palette back to the default.
 func (c *DansalClient) PatchEventTimetableTracks(ctx context.Context, eventID int, tracks []TimetableTrack, token string) error {
 	body, _ := json.Marshal(map[string][]TimetableTrack{"timetable_tracks": tracks})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPatch,
-		fmt.Sprintf("%s/api/v1/events/%d", c.BaseURL, eventID), bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/merge-patch+json")
-	req.Header.Set("Authorization", "Bearer "+token)
-	c.setInternalHeader(req)
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("patch event timetable tracks: %s: %s", resp.Status, apiErrorMessage(resp))
-	}
-	return nil
+	return c.doMergePatch(ctx, fmt.Sprintf("/api/v1/events/%d", eventID), token, body, nil)
 }
 
 // PatchEventTimetableRoomOrder persists the admin timetable editor's
@@ -2514,44 +2494,12 @@ func (c *DansalClient) PatchEventTimetableTracks(ctx context.Context, eventID in
 // explicitly reset back to the default derivation.
 func (c *DansalClient) PatchEventTimetableRoomOrder(ctx context.Context, eventID int, order []int, token string) error {
 	body, _ := json.Marshal(map[string][]int{"timetable_room_order": order})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPatch,
-		fmt.Sprintf("%s/api/v1/events/%d", c.BaseURL, eventID), bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/merge-patch+json")
-	req.Header.Set("Authorization", "Bearer "+token)
-	c.setInternalHeader(req)
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("patch event timetable room order: %s: %s", resp.Status, apiErrorMessage(resp))
-	}
-	return nil
+	return c.doMergePatch(ctx, fmt.Sprintf("/api/v1/events/%d", eventID), token, body, nil)
 }
 
 func (c *DansalClient) PatchEventTimes(ctx context.Context, eventID int, startTime, endTime, token string) error {
 	body, _ := json.Marshal(map[string]string{"start_time": startTime, "end_time": endTime})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPatch,
-		fmt.Sprintf("%s/api/v1/events/%d", c.BaseURL, eventID), bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/merge-patch+json")
-	req.Header.Set("Authorization", "Bearer "+token)
-	c.setInternalHeader(req)
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("patch event times: %s: %s", resp.Status, apiErrorMessage(resp))
-	}
-	return nil
+	return c.doMergePatch(ctx, fmt.Sprintf("/api/v1/events/%d", eventID), token, body, nil)
 }
 
 func (c *DansalClient) ConsumeVerification(ctx context.Context, token string) (string, error) {
@@ -3060,24 +3008,18 @@ func (c *DansalClient) ResendManage(ctx context.Context, email, baseURL string) 
 // UploadContactPostImage uploads imgData as a new image for postID, authorized
 // by the post's manage token. Returns the new image ID and URL on success.
 func (c *DansalClient) UploadContactPostImage(ctx context.Context, postID int, token string, imgData []byte, filename string) (ContactPostImageInfo, error) {
-	var buf bytes.Buffer
-	mw := multipart.NewWriter(&buf)
-	fw, err := mw.CreateFormFile("image", filename)
+	body, contentType, err := multipartForm(filename, imgData)
 	if err != nil {
 		return ContactPostImageInfo{}, err
 	}
-	if _, err := fw.Write(imgData); err != nil {
-		return ContactPostImageInfo{}, err
-	}
-	mw.Close()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		fmt.Sprintf("%s/api/v1/contact-posts/%d/images?token=%s", c.BaseURL, postID, url.QueryEscape(token)),
-		&buf)
+		bytes.NewReader(body))
 	if err != nil {
 		return ContactPostImageInfo{}, err
 	}
-	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("Content-Type", contentType)
 	c.setInternalHeader(req)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
@@ -4405,22 +4347,8 @@ type TOTPSetupInfo struct {
 }
 
 func (c *DansalClient) TOTPSetup(ctx context.Context, token string) (TOTPSetupInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/v1/me/totp/setup", nil)
-	if err != nil {
-		return TOTPSetupInfo{}, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	c.setInternalHeader(req)
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return TOTPSetupInfo{}, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return TOTPSetupInfo{}, apiErr(resp)
-	}
 	var info TOTPSetupInfo
-	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/api/v1/me/totp/setup", token, nil, &info); err != nil {
 		return TOTPSetupInfo{}, err
 	}
 	return info, nil
@@ -4428,42 +4356,12 @@ func (c *DansalClient) TOTPSetup(ctx context.Context, token string) (TOTPSetupIn
 
 func (c *DansalClient) TOTPConfirm(ctx context.Context, token, code string) error {
 	body, _ := json.Marshal(map[string]string{"code": code})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/me/totp/confirm", bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-	c.setInternalHeader(req)
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return apiErr(resp)
-	}
-	return nil
+	return c.do(ctx, http.MethodPost, "/api/v1/me/totp/confirm", token, body, nil)
 }
 
 func (c *DansalClient) TOTPDisable(ctx context.Context, token, code string) error {
 	body, _ := json.Marshal(map[string]string{"code": code})
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.BaseURL+"/api/v1/me/totp", bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-	c.setInternalHeader(req)
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return apiErr(resp)
-	}
-	return nil
+	return c.do(ctx, http.MethodDelete, "/api/v1/me/totp", token, body, nil)
 }
 
 // GetCities returns towns with geo-tagged venues (#965). includeInactive
@@ -4516,20 +4414,11 @@ type ExternalSync struct {
 }
 
 func (c *DansalClient) GetSyndicationConfig(ctx context.Context, orgID int, token string) (*SyndicationConfig, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		fmt.Sprintf("%s/api/v1/organizations/%d/syndication", c.BaseURL, orgID), nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	c.setInternalHeader(req)
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
 	var cfg SyndicationConfig
-	return &cfg, json.NewDecoder(resp.Body).Decode(&cfg)
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/api/v1/organizations/%d/syndication", orgID), token, nil, &cfg); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
 }
 
 func (c *DansalClient) PutSyndicationConfig(ctx context.Context, orgID int, token string, cfg SyndicationConfig) error {
@@ -4555,20 +4444,11 @@ func (c *DansalClient) PutSyndicationConfig(ctx context.Context, orgID int, toke
 }
 
 func (c *DansalClient) GetEventSyncStatus(ctx context.Context, eventID int, token string) (*ExternalSync, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		fmt.Sprintf("%s/api/v1/events/%d/syndication", c.BaseURL, eventID), nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	c.setInternalHeader(req)
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
 	var s ExternalSync
-	return &s, json.NewDecoder(resp.Body).Decode(&s)
+	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/api/v1/events/%d/syndication", eventID), token, nil, &s); err != nil {
+		return nil, err
+	}
+	return &s, nil
 }
 
 func (c *DansalClient) SyndicateTo(ctx context.Context, eventID int, platform, token string) error {

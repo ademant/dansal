@@ -56,9 +56,9 @@ func TestInsertEventSanitizesDescription(t *testing.T) {
 		t.Fatalf("insertEvent: %v", err)
 	}
 
-	event, err := fetchEventByID(db, eventID)
+	event, err := getEventByID(db, eventID)
 	if err != nil {
-		t.Fatalf("fetchEventByID: %v", err)
+		t.Fatalf("getEventByID: %v", err)
 	}
 	if strings.Contains(event.Description, "<script") || strings.Contains(event.Description, "alert(") {
 		t.Fatalf("Description still contains a script tag: %q", event.Description)

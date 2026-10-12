@@ -264,12 +264,8 @@ func adminOrgCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 
 func adminOrgEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n, db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := requireLogin(w, r)
+		user, ok := requireRole(w, r, "admin", "user")
 		if !ok {
-			return
-		}
-		if user.Role != "admin" && user.Role != "user" {
-			forbidden(w, r)
 			return
 		}
 		id, ok := intPathValueOr404(w, r, "id")
@@ -535,12 +531,8 @@ func adminOrgLocationsHandler(cfg *Config, client *DansalClient) http.HandlerFun
 
 func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := requireLogin(w, r)
+		user, ok := requireRole(w, r, "admin", "user")
 		if !ok {
-			return
-		}
-		if user.Role != "admin" && user.Role != "user" {
-			forbidden(w, r)
 			return
 		}
 		// A logo upload triggers a slow AVIF re-encode on the backend (WASM-based

@@ -207,6 +207,6 @@ func tagSearchHandler(client *DansalClient) http.HandlerFunc {
 			}
 		}
 
-		writeJSON(w, http.StatusOK, matches)
+		writeJSONResponse(w, http.StatusOK, matches)
 	}
 }

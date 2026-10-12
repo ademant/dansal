@@ -94,6 +94,12 @@ type authUserRow struct {
 // display_name fallback match is ambiguous (shared by 2+ accounts).
 var errAmbiguousIdentifier = errors.New("multiple accounts share that identifier")
 
+// authUserCols is kept distinct from users.go's userSelectCols (#1509): login
+// needs the raw password_hash to verify against and the failed-login
+// counters to throttle, neither of which userSelectCols exposes (it reduces
+// password_hash to a public-safe "has a password" boolean and has no
+// lockout state at all) — merging them would mean adding login-only fields
+// to every other caller of userSelectCols.
 const authUserCols = "id, COALESCE(email,''), COALESCE(display_name,''), role, created_at, COALESCE(password_hash,''), COALESCE(disabled,0), COALESCE(failed_login_count,0), COALESCE(failed_login_since,'')"
 
 func scanAuthUserRow(row interface{ Scan(...any) error }, u *authUserRow) error {
@@ -462,12 +468,7 @@ func certLogin(w http.ResponseWriter, r *http.Request) {
 		"SELECT id, email, COALESCE(display_name,''), role, created_at, COALESCE(disabled,0) FROM users WHERE email=?",
 		req.Email,
 	).Scan(&user.ID, &user.Email, &user.DisplayName, &user.Role, &user.CreatedAt, new(int))
-	if err == sql.ErrNoRows {
-		writeError(w, "user not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "user not found") {
 		return
 	}
 	if user.Role != RoleAdmin {

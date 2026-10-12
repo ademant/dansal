@@ -33,7 +33,7 @@ func oidcStartHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		flowID, authorizeURL, err := client.OIDCStart(ctx, providerID, redirectURI, invite)
 		if err != nil {
 			log.Printf("oidc start: %v", err)
-			http.Redirect(w, r, oidcErrorRedirect(invite), http.StatusSeeOther)
+			flashRedirect(w, r, oidcErrorRedirect(invite), flashToken(err), FlashMsg{OIDCLoginError: true})
 			return
 		}
 		http.SetCookie(w, &http.Cookie{
@@ -63,7 +63,7 @@ func oidcCallbackHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		http.SetCookie(w, &http.Cookie{Name: oidcFlowCookie, Value: "", Path: "/oidc", MaxAge: -1})
 
 		if cookieErr != nil || code == "" || state == "" {
-			http.Redirect(w, r, "/login?error=oidc", http.StatusSeeOther)
+			flashRedirect(w, r, "/login", flashToken(nil), FlashMsg{OIDCLoginError: true})
 			return
 		}
 
@@ -72,7 +72,7 @@ func oidcCallbackHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		sess, err := client.OIDCCallback(ctx, cookie.Value, code, state)
 		if err != nil {
 			log.Printf("oidc callback: %v", err)
-			http.Redirect(w, r, "/login?error=oidc", http.StatusSeeOther)
+			flashRedirect(w, r, "/login", flashToken(err), FlashMsg{OIDCLoginError: true})
 			return
 		}
 		setSession(w, sess.Token, SessionUser{
@@ -84,14 +84,16 @@ func oidcCallbackHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	}
 }
 
-// oidcErrorRedirect sends the user back to wherever they started (the
-// invite page if this was an invite redemption, otherwise /login) with an
-// error flag, rather than stranding them on a bare error page.
+// oidcErrorRedirect returns the base path (no flash token yet) to send the
+// user back to wherever they started — the invite page if this was an
+// invite redemption, otherwise /login — rather than stranding them on a
+// bare error page. The caller attaches the OIDCLoginError flash via
+// flashRedirect.
 func oidcErrorRedirect(inviteToken string) string {
 	if inviteToken != "" {
-		return "/invites/" + url.PathEscape(inviteToken) + "?error=oidc"
+		return "/invites/" + url.PathEscape(inviteToken)
 	}
-	return "/login?error=oidc"
+	return "/login"
 }
 
 // oidcLinkFlowCookie carries the flow_id issued by dansal's
@@ -119,7 +121,7 @@ func oidcLinkStartHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		flowID, authorizeURL, err := client.OIDCLinkStart(ctx, providerID, redirectURI, token)
 		if err != nil {
 			log.Printf("oidc link start: %v", err)
-			http.Redirect(w, r, "/settings?linkerr=1", http.StatusSeeOther)
+			flashRedirect(w, r, "/settings", flashToken(err), FlashMsg{SettingsLinkError: true})
 			return
 		}
 		http.SetCookie(w, &http.Cookie{
@@ -150,7 +152,7 @@ func oidcLinkCallbackHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 		http.SetCookie(w, &http.Cookie{Name: oidcLinkFlowCookie, Value: "", Path: "/settings/oidc", MaxAge: -1})
 
 		if cookieErr != nil || code == "" || state == "" {
-			http.Redirect(w, r, "/settings?linkerr=1", http.StatusSeeOther)
+			flashRedirect(w, r, "/settings", flashToken(nil), FlashMsg{SettingsLinkError: true})
 			return
 		}
 
@@ -158,9 +160,9 @@ func oidcLinkCallbackHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 		defer cancel()
 		if err := client.OIDCLinkCallback(ctx, cookie.Value, code, state); err != nil {
 			log.Printf("oidc link callback: %v", err)
-			http.Redirect(w, r, "/settings?linkerr=1", http.StatusSeeOther)
+			flashRedirect(w, r, "/settings", flashToken(err), FlashMsg{SettingsLinkError: true})
 			return
 		}
-		http.Redirect(w, r, "/settings?linked=1", http.StatusSeeOther)
+		flashRedirect(w, r, "/settings", flashToken(nil), FlashMsg{SettingsLinked: true})
 	}
 }

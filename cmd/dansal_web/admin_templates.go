@@ -65,9 +65,8 @@ func adminTemplateSaveHandler(cfg *Config, db *sql.DB, client *DansalClient) htt
 		if !ok {
 			return
 		}
-		eventID, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.Error(w, "bad id", http.StatusBadRequest)
+		eventID, ok := intPathValueOr400(w, r, "id", "bad id")
+		if !ok {
 			return
 		}
 		if err := r.ParseForm(); err != nil {

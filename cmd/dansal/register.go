@@ -320,12 +320,7 @@ func registerStatusHandler(w http.ResponseWriter, r *http.Request) {
 	err := db.QueryRow(
 		"SELECT verified, approved, COALESCE(approved_invite_url,''), expires_at, verification_token, user_id FROM pending_registrations WHERE id=?", id,
 	).Scan(&verified, &approved, &approvedInviteURL, &expiresAt, &storedToken, &userID)
-	if err == sql.ErrNoRows {
-		writeError(w, "not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeError(w, "db error", http.StatusInternalServerError)
+	if !rowOr404(w, err, "not found") {
 		return
 	}
 	exp, err := parseTokenExpiration(expiresAt)
@@ -390,12 +385,7 @@ func registerResendHandler(w http.ResponseWriter, r *http.Request) {
 		"SELECT id, COALESCE(email,''), COALESCE(telegram,''), verification_channel, expires_at, verified FROM pending_registrations WHERE verification_token=?",
 		sha256Hex(token),
 	).Scan(&id, &email, &telegram, &channel, &expiresAt, &verified)
-	if err == sql.ErrNoRows {
-		writeError(w, "registration not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		writeError(w, "db error", http.StatusInternalServerError)
+	if !rowOr404(w, err, "registration not found") {
 		return
 	}
 	if verified == 1 {

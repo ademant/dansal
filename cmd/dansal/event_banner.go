@@ -107,7 +107,7 @@ func eventBannerCachePath(eventID int, tier string) string {
 // removed from its series, series/org banner deleted, etc.) — see the
 // dansal-prune-images timer.
 func eventBannerFileStillValid(id int, tier string) bool {
-	event, err := fetchEventByID(db, id)
+	event, err := getEventByID(db, id)
 	if err != nil {
 		return false
 	}
@@ -121,7 +121,7 @@ func getEventBannerImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := strconv.Atoi(idStr)
-	event, err := fetchEventByID(db, id)
+	event, err := getEventByID(db, id)
 	if err != nil {
 		writeError(w, "Event not found", http.StatusNotFound)
 		return

@@ -177,7 +177,7 @@ func buildSitemap(r *http.Request, cfg *Config, client *DansalClient) ([]byte, e
 	}
 
 	// Cities — hub pages for each town with upcoming events.
-	cities, err := client.GetCities(ctx)
+	cities, err := client.GetCities(ctx, false)
 	if err != nil {
 		log.Printf("sitemap: could not load cities: %v", err)
 	}

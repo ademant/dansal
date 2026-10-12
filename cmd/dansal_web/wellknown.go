@@ -16,19 +16,38 @@ func healthHandler() http.HandlerFunc {
 }
 
 // securityTxtHandler serves /.well-known/security.txt per RFC 9116.
-// Only active when SecurityContact is set in web.yaml.
+// Contact and Policy are read from site_settings (via siteCfg) first, with
+// web.yaml as fallback. Returns 404 when neither source has a contact.
+// Expires is a stable fixed date stored in site_settings; only when that
+// value is missing does the handler fall back to now+1y (so existing
+// installs that have never set the field still get a valid, if per-request,
+// Expires rather than an RFC 9116 violation).
 func securityTxtHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if cfg.SecurityContact == "" {
+		contact := siteCfg.SecurityContact()
+		if contact == "" {
+			contact = cfg.SecurityContact
+		}
+		if contact == "" {
 			http.NotFound(w, r)
 			return
 		}
-		expires := time.Now().AddDate(1, 0, 0).UTC().Format(time.RFC3339)
+
+		policy := siteCfg.SecurityPolicy()
+		if policy == "" {
+			policy = cfg.SecurityPolicy
+		}
+
+		expires := siteCfg.SecurityExpires()
+		if expires == "" {
+			expires = time.Now().AddDate(1, 0, 0).UTC().Truncate(time.Second).Format(time.RFC3339)
+		}
+
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.Header().Set("Cache-Control", "public, max-age=86400")
-		fmt.Fprintf(w, "Contact: %s\nExpires: %s\n", cfg.SecurityContact, expires)
-		if cfg.SecurityPolicy != "" {
-			fmt.Fprintf(w, "Policy: %s\n", cfg.SecurityPolicy)
+		fmt.Fprintf(w, "Contact: %s\nExpires: %s\n", contact, expires)
+		if policy != "" {
+			fmt.Fprintf(w, "Policy: %s\n", policy)
 		}
 	}
 }

@@ -20,12 +20,8 @@ type AdminFetchurlSuggestionsData struct {
 // listPendingRegsHandler already uses for pending_registrations.
 func adminFetchurlSuggestionsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		su, ok := requireLogin(w, r)
+		_, ok := requireRole(w, r, "admin", "user")
 		if !ok {
-			return
-		}
-		if su.Role != "admin" && su.Role != "user" {
-			forbidden(w, r)
 			return
 		}
 		token := getSessionToken(r)
@@ -46,12 +42,8 @@ func adminFetchurlSuggestionsHandler(cfg *Config, tmpls *Templates, client *Dans
 
 func adminFetchurlSuggestionApproveHandler(client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		su, ok := requireLogin(w, r)
+		_, ok := requireRole(w, r, "admin", "user")
 		if !ok {
-			return
-		}
-		if su.Role != "admin" && su.Role != "user" {
-			forbidden(w, r)
 			return
 		}
 		id, ok := intPathValueOr404(w, r, "id")
@@ -70,12 +62,8 @@ func adminFetchurlSuggestionApproveHandler(client *DansalClient) http.HandlerFun
 
 func adminFetchurlSuggestionRejectHandler(client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		su, ok := requireLogin(w, r)
+		_, ok := requireRole(w, r, "admin", "user")
 		if !ok {
-			return
-		}
-		if su.Role != "admin" && su.Role != "user" {
-			forbidden(w, r)
 			return
 		}
 		id, ok := intPathValueOr404(w, r, "id")

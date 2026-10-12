@@ -7,8 +7,15 @@ import (
 
 const (
 	// maxMultipartSize caps admin create/save form uploads; the forms are
-	// multipart because they carry image uploads.
+	// multipart because they carry image uploads. Used by the generic
+	// adminEntity[E] Create/Save handlers (one avatar-sized image each).
 	maxMultipartSize = 10 << 20
+	// maxEventImageMultipartSize (#1515) is the explicit, larger cap for
+	// upload classes that legitimately carry bigger originals than a single
+	// admin-entity avatar: the event/location/series edit forms (full event
+	// photos, building site-plan images) and the public suggest-management
+	// form. Was hand-copied as a bare "32 << 20" literal at each call site.
+	maxEventImageMultipartSize = 32 << 20
 	// maxFeedBodySize caps fetched feed bodies in the enrich handler.
 	maxFeedBodySize = 8 << 20
 	// fdpMatchWindow is the ±3h start-time window for matching
@@ -24,9 +31,15 @@ func adminWriteDeadline(w http.ResponseWriter) {
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(170 * time.Second))
 }
 
-// forbidden writes a uniform 403 response. Both the HTML (http.Error
-// "Forbidden") and JSON ({"error":"forbidden"}) handlers converged on this.
+// forbidden writes a uniform 403 response: the styled HTML error page for a
+// normal browser navigation, or a JSON error body for an API/fetch caller
+// (#1512, see htmlError/wantsHTML). Both the HTML (http.Error "Forbidden")
+// and JSON ({"error":"forbidden"}) call sites converged on this.
 func forbidden(w http.ResponseWriter, r *http.Request) {
+	if wantsHTML(r) {
+		htmlError(w, r, http.StatusForbidden)
+		return
+	}
 	writeJSONError(w, r, http.StatusForbidden, "forbidden")
 }
 
@@ -37,6 +50,17 @@ func parseAdminMultipart(r *http.Request) error {
 		return r.ParseForm()
 	}
 	return nil
+}
+
+// parseMultipartWithLimit parses r's body as multipart/form-data up to
+// maxBytes, for an upload class whose cap intentionally differs from
+// maxMultipartSize (#1515) — currently maxEventImageMultipartSize. Unlike
+// parseAdminMultipart it does not fall back to ParseForm on failure: every
+// call site already returns its own 400 on error, and silently falling
+// through to a form with no files would just surface as a confusing
+// validation failure further down instead.
+func parseMultipartWithLimit(r *http.Request, maxBytes int64) error {
+	return r.ParseMultipartForm(maxBytes)
 }
 
 // memberOrgSet returns the set of org IDs the user belongs to, or nil for

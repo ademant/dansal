@@ -19,9 +19,9 @@ func TestTimetableTracksDefaultFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("insertEvent: %v", err)
 	}
-	got, err := fetchEventByID(db, id)
+	got, err := getEventByID(db, id)
 	if err != nil {
-		t.Fatalf("fetchEventByID: %v", err)
+		t.Fatalf("getEventByID: %v", err)
 	}
 	if len(got.TimetableTracks) != len(defaultTimetableTracks) {
 		t.Fatalf("expected default palette (%d tracks), got %d", len(defaultTimetableTracks), len(got.TimetableTracks))
@@ -41,9 +41,9 @@ func TestTimetableTracksDefaultFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("insertEvent (custom): %v", err)
 	}
-	got2, err := fetchEventByID(db, id2)
+	got2, err := getEventByID(db, id2)
 	if err != nil {
-		t.Fatalf("fetchEventByID: %v", err)
+		t.Fatalf("getEventByID: %v", err)
 	}
 	if len(got2.TimetableTracks) != 1 || got2.TimetableTracks[0].Slug != "keynote" {
 		t.Fatalf("expected custom single-track palette, got %+v", got2.TimetableTracks)
@@ -69,9 +69,9 @@ func TestTimetableTracksDefaultFallback(t *testing.T) {
 	); err != nil {
 		t.Fatalf("simulated PUT without tracks: %v", err)
 	}
-	got3, err := fetchEventByID(db, id2)
+	got3, err := getEventByID(db, id2)
 	if err != nil {
-		t.Fatalf("fetchEventByID: %v", err)
+		t.Fatalf("getEventByID: %v", err)
 	}
 	if len(got3.TimetableTracks) != 1 || got3.TimetableTracks[0].Slug != "keynote" {
 		t.Fatalf("expected custom palette to survive a tracks-less PUT, got %+v", got3.TimetableTracks)

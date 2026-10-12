@@ -492,9 +492,8 @@ func adminPublisherRegenerateKeyHandler(cfg *Config, client *DansalClient) http.
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			writeJSONError(w, r, http.StatusBadRequest, "invalid id")
+		id, ok := intPathValueOrJSON400(w, r, "id", "invalid id")
+		if !ok {
 			return
 		}
 		token := getSessionToken(r)
@@ -523,9 +522,8 @@ func adminPublisherReconnectLinkHandler(cfg *Config, client *DansalClient) http.
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			writeJSONError(w, r, http.StatusBadRequest, "invalid id")
+		id, ok := intPathValueOrJSON400(w, r, "id", "invalid id")
+		if !ok {
 			return
 		}
 		token := getSessionToken(r)
@@ -587,9 +585,8 @@ func adminPublisherDeleteHandler(cfg *Config, client *DansalClient) http.Handler
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			writeJSONError(w, r, http.StatusBadRequest, "invalid id")
+		id, ok := intPathValueOrJSON400(w, r, "id", "invalid id")
+		if !ok {
 			return
 		}
 		token := getSessionToken(r)

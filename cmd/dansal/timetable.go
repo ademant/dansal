@@ -275,12 +275,7 @@ func validateTimetableRequests(reqs []TimetableEntryRequest) error {
 // "no target to validate" values.
 func timetableAuthCheck(w http.ResponseWriter, userRole string, callerID, eventID int) bool {
 	orgID, err := eventOrgID(db, eventID)
-	if err == sql.ErrNoRows {
-		writeError(w, "Event not found", http.StatusNotFound)
-		return false
-	}
-	if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "Event not found") {
 		return false
 	}
 	return requireEventOrg(w, userRole, callerID, orgID, nil, false)
@@ -648,11 +643,7 @@ func getTimetableHistory(w http.ResponseWriter, r *http.Request) {
 
 	var isPublished int
 	err := db.QueryRow("SELECT is_published FROM events WHERE id = ?", eventID).Scan(&isPublished)
-	if err == sql.ErrNoRows {
-		writeError(w, "Event not found", http.StatusNotFound)
-		return
-	} else if err != nil {
-		writeInternalError(w, err)
+	if !rowOr404(w, err, "Event not found") {
 		return
 	}
 	if userRole == "" && isPublished == 0 {

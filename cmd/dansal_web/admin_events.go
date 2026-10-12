@@ -2084,7 +2084,7 @@ func adminTemplateCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, clien
 		// upload form outside template mode); a plain r.ParseForm() never
 		// reads a multipart body, so every field including tpl_name always
 		// arrived empty here regardless of what was typed.
-		if err := r.ParseMultipartForm(32 << 20); err != nil {
+		if err := parseMultipartWithLimit(r, maxEventImageMultipartSize); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
@@ -2201,7 +2201,7 @@ func adminTemplateEditSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, cli
 			http.NotFound(w, r)
 			return
 		}
-		if err := r.ParseMultipartForm(32 << 20); err != nil {
+		if err := parseMultipartWithLimit(r, maxEventImageMultipartSize); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
@@ -2546,7 +2546,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 		if !ok {
 			return
 		}
-		if err := r.ParseMultipartForm(32 << 20); err != nil {
+		if err := parseMultipartWithLimit(r, maxEventImageMultipartSize); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
@@ -3035,7 +3035,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		if !ok {
 			return
 		}
-		if err := r.ParseMultipartForm(32 << 20); err != nil {
+		if err := parseMultipartWithLimit(r, maxEventImageMultipartSize); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}

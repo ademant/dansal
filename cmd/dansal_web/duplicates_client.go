@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -62,21 +61,5 @@ func (c *DansalClient) ResolveDuplicate(ctx context.Context, eventID int, mode, 
 // PatchEventLocation moves an event to another location (venue or room).
 func (c *DansalClient) PatchEventLocation(ctx context.Context, eventID, locationID int, token string) error {
 	body, _ := json.Marshal(map[string]int{"location_id": locationID})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPatch,
-		fmt.Sprintf("%s/api/v1/events/%d", c.BaseURL, eventID), bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/merge-patch+json")
-	req.Header.Set("Authorization", "Bearer "+token)
-	c.setInternalHeader(req)
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return apiErr(resp)
-	}
-	return nil
+	return c.doMergePatch(ctx, fmt.Sprintf("/api/v1/events/%d", eventID), token, body, nil)
 }

@@ -10,7 +10,11 @@ jobs:
   e2e-journeys:
     name: Playwright Journeys (${{ matrix.project }})
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 20 min was never actually validated against a real run — every prior
+    # CI run failed within 1-2 min at setup (#1522 etc.), so this cap never
+    # mattered until the suite could run far enough to hit it (#1531): ~100
+    # of ~37 spec files' tests still weren't done at 20 min.
+    timeout-minutes: 60
 
     strategy:
       fail-fast: false

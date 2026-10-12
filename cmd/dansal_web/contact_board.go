@@ -138,14 +138,14 @@ func boardFormTokenHandler(cfg *Config) http.HandlerFunc {
 		}
 		ip := getClientIP(r)
 		if tokenThrottle.isBlocked(ip) {
-			http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
+			writeJSONError(w, r, http.StatusTooManyRequests, "rate limit exceeded")
 			return
 		}
 		tokenThrottle.record(ip)
 
 		tok := issueFormToken(ip)
 		if tok == "" {
-			http.Error(w, `{"error":"unavailable"}`, http.StatusServiceUnavailable)
+			writeJSONError(w, r, http.StatusServiceUnavailable, "unavailable")
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")
@@ -379,7 +379,7 @@ func contactManageImageUploadHandler(client *DansalClient) http.HandlerFunc {
 			http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
 			return
 		}
-		if err := r.ParseMultipartForm(10 << 20); err != nil {
+		if err := r.ParseMultipartForm(maxMultipartSize); err != nil {
 			http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
 			return
 		}

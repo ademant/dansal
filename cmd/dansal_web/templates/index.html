@@ -182,15 +182,6 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   /* same 60svh cap as above: a short landscape viewport (width <=640 but
      height ~320) would otherwise let the 280px map take 87% of the screen. */
   #map-container{height:min(280px,60svh)}
-  .home-mapweek{display:flex;flex-direction:column}
-  .home-mapweek #week-outer{order:1}
-  .home-mapweek .mobile-mode-bar{order:2}
-  .home-mapweek #map-container{order:3;margin-top:.75rem}
-  .home-mapweek .map-toolbar{order:4}
-  /* The week list is rendered (and later re-rendered, longer) by JS; let it
-     reserve the rest of the screen so the bar and map below start out of
-     view and its growth can't push visible content (CLS 0.11 otherwise). */
-  .home-mapweek #week-outer{min-height:60svh}
   #week-mini-cal{display:none}
   .week-nav{display:none}
   .leaflet-popup-close-button{width:28px!important;height:28px!important;font-size:20px!important;line-height:28px!important;top:4px!important;right:4px!important}
@@ -244,9 +235,11 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
      control from staying reachable via Tab once hidden from that tree —
      aria-hidden alone doesn't affect tab order. Sighted/mouse users see and
      use the map exactly as before. */}}
-{{/* #1358: map + week view share a wrapper so phones can show the week
-     list first and the map below it (CSS order, mobile only) — otherwise the
-     map's tiles were the largest element on screen and the LCP (~3 s). */}}
+{{/* map + week view share a wrapper for layout grouping. #1358 had phones
+     show the week list first and the map below it (CSS order) to fix an LCP
+     regression from the map's tiles being the largest element on screen;
+     #1520 reverted that so mobile order matches desktop (map, then week)
+     again, accepting that LCP tradeoff back for order consistency. */}}
 <div class="home-mapweek">
 <div id="map-container" aria-hidden="true"></div>
 <div class="map-toolbar">

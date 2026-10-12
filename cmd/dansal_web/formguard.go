@@ -372,13 +372,13 @@ func refreshFormTokenHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ip := getClientIP(r)
 		if tokenThrottle.isBlocked(ip) {
-			http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
+			writeJSONError(w, r, http.StatusTooManyRequests, "rate limit exceeded")
 			return
 		}
 		tokenThrottle.record(ip)
 		tok := issueFormToken(ip)
 		if tok == "" {
-			http.Error(w, `{"error":"unavailable"}`, http.StatusServiceUnavailable)
+			writeJSONError(w, r, http.StatusServiceUnavailable, "unavailable")
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")

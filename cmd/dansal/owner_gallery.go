@@ -135,9 +135,8 @@ func (s galleryOwnerSpec) owner(w http.ResponseWriter, r *http.Request) (int, bo
 	if !requireRole(w, role, s.roles...) {
 		return 0, false
 	}
-	id, err := strconv.Atoi(r.PathValue("id"))
-	if err != nil {
-		writeError(w, "Invalid "+strings.ToLower(s.label)+" ID", http.StatusBadRequest)
+	id, ok := requireIntPathValue(w, r, "id", "Invalid "+strings.ToLower(s.label)+" ID")
+	if !ok {
 		return 0, false
 	}
 	var exists int
@@ -303,9 +302,8 @@ func (s galleryOwnerSpec) remove(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	gid, err := strconv.Atoi(r.PathValue("gid"))
-	if err != nil {
-		writeError(w, "Invalid picture ID", http.StatusBadRequest)
+	gid, ok := requireIntPathValue(w, r, "gid", "Invalid picture ID")
+	if !ok {
 		return
 	}
 	res, err := db.Exec("DELETE FROM owner_gallery WHERE id = ? AND owner_type = ? AND owner_id = ?", gid, s.ownerType, ownerID)

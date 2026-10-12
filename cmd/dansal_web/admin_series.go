@@ -627,7 +627,7 @@ func adminSeriesImageUploadHandler(cfg *Config, client *DansalClient) http.Handl
 		if !ok {
 			return
 		}
-		if err := r.ParseMultipartForm(32 << 20); err != nil {
+		if err := parseMultipartWithLimit(r, maxEventImageMultipartSize); err != nil {
 			http.Error(w, "bad form", http.StatusBadRequest)
 			return
 		}

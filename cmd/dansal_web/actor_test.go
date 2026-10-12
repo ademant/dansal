@@ -146,6 +146,57 @@ func TestHostMetaJSON(t *testing.T) {
 	}
 }
 
+// TestNodeinfoIndexRelayLink verifies #1521: the NodeInfo index links the
+// relay/Application actor (FEP-2677) only when federation's relay actor is
+// configured, mirroring how the relay actor/routes are gated elsewhere
+// (frontend.go's RelayActorURL).
+func TestNodeinfoIndexRelayLink(t *testing.T) {
+	type link struct {
+		Rel  string `json:"rel"`
+		Href string `json:"href"`
+	}
+	decode := func(cfg *Config) []link {
+		req := httptest.NewRequest(http.MethodGet, "/.well-known/nodeinfo", nil)
+		rec := httptest.NewRecorder()
+		nodeinfoIndexHandler(cfg)(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		var doc struct {
+			Links []link `json:"links"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
+			t.Fatalf("decode: %v, body=%s", err, rec.Body.String())
+		}
+		return doc.Links
+	}
+
+	t.Run("relay configured", func(t *testing.T) {
+		cfg := &Config{Domain: "example.com", RelayActorName: "relay"}
+		links := decode(cfg)
+		if len(links) != 3 {
+			t.Fatalf("got %d links, want 3: %+v", len(links), links)
+		}
+		want := link{Rel: "https://www.w3.org/ns/activitystreams#Application", Href: "https://example.com/org/relay"}
+		if links[2] != want {
+			t.Errorf("links[2] = %+v, want %+v", links[2], want)
+		}
+	})
+
+	t.Run("federation disabled", func(t *testing.T) {
+		cfg := &Config{Domain: "example.com"}
+		links := decode(cfg)
+		if len(links) != 2 {
+			t.Fatalf("got %d links, want 2 (no Application link): %+v", len(links), links)
+		}
+		for _, l := range links {
+			if l.Rel == "https://www.w3.org/ns/activitystreams#Application" {
+				t.Errorf("Application link present despite RelayActorName unset: %+v", l)
+			}
+		}
+	})
+}
+
 // TestActorOrFrontendContentNegotiation verifies apActorHandler vs the HTML
 // frontend handler are selected purely from the Accept header (issue #947).
 func TestActorOrFrontendContentNegotiation(t *testing.T) {
@@ -215,9 +266,9 @@ func TestRelayActorURLEmptyWhenUnconfigured(t *testing.T) {
 func TestAPImageURL(t *testing.T) {
 	cfg := &Config{Domain: "example.com"}
 	cases := []struct {
-		name  string
-		in    string
-		want  string
+		name string
+		in   string
+		want string
 	}{
 		{"empty", "", ""},
 		{"relative", "/api/v1/images/5", "https://example.com/api/v1/images/5?format=jpeg"},

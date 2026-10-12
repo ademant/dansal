@@ -259,11 +259,11 @@
     <div class="form-row">
       <div>
         <label for="capacity">{{$.Strings.T "loc_capacity"}}</label>
-        <input id="capacity" type="number" min="0" step="1" name="capacity" value="{{intVal .Location.Capacity}}">
+        <input id="capacity" type="number" min="0" step="1" name="capacity" value="{{derefInt .Location.Capacity}}">
       </div>
       <div>
         <label for="size_sqm">{{$.Strings.T "loc_size_sqm"}}</label>
-        <input id="size_sqm" type="number" min="0" step="1" name="size_sqm" value="{{intVal .Location.SizeSqm}}">
+        <input id="size_sqm" type="number" min="0" step="1" name="size_sqm" value="{{derefInt .Location.SizeSqm}}">
       </div>
     </div>
   </section>

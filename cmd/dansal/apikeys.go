@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -18,6 +17,20 @@ type APIKey struct {
 	Key       string `json:"key,omitempty"`
 	ExpiresAt string `json:"expires_at,omitempty"`
 	CreatedAt string `json:"created_at"`
+}
+
+// apiKeyCols is the single column list for api_keys rows returned by
+// listAPIKeys, shared across its two query branches (#1509).
+const apiKeyCols = "id, user_id, name, expires_at, created_at"
+
+func scanAPIKey(row interface{ Scan(...any) error }) (APIKey, error) {
+	var k APIKey
+	var exp sql.NullString
+	err := row.Scan(&k.ID, &k.UserID, &k.Name, &exp, &k.CreatedAt)
+	if err == nil && exp.Valid {
+		k.ExpiresAt = epochStrToRFC3339(exp.String)
+	}
+	return k, err
 }
 
 type CreateAPIKeyRequest struct {
@@ -80,53 +93,48 @@ func validateAPIKey(key string) (int, string, int, error) {
 }
 
 func listAPIKeys(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	callerID, callerRole := callerFromRequest(r)
 
-	var rows *sql.Rows
-	var err error
+	var query string
+	var args []any
 
 	if callerRole == RoleAdmin {
-		rows, err = db.Query("SELECT id, user_id, name, expires_at, created_at FROM api_keys ORDER BY id")
+		query = "SELECT " + apiKeyCols + " FROM api_keys"
 	} else {
 		// Non-admins see their own keys plus keys for publishers in the same org(s).
-		rows, err = db.Query(`
+		query = `
 			SELECT ak.id, ak.user_id, ak.name, ak.expires_at, ak.created_at FROM api_keys ak
 			WHERE ak.user_id = ?
 			UNION
 			SELECT ak.id, ak.user_id, ak.name, ak.expires_at, ak.created_at FROM api_keys ak
 			JOIN users u ON u.id = ak.user_id AND u.role = 'publisher'
 			JOIN organization_members om1 ON om1.user_id = ak.user_id
-			JOIN organization_members om2 ON om2.organization_id = om1.organization_id AND om2.user_id = ?
-			ORDER BY id`, callerID, callerID)
+			JOIN organization_members om2 ON om2.organization_id = om1.organization_id AND om2.user_id = ?`
+		args = []any{callerID, callerID}
 	}
+	writeTotalCountHeader(w, query, args)
+	applyListPagination(r, "id", &query, &args)
+
+	rows, err := db.Query(query, args...)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to fetch API keys"})
+		writeError(w, "Failed to fetch API keys", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
 
 	keys := []APIKey{}
 	for rows.Next() {
-		var k APIKey
-		var exp sql.NullString
-		if err := rows.Scan(&k.ID, &k.UserID, &k.Name, &exp, &k.CreatedAt); err != nil {
+		k, err := scanAPIKey(rows)
+		if err != nil {
 			continue
-		}
-		if exp.Valid {
-			k.ExpiresAt = epochStrToRFC3339(exp.String)
 		}
 		keys = append(keys, k)
 	}
 
-	json.NewEncoder(w).Encode(keys)
+	writeJSON(w, keys)
 }
 
 func createAPIKey(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	callerID, callerRole := callerFromRequest(r)
 
 	var req CreateAPIKeyRequest
@@ -135,8 +143,7 @@ func createAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Name == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "name is required"})
+		writeError(w, "name is required", http.StatusBadRequest)
 		return
 	}
 
@@ -144,8 +151,7 @@ func createAPIKey(w http.ResponseWriter, r *http.Request) {
 	if req.ExpiresAt != "" {
 		t, err := time.Parse(time.RFC3339, req.ExpiresAt)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": "expires_at must be RFC3339"})
+			writeError(w, "expires_at must be RFC3339", http.StatusBadRequest)
 			return
 		}
 		epoch := t.Unix()
@@ -155,8 +161,7 @@ func createAPIKey(w http.ResponseWriter, r *http.Request) {
 	targetUserID := callerID
 	if req.UserID != nil {
 		if callerRole != RoleAdmin && *req.UserID != callerID {
-			w.WriteHeader(http.StatusForbidden)
-			json.NewEncoder(w).Encode(map[string]string{"error": "Only admins can create API keys for other users"})
+			writeError(w, "Only admins can create API keys for other users", http.StatusForbidden)
 			return
 		}
 		targetUserID = *req.UserID
@@ -164,8 +169,7 @@ func createAPIKey(w http.ResponseWriter, r *http.Request) {
 
 	key, err := generateAPIKey()
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to generate API key"})
+		writeError(w, "Failed to generate API key", http.StatusInternalServerError)
 		return
 	}
 
@@ -176,8 +180,7 @@ func createAPIKey(w http.ResponseWriter, r *http.Request) {
 		targetUserID, req.Name, hashAPIKey(key), expiresAt,
 	).Scan(&id, &createdAt)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to create API key"})
+		writeError(w, "Failed to create API key", http.StatusInternalServerError)
 		return
 	}
 
@@ -191,13 +194,10 @@ func createAPIKey(w http.ResponseWriter, r *http.Request) {
 	if req.ExpiresAt != "" {
 		resp.ExpiresAt = req.ExpiresAt
 	}
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(resp)
+	writeJSONStatus(w, http.StatusCreated, resp)
 }
 
 func deleteAPIKey(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	callerID, callerRole := callerFromRequest(r)
 
 	keyID, ok := requireIntPathValue(w, r, "id", "Invalid API key ID")
@@ -207,26 +207,17 @@ func deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 
 	var ownerID int
 	err := db.QueryRow("SELECT user_id FROM api_keys WHERE id = ?", keyID).Scan(&ownerID)
-	if err == sql.ErrNoRows {
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]string{"error": "API key not found"})
-		return
-	}
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Internal server error"})
+	if !rowOr404(w, err, "API key not found") {
 		return
 	}
 
 	if callerRole != RoleAdmin && callerID != ownerID {
-		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Cannot delete another user's API key"})
+		writeError(w, "Cannot delete another user's API key", http.StatusForbidden)
 		return
 	}
 
 	if _, err = db.Exec("DELETE FROM api_keys WHERE id = ?", keyID); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to delete API key"})
+		writeError(w, "Failed to delete API key", http.StatusInternalServerError)
 		return
 	}
 
@@ -241,13 +232,10 @@ func deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 // renewed, and only before they expire — an already-expired key needs a
 // human to reissue it via regenerate-key.
 func renewAPIKey(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	authHeader := r.Header.Get("Authorization")
 	parts := strings.Split(authHeader, " ")
 	if len(parts) != 2 || parts[0] != "Bearer" {
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid authorization header format. Use 'Bearer <api_key>'"})
+		writeError(w, "Invalid authorization header format. Use 'Bearer <api_key>'", http.StatusUnauthorized)
 		return
 	}
 	presentedKey := parts[1]
@@ -260,25 +248,21 @@ func renewAPIKey(w http.ResponseWriter, r *http.Request) {
 		hashAPIKey(presentedKey),
 	).Scan(&keyID, &userID, &name, &createdAtStr, &expiresAt, &signingSecretEnc, &requireSignature)
 	if err == sql.ErrNoRows {
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid or expired credentials"})
+		writeError(w, "Invalid or expired credentials", http.StatusUnauthorized)
 		return
 	}
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Internal server error"})
+		writeError(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	if !expiresAt.Valid || expiresAt.String == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "This key has no expiry; renewal is not applicable"})
+		writeError(w, "This key has no expiry; renewal is not applicable", http.StatusBadRequest)
 		return
 	}
 
 	oldExpiry, err := parseTokenExpiration(expiresAt.String)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Internal server error"})
+		writeError(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	// #1189: tolerate a short grace window past expires_at so a client
@@ -288,14 +272,12 @@ func renewAPIKey(w http.ResponseWriter, r *http.Request) {
 	// key via regenerate-key the instant expiry passes.
 	graceUntil := oldExpiry.Add(time.Duration(config.Server.APIKeyRenewGraceHours) * time.Hour)
 	if time.Now().After(graceUntil) {
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"error": "This key has already expired; ask an admin or org member to issue a new one"})
+		writeError(w, "This key has already expired; ask an admin or org member to issue a new one", http.StatusUnauthorized)
 		return
 	}
 	oldCreated, err := parseTokenExpiration(createdAtStr)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Internal server error"})
+		writeError(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
@@ -303,22 +285,19 @@ func renewAPIKey(w http.ResponseWriter, r *http.Request) {
 
 	newKey, err := generateAPIKey()
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to generate API key"})
+		writeError(w, "Failed to generate API key", http.StatusInternalServerError)
 		return
 	}
 
 	tx, err := db.Begin()
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "db error"})
+		writeError(w, "db error", http.StatusInternalServerError)
 		return
 	}
 	defer tx.Rollback()
 
 	if _, err := tx.Exec("DELETE FROM api_keys WHERE id=?", keyID); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to rotate key"})
+		writeError(w, "Failed to rotate key", http.StatusInternalServerError)
 		return
 	}
 	// #1366: carry the signing secret/enforcement flag over to the new row —
@@ -330,19 +309,17 @@ func renewAPIKey(w http.ResponseWriter, r *http.Request) {
 		"INSERT INTO api_keys (user_id, name, api_key, expires_at, signing_secret_enc, require_signature) VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
 		userID, name, hashAPIKey(newKey), newExpiry.Unix(), signingSecretEnc, requireSignature,
 	).Scan(&newID); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to rotate key"})
+		writeError(w, "Failed to rotate key", http.StatusInternalServerError)
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "db error"})
+		writeError(w, "db error", http.StatusInternalServerError)
 		return
 	}
 
 	credentials.invalidate(presentedKey)
 
-	json.NewEncoder(w).Encode(map[string]any{
+	writeJSON(w, map[string]any{
 		"key_id":     newID,
 		"api_key":    newKey,
 		"expires_at": newExpiry.UTC().Format(time.RFC3339),
@@ -364,20 +341,16 @@ func renewAPIKey(w http.ResponseWriter, r *http.Request) {
 // then satisfy the signature check on every other write, defeating the
 // entire point of requiring a second, separately-held credential.
 func rotateSigningSecret(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	authHeader := r.Header.Get("Authorization")
 	parts := strings.Split(authHeader, " ")
 	if len(parts) != 2 || parts[0] != "Bearer" {
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid authorization header format. Use 'Bearer <api_key>'"})
+		writeError(w, "Invalid authorization header format. Use 'Bearer <api_key>'", http.StatusUnauthorized)
 		return
 	}
 	presentedKey := parts[1]
 
 	if !config.Server.Signing.Enabled {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "request signing is not enabled on this server"})
+		writeError(w, "request signing is not enabled on this server", http.StatusBadRequest)
 		return
 	}
 
@@ -387,35 +360,30 @@ func rotateSigningSecret(w http.ResponseWriter, r *http.Request) {
 		hashAPIKey(presentedKey),
 	).Scan(&keyID)
 	if err == sql.ErrNoRows {
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid or expired credentials"})
+		writeError(w, "Invalid or expired credentials", http.StatusUnauthorized)
 		return
 	}
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Internal server error"})
+		writeError(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	if err := checkRequestSignature(r, keyID); err != nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"error": "request signature invalid: " + err.Error()})
+		writeError(w, "request signature invalid: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 
 	secret, err := generateSigningSecret()
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to generate signing secret"})
+		writeError(w, "Failed to generate signing secret", http.StatusInternalServerError)
 		return
 	}
 	if _, err := db.Exec("UPDATE api_keys SET signing_secret_enc=? WHERE id=?", signingSecretEncrypt(secret), keyID); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to store signing secret"})
+		writeError(w, "Failed to store signing secret", http.StatusInternalServerError)
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{"signing_secret": secret})
+	writeJSON(w, map[string]string{"signing_secret": secret})
 }
 
 // DELETE /api/v1/apikeys/current — self-revoke, authenticated by presenting
@@ -423,13 +391,10 @@ func rotateSigningSecret(w http.ResponseWriter, r *http.Request) {
 // uninstall/disconnect) retire its own key without admin credentials,
 // instead of leaving an orphaned live key behind.
 func revokeCurrentAPIKey(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	authHeader := r.Header.Get("Authorization")
 	parts := strings.Split(authHeader, " ")
 	if len(parts) != 2 || parts[0] != "Bearer" {
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid authorization header format. Use 'Bearer <api_key>'"})
+		writeError(w, "Invalid authorization header format. Use 'Bearer <api_key>'", http.StatusUnauthorized)
 		return
 	}
 	presentedKey := parts[1]
@@ -440,19 +405,16 @@ func revokeCurrentAPIKey(w http.ResponseWriter, r *http.Request) {
 		hashAPIKey(presentedKey),
 	).Scan(&keyID)
 	if err == sql.ErrNoRows {
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid or expired credentials"})
+		writeError(w, "Invalid or expired credentials", http.StatusUnauthorized)
 		return
 	}
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Internal server error"})
+		writeError(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	if _, err := db.Exec("DELETE FROM api_keys WHERE id = ?", keyID); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to revoke API key"})
+		writeError(w, "Failed to revoke API key", http.StatusInternalServerError)
 		return
 	}
 

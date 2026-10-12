@@ -747,6 +747,16 @@ var tmplFuncMap = func() template.FuncMap {
 	m := template.FuncMap{}
 	for _, part := range []template.FuncMap{tmplFuncsTime, tmplFuncsLocation, tmplFuncsTags, tmplFuncsChat, tmplFuncsMisc} {
 		for k, v := range part {
+			// #1518: a name reused across two templatefuncs_*.go fragments
+			// would otherwise have the second silently win, hiding a
+			// collision behind whichever slice order happens to iterate
+			// last. Panicking at init time catches it at build/test time
+			// (this var initializer runs as soon as the package loads, so
+			// any `go test ./cmd/dansal_web/...` run exercises it) rather
+			// than at some unrelated page render.
+			if _, dup := m[k]; dup {
+				panic("tmplFuncMap: duplicate template func name " + k)
+			}
 			m[k] = v
 		}
 	}
@@ -836,6 +846,7 @@ type Templates struct {
 	embedLocations            *template.Template
 	dashboard                 *template.Template
 	festivals                 *template.Template
+	errorPage                 *template.Template
 }
 
 func loadTemplates() *Templates {
@@ -943,6 +954,7 @@ func loadTemplates() *Templates {
 		embedLocations:            loadEmbed("embed_locations"),
 		dashboard:                 load("dashboard"),
 		festivals:                 load("festivals"),
+		errorPage:                 load("error"),
 	}
 }
 
@@ -995,7 +1007,7 @@ func legacyGancioRedirect(target string) http.HandlerFunc {
 // redirect to the homepage is a crawler soft-404 and sends visitors somewhere
 // unrelated; 410 lets both clients stop retrying the dead URL (#1433).
 func legacyGancioGone(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "This legacy URL is gone", http.StatusGone)
+	htmlError(w, r, http.StatusGone)
 }
 
 func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -1081,7 +1093,7 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		// as if it were relative, requesting /events/geo:lat,lon -- a 410
 		// drains their retry queue faster than a plain 404 would.
 		if strings.HasPrefix(idStr, "geo:") {
-			http.Error(w, "not a navigable URL", http.StatusGone)
+			htmlError(w, r, http.StatusGone)
 			return
 		}
 		id, err := strconv.Atoi(idStr)
@@ -1124,7 +1136,7 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 					return
 				}
 				if errors.Is(err, errExpired) {
-					http.Error(w, "event is gone", http.StatusGone)
+					htmlError(w, r, http.StatusGone)
 				} else {
 					http.NotFound(w, r)
 				}
@@ -1232,18 +1244,18 @@ func eventAssignOrgHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			return
 		}
 		if err := r.ParseForm(); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
+			logHTTPError(w, r, "bad request", http.StatusBadRequest)
 			return
 		}
 		orgID, err := strconv.Atoi(r.FormValue("org_id"))
 		if err != nil || orgID == 0 {
-			http.Error(w, "invalid org_id", http.StatusBadRequest)
+			logHTTPError(w, r, "invalid org_id", http.StatusBadRequest)
 			return
 		}
 		token := getSessionToken(r)
 		members, err := client.GetOrganizationMembers(r.Context(), orgID, token)
 		if err != nil {
-			http.Error(w, "forbidden", http.StatusForbidden)
+			logHTTPError(w, r, "forbidden", http.StatusForbidden)
 			return
 		}
 		isMember := false
@@ -1254,7 +1266,7 @@ func eventAssignOrgHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			}
 		}
 		if !isMember {
-			http.Error(w, "forbidden", http.StatusForbidden)
+			logHTTPError(w, r, "forbidden", http.StatusForbidden)
 			return
 		}
 		if err := client.AssignEventOrg(r.Context(), id, orgID, token); err != nil {
@@ -1293,7 +1305,7 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 				// #1462: no live org claims this slug — it may be a renamed
 				// or deleted org's old URL rather than one that never existed.
 				if target, gone := resolveOrgSlugRedirect(db, slug); gone {
-					http.Error(w, "this organization is gone", http.StatusGone)
+					htmlError(w, r, http.StatusGone)
 					return
 				} else if target != "" {
 					http.Redirect(w, r, "/org/"+target, http.StatusMovedPermanently)
@@ -1314,7 +1326,7 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 			// deleted org's old slug reaches here rather than the actor==nil
 			// branch above.
 			if target, gone := resolveOrgSlugRedirect(db, actor.OrgSlug); gone {
-				http.Error(w, "this organization is gone", http.StatusGone)
+				htmlError(w, r, http.StatusGone)
 				return
 			} else if target != "" {
 				http.Redirect(w, r, "/org/"+target, http.StatusMovedPermanently)
@@ -1369,7 +1381,7 @@ func locationPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 		// /location/geo:lat,lon -- a 410 drains their retry queue faster
 		// than a plain 404 would.
 		if strings.HasPrefix(r.PathValue("id"), "geo:") {
-			http.Error(w, "not a navigable URL", http.StatusGone)
+			htmlError(w, r, http.StatusGone)
 			return
 		}
 		id, ok := intPathValueOr404(w, r, "id")
@@ -1384,7 +1396,7 @@ func locationPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 					return
 				}
 				if errors.Is(err, errExpired) {
-					http.Error(w, "location is gone", http.StatusGone)
+					htmlError(w, r, http.StatusGone)
 				} else {
 					http.NotFound(w, r)
 				}

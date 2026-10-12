@@ -2,7 +2,6 @@ package main
 
 import (
 	"net/http"
-	"strconv"
 )
 
 func adminAddEventExtraLocationHandler(client *DansalClient) http.HandlerFunc {
@@ -11,14 +10,12 @@ func adminAddEventExtraLocationHandler(client *DansalClient) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		eventID, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.Error(w, "invalid event id", http.StatusBadRequest)
+		eventID, ok := intPathValueOr400(w, r, "id", "invalid event id")
+		if !ok {
 			return
 		}
-		locationID, err := strconv.Atoi(r.PathValue("location_id"))
-		if err != nil {
-			http.Error(w, "invalid location_id", http.StatusBadRequest)
+		locationID, ok := intPathValueOr400(w, r, "location_id", "invalid location_id")
+		if !ok {
 			return
 		}
 		if err := client.AddEventExtraLocation(r.Context(), eventID, locationID, getSessionToken(r)); err != nil {
@@ -35,14 +32,12 @@ func adminRemoveEventExtraLocationHandler(client *DansalClient) http.HandlerFunc
 		if !ok {
 			return
 		}
-		eventID, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.Error(w, "invalid event id", http.StatusBadRequest)
+		eventID, ok := intPathValueOr400(w, r, "id", "invalid event id")
+		if !ok {
 			return
 		}
-		locationID, err := strconv.Atoi(r.PathValue("location_id"))
-		if err != nil {
-			http.Error(w, "invalid location_id", http.StatusBadRequest)
+		locationID, ok := intPathValueOr400(w, r, "location_id", "invalid location_id")
+		if !ok {
 			return
 		}
 		if err := client.RemoveEventExtraLocation(r.Context(), eventID, locationID, getSessionToken(r)); err != nil {
@@ -59,14 +54,12 @@ func adminSetEventExtraLocationPrimaryHandler(client *DansalClient) http.Handler
 		if !ok {
 			return
 		}
-		eventID, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.Error(w, "invalid event id", http.StatusBadRequest)
+		eventID, ok := intPathValueOr400(w, r, "id", "invalid event id")
+		if !ok {
 			return
 		}
-		locationID, err := strconv.Atoi(r.PathValue("location_id"))
-		if err != nil {
-			http.Error(w, "invalid location_id", http.StatusBadRequest)
+		locationID, ok := intPathValueOr400(w, r, "location_id", "invalid location_id")
+		if !ok {
 			return
 		}
 		if err := client.SetEventExtraLocationPrimary(r.Context(), eventID, locationID, getSessionToken(r)); err != nil {

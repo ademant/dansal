@@ -10,6 +10,7 @@ For the `dansal_web` frontend's own routes (public pages, feeds, `/embed/*` widg
 - [Authentication](#authentication)
 - [Roles and Permissions](#roles-and-permissions)
 - [Content Negotiation](#content-negotiation)
+- [Pagination](#pagination)
 - [Caching and Conditional Requests](#caching-and-conditional-requests)
 - [Info and Health](#info-and-health)
 - [Vocabulary](#vocabulary)
@@ -101,6 +102,23 @@ curl -H "Accept: text/calendar" http://localhost:8000/api/v1/events
 # Get locations as GeoJSON
 curl -H "Accept: application/geo+json" http://localhost:8000/api/v1/locations
 ```
+
+## Pagination
+
+Every list endpoint that returns a row set potentially larger than a handful of entries supports the same `limit`/`offset` pair and reports the total matching row count via a response header, rather than each endpoint inventing its own convention:
+
+- `limit=N` — max results per page (default 100, max 1000)
+- `offset=N` — number of matching rows to skip
+
+The response includes an `X-Total-Count` header: the total number of rows the filters would match **before** `limit`/`offset` is applied, so a client can compute page count without a separate `COUNT(*)` request.
+
+```bash
+curl -D- "http://localhost:8000/api/v1/events?limit=20&offset=40" | grep -i X-Total-Count
+```
+
+This applies to: `GET /api/v1/events`, `/api/v1/locations`, `/api/v1/instructors`, `/api/v1/musicians`, `/api/v1/organizations`, `/api/v1/users`, `/api/v1/apikeys`, `/api/v1/feeds`, `/api/v1/feeds/suggestions`, `/api/v1/series`, `/api/v1/invites`, `/api/v1/events/{id}/bookings`, `/api/v1/contact-posts`, and `/api/v1/events/{id}/contact-posts`.
+
+A handful of admin-only list endpoints over small, inherently bounded datasets are deliberately **not** paginated and always return every row: `GET /api/v1/pending-registrations`, `/api/v1/pending-invites`, `/api/v1/dances`, and `/api/v1/publishers/{id}/webhooks` (capped at 5 per publisher regardless).
 
 ## Caching and Conditional Requests
 
@@ -272,7 +290,7 @@ Authentication required. List or revoke active sessions for the current user.
 ## Users
 
 ```
-GET    /api/v1/users              # admin only
+GET    /api/v1/users              # admin only; paginated, see Pagination
 GET    /api/v1/users/{id}         # any authenticated caller; only the account owner gets full PII
 PUT    /api/v1/users/{id}         # admin or self (see restrictions below)
 GET    /api/v1/users/{id}/organizations   # admin or self
@@ -617,7 +635,7 @@ Authentication required.
 ## API Keys
 
 ```
-GET    /api/v1/apikeys
+GET    /api/v1/apikeys                         # paginated, see Pagination
 POST   /api/v1/apikeys
 DELETE /api/v1/apikeys/{id}
 DELETE /api/v1/apikeys/current                 # self-revoke; see below
@@ -767,7 +785,7 @@ The caller must be that publisher, or an admin. At most 5 subscriptions per publ
 ## Organizations
 
 ```
-GET    /api/v1/organizations
+GET    /api/v1/organizations              # paginated, see Pagination
 GET    /api/v1/organizations/{id}
 POST   /api/v1/organizations              # auth required
 PUT    /api/v1/organizations/{id}         # member or admin — full replace
@@ -790,7 +808,7 @@ List and get are public. Create/update/delete require authentication. `GET /api/
 ## Locations
 
 ```
-GET    /api/v1/locations
+GET    /api/v1/locations              # paginated, see Pagination
 GET    /api/v1/locations/{id}
 POST   /api/v1/locations              # auth required
 PUT    /api/v1/locations/{id}         # auth required — full replace
@@ -868,14 +886,14 @@ Either check is skipped when the location being written has `parent_id` set (a r
 ## Musicians and Instructors
 
 ```
-GET    /api/v1/musicians
+GET    /api/v1/musicians              # paginated, see Pagination
 GET    /api/v1/musicians/{id}
 POST   /api/v1/musicians              # auth required
 PUT    /api/v1/musicians/{id}         # auth required — full replace
 PATCH  /api/v1/musicians/{id}         # auth required — partial merge
 DELETE /api/v1/musicians/{id}         # auth required
 
-GET    /api/v1/instructors
+GET    /api/v1/instructors            # paginated, see Pagination
 GET    /api/v1/instructors/{id}
 GET    /api/v1/events/{id}/instructors
 POST   /api/v1/instructors            # auth required
@@ -1012,11 +1030,7 @@ Auth-only filters:
 - `is_published=true|false` — filter by publish status (admin/user/publisher); publishers can only list their org's unpublished events
 - `include_past=true` — available to all callers but only authenticated callers can combine it with `is_published=false`
 
-Pagination:
-- `limit=N` — max results (default 100, max 1000)
-- `offset=N` — pagination offset
-
-The response includes an `X-Total-Count` header with the total matching row count before pagination.
+Supports `limit`/`offset` and `X-Total-Count` like every other list endpoint — see [Pagination](#pagination). `?order=desc` flips to newest-first (default is oldest-first); useful for "most recent N past events" on a venue page, where ascending + limit would give the *oldest* N instead.
 
 List and get are public for published events. Authenticated users see their organization's draft events too.
 
@@ -1060,7 +1074,7 @@ PUT    /api/v1/organizations/{id}/syndication   # set them
 ## Event Series
 
 ```
-GET    /api/v1/series
+GET    /api/v1/series                  # paginated, see Pagination
 GET    /api/v1/series/{id}
 POST   /api/v1/series
 PUT    /api/v1/series/{id}
@@ -1156,7 +1170,7 @@ See also [Contact Posts](#contact-posts) for `contact-post-images`, a fourth ima
 ## Fetch Sources
 
 ```
-GET    /api/v1/feeds
+GET    /api/v1/feeds                  # paginated, see Pagination
 GET    /api/v1/feeds/{id}
 POST   /api/v1/feeds
 PATCH  /api/v1/feeds/{id}
@@ -1168,7 +1182,7 @@ POST   /api/v1/feeds/bulk-assign-org
 
 POST   /api/v1/feeds/suggest-preview  # public: preview a visitor's feed suggestion
 POST   /api/v1/feeds/suggest          # public: submit it
-GET    /api/v1/feeds/suggestions                 # pending suggestions (admin, or member of the suggested org)
+GET    /api/v1/feeds/suggestions                 # pending suggestions (admin, or member of the suggested org); paginated, see Pagination
 POST   /api/v1/feeds/suggestions/{id}/approve
 POST   /api/v1/feeds/suggestions/{id}/reject
 ```
@@ -1182,8 +1196,8 @@ Authentication required except where marked public. Fetch sources are iCal/JSON/
 ## Contact Posts
 
 ```
-GET    /api/v1/contact-posts                    # all posts (auth required)
-GET    /api/v1/events/{id}/contact-posts        # posts for one event (public)
+GET    /api/v1/contact-posts                    # all posts (auth required); paginated, see Pagination
+GET    /api/v1/events/{id}/contact-posts        # posts for one event (public); paginated, see Pagination
 POST   /api/v1/events/{id}/contact-posts        # create post (public, verification required)
 GET    /api/v1/contact-posts/manage/{token}     # get post by management token
 PUT    /api/v1/contact-posts/{id}               # full replace (management token)
@@ -1209,7 +1223,7 @@ Public posts require email or Telegram verification before appearing.
 ```
 POST   /api/v1/events/{id}/bookings         # create booking (public)
 GET    /api/v1/bookings/verify/{token}      # verify booking via email link
-GET    /api/v1/events/{id}/bookings         # list bookings for event (auth required)
+GET    /api/v1/events/{id}/bookings         # list bookings for event (auth required); paginated, see Pagination
 PATCH  /api/v1/bookings/{id}/status         # update status (auth required)
 GET    /api/v1/bookings/checkin/{qr_token}  # check in via QR code (auth required)
 DELETE /api/v1/bookings/{id}                # auth required
@@ -1228,7 +1242,7 @@ Public. Suggestions are visible to admins for review immediately on submit — r
 ## Invites
 
 ```
-GET    /api/v1/invites                          # list own invites; admin sees all
+GET    /api/v1/invites                          # list own invites; admin sees all; paginated, see Pagination
 POST   /api/v1/invites                          # create invite (admin or org member)
 DELETE /api/v1/invites/{token}                  # revoke unused invite (creator or admin)
 GET    /api/v1/invites/{token}                  # get invite info (public — for registration page)

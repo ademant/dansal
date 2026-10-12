@@ -10,7 +10,11 @@ jobs:
   e2e-journeys:
     name: Playwright Journeys (${{ matrix.project }})
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 20 min was never actually validated against a real run — every prior
+    # CI run failed within 1-2 min at setup (#1522 etc.), so this cap never
+    # mattered until the suite could run far enough to hit it (#1531): ~100
+    # of ~37 spec files' tests still weren't done at 20 min.
+    timeout-minutes: 60
 
     strategy:
       fail-fast: false
@@ -41,24 +45,65 @@ jobs:
       - name: Start services
         run: |
           sudo mkdir -p /var/lib/dansal/e2e /var/lib/dansal-web/e2e /etc/dansal/e2e
+          # packaging/config.yaml's db_path/images_dir/admin_socket/backup_dir
+          # (and web.yaml's db_path/images_dir) all point directly under
+          # /var/lib/dansal(-web), not the .../e2e leaf just created above —
+          # same root-owned-parent issue as #1522's sed fix, one level up:
+          # the unprivileged dansal/dansal_web processes below need to create
+          # their socket/DB/images there themselves (#1526).
+          sudo chown -R "$(id -u):$(id -g)" /var/lib/dansal /var/lib/dansal-web
           sudo cp packaging/config.yaml /etc/dansal/e2e/config.yaml
           sudo cp packaging/web.yaml /etc/dansal/e2e/web.yaml
           sudo cp packaging/webmin.yaml /etc/dansal/e2e/webmin.yaml
-          sed -i 's/port: 8000/port: 18000/' /etc/dansal/e2e/config.yaml
+          # These configs were just copied in with `sudo cp`, so they (and the
+          # /etc/dansal/e2e dir sed -i needs to write its temp file into) are
+          # root-owned — every in-place edit below needs sudo too, or sed
+          # fails with "Permission denied" creating that temp file (#1522).
+          sudo sed -i 's/port: 8000/port: 18000/' /etc/dansal/e2e/config.yaml
+          # Server.Listen (set explicitly below) takes precedence over
+          # Server.Port for the actual bind address — Port only defaults
+          # Listen when Listen is empty (cmd/dansal/config.go) — so the
+          # port: sed above never affected what dansal actually binds to.
+          # Without this, dansal always listened on :8000, not :18000 (#1529).
+          sudo sed -i 's/listen: "127.0.0.1:8000"/listen: "127.0.0.1:18000"/' /etc/dansal/e2e/config.yaml
+          grep -q 'listen: "127.0.0.1:18000"' /etc/dansal/e2e/config.yaml
           # The suite drives the API directly on loopback (no shared-secret
           # exemption), so every spec's seed calls share one per-IP bucket;
           # the packaging default of 100/min is exhausted mid-run (#1345).
-          sed -i 's/^  rate_limit: 100$/  rate_limit: 1000/' /etc/dansal/e2e/config.yaml
+          sudo sed -i 's/^  rate_limit: 100$/  rate_limit: 1000/' /etc/dansal/e2e/config.yaml
           grep -q '^  rate_limit: 1000$' /etc/dansal/e2e/config.yaml
           # Seeding alone exceeds the default 30 creates/updates per minute
           # per account (#1423) — same value the dev e2e target uses.
-          sed -i 's/^  account_mutation_rate_limit: 0$/  account_mutation_rate_limit: 600/' /etc/dansal/e2e/config.yaml
+          sudo sed -i 's/^  account_mutation_rate_limit: 0$/  account_mutation_rate_limit: 600/' /etc/dansal/e2e/config.yaml
           grep -q '^  account_mutation_rate_limit: 600$' /etc/dansal/e2e/config.yaml
-          sed -i 's/listen: :8080/listen: :18080/' /etc/dansal/e2e/web.yaml
-          sed -i 's/listen: :8090/listen: :18090/' /etc/dansal/e2e/webmin.yaml
-          ./dansal --config /etc/dansal/e2e/config.yaml &
+          # packaging/web.yaml's actual format is `listen: "127.0.0.1:8080"`
+          # (quoted, with a host) — the old bare `listen: :8080` pattern
+          # never matched it, so this sed silently no-op'ed and dansal_web
+          # always bound to the untouched default port instead of :18080,
+          # while every spec points BASE_URL at :18080 (#1528). grep -q
+          # verifies the match the same way the rate_limit sed above already
+          # does, so a future packaging format change fails loudly instead
+          # of silently drifting out of sync again.
+          sudo sed -i 's/listen: "127.0.0.1:8080"/listen: "127.0.0.1:18080"/' /etc/dansal/e2e/web.yaml
+          grep -q 'listen: "127.0.0.1:18080"' /etc/dansal/e2e/web.yaml
+          sudo sed -i 's/listen: "127.0.0.1:8090"/listen: "127.0.0.1:18090"/' /etc/dansal/e2e/webmin.yaml
+          grep -q 'listen: "127.0.0.1:18090"' /etc/dansal/e2e/webmin.yaml
+          # web.yaml's dansal_url is a separate field from its own listen:
+          # above — it's where dansal_web reaches the *API* (dansal, not
+          # itself), which now binds :18000 per the config.yaml listen fix
+          # above. Without this, dansal_web can't verify a magic-login
+          # token (calls the API internally), so global-setup's login never
+          # reaches /dashboard and just times out after 30s (#1530).
+          sudo sed -i 's|dansal_url: "http://127.0.0.1:8000"|dansal_url: "http://127.0.0.1:18000"|' /etc/dansal/e2e/web.yaml
+          grep -q 'dansal_url: "http://127.0.0.1:18000"' /etc/dansal/e2e/web.yaml
+          # Redirected (rather than left on the step's own stdout) because a
+          # background `&` process's output isn't captured once this step's
+          # synchronous commands finish — a startup failure here otherwise
+          # surfaces only indirectly, several steps later, as a Playwright
+          # connection-refused error with no indication of why.
+          ./dansal --config /etc/dansal/e2e/config.yaml > /tmp/dansal.log 2>&1 &
           sleep 2
-          ./dansal_web --config /etc/dansal/e2e/web.yaml &
+          ./dansal_web --config /etc/dansal/e2e/web.yaml > /tmp/dansal_web.log 2>&1 &
           sleep 2
 
       - name: Run journey tests
@@ -70,7 +115,17 @@ jobs:
           API_URL: http://localhost:18000
           ADMIN_SOCKET: /var/lib/dansal/dansal.sock
           ADMIN_NO_SUDO: "1"
+          # Without this, helpers/seed.ts's ADMIN_CLI defaults to the bare
+          # name "dansal_admin", which isn't on PATH — the built binary sits
+          # at the repo root ($GITHUB_WORKSPACE), not e2e/ (#1524).
+          ADMIN_CLI: ${{ github.workspace }}/dansal_admin
           WEB_DB_PATH: /var/lib/dansal-web/web.db
+
+      - name: Dump service logs on failure
+        if: failure()
+        run: |
+          echo "=== dansal.log ==="; cat /tmp/dansal.log || true
+          echo "=== dansal_web.log ==="; cat /tmp/dansal_web.log || true
 
       - name: Upload test results
         if: always()
@@ -116,24 +171,65 @@ jobs:
       - name: Start services
         run: |
           sudo mkdir -p /var/lib/dansal/e2e /var/lib/dansal-web/e2e /etc/dansal/e2e
+          # packaging/config.yaml's db_path/images_dir/admin_socket/backup_dir
+          # (and web.yaml's db_path/images_dir) all point directly under
+          # /var/lib/dansal(-web), not the .../e2e leaf just created above —
+          # same root-owned-parent issue as #1522's sed fix, one level up:
+          # the unprivileged dansal/dansal_web processes below need to create
+          # their socket/DB/images there themselves (#1526).
+          sudo chown -R "$(id -u):$(id -g)" /var/lib/dansal /var/lib/dansal-web
           sudo cp packaging/config.yaml /etc/dansal/e2e/config.yaml
           sudo cp packaging/web.yaml /etc/dansal/e2e/web.yaml
           sudo cp packaging/webmin.yaml /etc/dansal/e2e/webmin.yaml
-          sed -i 's/port: 8000/port: 18000/' /etc/dansal/e2e/config.yaml
+          # These configs were just copied in with `sudo cp`, so they (and the
+          # /etc/dansal/e2e dir sed -i needs to write its temp file into) are
+          # root-owned — every in-place edit below needs sudo too, or sed
+          # fails with "Permission denied" creating that temp file (#1522).
+          sudo sed -i 's/port: 8000/port: 18000/' /etc/dansal/e2e/config.yaml
+          # Server.Listen (set explicitly below) takes precedence over
+          # Server.Port for the actual bind address — Port only defaults
+          # Listen when Listen is empty (cmd/dansal/config.go) — so the
+          # port: sed above never affected what dansal actually binds to.
+          # Without this, dansal always listened on :8000, not :18000 (#1529).
+          sudo sed -i 's/listen: "127.0.0.1:8000"/listen: "127.0.0.1:18000"/' /etc/dansal/e2e/config.yaml
+          grep -q 'listen: "127.0.0.1:18000"' /etc/dansal/e2e/config.yaml
           # The suite drives the API directly on loopback (no shared-secret
           # exemption), so every spec's seed calls share one per-IP bucket;
           # the packaging default of 100/min is exhausted mid-run (#1345).
-          sed -i 's/^  rate_limit: 100$/  rate_limit: 1000/' /etc/dansal/e2e/config.yaml
+          sudo sed -i 's/^  rate_limit: 100$/  rate_limit: 1000/' /etc/dansal/e2e/config.yaml
           grep -q '^  rate_limit: 1000$' /etc/dansal/e2e/config.yaml
           # Seeding alone exceeds the default 30 creates/updates per minute
           # per account (#1423) — same value the dev e2e target uses.
-          sed -i 's/^  account_mutation_rate_limit: 0$/  account_mutation_rate_limit: 600/' /etc/dansal/e2e/config.yaml
+          sudo sed -i 's/^  account_mutation_rate_limit: 0$/  account_mutation_rate_limit: 600/' /etc/dansal/e2e/config.yaml
           grep -q '^  account_mutation_rate_limit: 600$' /etc/dansal/e2e/config.yaml
-          sed -i 's/listen: :8080/listen: :18080/' /etc/dansal/e2e/web.yaml
-          sed -i 's/listen: :8090/listen: :18090/' /etc/dansal/e2e/webmin.yaml
-          ./dansal --config /etc/dansal/e2e/config.yaml &
+          # packaging/web.yaml's actual format is `listen: "127.0.0.1:8080"`
+          # (quoted, with a host) — the old bare `listen: :8080` pattern
+          # never matched it, so this sed silently no-op'ed and dansal_web
+          # always bound to the untouched default port instead of :18080,
+          # while every spec points BASE_URL at :18080 (#1528). grep -q
+          # verifies the match the same way the rate_limit sed above already
+          # does, so a future packaging format change fails loudly instead
+          # of silently drifting out of sync again.
+          sudo sed -i 's/listen: "127.0.0.1:8080"/listen: "127.0.0.1:18080"/' /etc/dansal/e2e/web.yaml
+          grep -q 'listen: "127.0.0.1:18080"' /etc/dansal/e2e/web.yaml
+          sudo sed -i 's/listen: "127.0.0.1:8090"/listen: "127.0.0.1:18090"/' /etc/dansal/e2e/webmin.yaml
+          grep -q 'listen: "127.0.0.1:18090"' /etc/dansal/e2e/webmin.yaml
+          # web.yaml's dansal_url is a separate field from its own listen:
+          # above — it's where dansal_web reaches the *API* (dansal, not
+          # itself), which now binds :18000 per the config.yaml listen fix
+          # above. Without this, dansal_web can't verify a magic-login
+          # token (calls the API internally), so global-setup's login never
+          # reaches /dashboard and just times out after 30s (#1530).
+          sudo sed -i 's|dansal_url: "http://127.0.0.1:8000"|dansal_url: "http://127.0.0.1:18000"|' /etc/dansal/e2e/web.yaml
+          grep -q 'dansal_url: "http://127.0.0.1:18000"' /etc/dansal/e2e/web.yaml
+          # Redirected (rather than left on the step's own stdout) because a
+          # background `&` process's output isn't captured once this step's
+          # synchronous commands finish — a startup failure here otherwise
+          # surfaces only indirectly, several steps later, as a Playwright
+          # connection-refused error with no indication of why.
+          ./dansal --config /etc/dansal/e2e/config.yaml > /tmp/dansal.log 2>&1 &
           sleep 2
-          ./dansal_web --config /etc/dansal/e2e/web.yaml &
+          ./dansal_web --config /etc/dansal/e2e/web.yaml > /tmp/dansal_web.log 2>&1 &
           sleep 2
 
       - name: Run accessibility sweep
@@ -145,6 +241,16 @@ jobs:
           API_URL: http://localhost:18000
           ADMIN_SOCKET: /var/lib/dansal/dansal.sock
           ADMIN_NO_SUDO: "1"
+          # Without this, helpers/seed.ts's ADMIN_CLI defaults to the bare
+          # name "dansal_admin", which isn't on PATH — the built binary sits
+          # at the repo root ($GITHUB_WORKSPACE), not e2e/ (#1524).
+          ADMIN_CLI: ${{ github.workspace }}/dansal_admin
+
+      - name: Dump service logs on failure
+        if: failure()
+        run: |
+          echo "=== dansal.log ==="; cat /tmp/dansal.log || true
+          echo "=== dansal_web.log ==="; cat /tmp/dansal_web.log || true
 
       - name: Upload test results
         if: always()

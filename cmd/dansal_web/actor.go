@@ -393,18 +393,27 @@ func webfingerHandler(cfg *Config, db *sql.DB, client *DansalClient) http.Handle
 func nodeinfoIndexHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		base := "https://" + cfg.Domain
-		resp := map[string]any{
-			"links": []map[string]string{
-				{
-					"rel":  "http://nodeinfo.diaspora.software/ns/schema/2.0",
-					"href": base + "/nodeinfo/2.0",
-				},
-				{
-					"rel":  "http://nodeinfo.diaspora.software/ns/schema/2.1",
-					"href": base + "/nodeinfo/2.1",
-				},
+		links := []map[string]string{
+			{
+				"rel":  "http://nodeinfo.diaspora.software/ns/schema/2.0",
+				"href": base + "/nodeinfo/2.0",
+			},
+			{
+				"rel":  "http://nodeinfo.diaspora.software/ns/schema/2.1",
+				"href": base + "/nodeinfo/2.1",
 			},
 		}
+		// FEP-2677 (#1521): advertise the relay/Application actor from the
+		// NodeInfo index too, same as Gancio does for its instance actor, so
+		// remote servers can discover it without a WebFinger lookup. Gated on
+		// RelayActorName like the relay actor/routes themselves (frontend.go).
+		if cfg.RelayActorName != "" {
+			links = append(links, map[string]string{
+				"rel":  "https://www.w3.org/ns/activitystreams#Application",
+				"href": actorURL(cfg, cfg.RelayActorName),
+			})
+		}
+		resp := map[string]any{"links": links}
 		writeJSONResponse(w, http.StatusOK, resp)
 	}
 }

@@ -5,7 +5,6 @@ import (
 	"html/template"
 	"log"
 	"net/http"
-	"strconv"
 )
 
 // adminEntity[E] drives the six standard admin CRUD handlers (list, new page,
@@ -127,9 +126,8 @@ func (e *adminEntity[E]) EditPage(cfg *Config, tmpls *Templates, client *DansalC
 		if !ok {
 			return
 		}
-		id, err := parseAdminID(r)
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		item, err := e.getFn(r.Context(), client, id)
@@ -153,9 +151,8 @@ func (e *adminEntity[E]) Save(cfg *Config, tmpls *Templates, client *DansalClien
 		if e.needDeadline {
 			adminWriteDeadline(w)
 		}
-		id, err := parseAdminID(r)
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := parseAdminMultipart(r); err != nil {
@@ -200,9 +197,8 @@ func (e *adminEntity[E]) Delete(cfg *Config, client *DansalClient) http.HandlerF
 		if !ok {
 			return
 		}
-		id, err := parseAdminID(r)
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := e.deleteFn(r.Context(), client, id, getSessionToken(r)); err != nil {
@@ -226,9 +222,8 @@ func adminSubResourceDeleteHandler(
 		if !ok {
 			return
 		}
-		id, err := parseAdminID(r)
-		if err != nil {
-			http.NotFound(w, r)
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
 			return
 		}
 		if err := deleteFn(r.Context(), id, getSessionToken(r)); err != nil {
@@ -236,9 +231,4 @@ func adminSubResourceDeleteHandler(
 		}
 		http.Redirect(w, r, editPath(id), http.StatusSeeOther)
 	}
-}
-
-// parseAdminID reads the {id} path value shared by every admin {id} route.
-func parseAdminID(r *http.Request) (int, error) {
-	return strconv.Atoi(r.PathValue("id"))
 }

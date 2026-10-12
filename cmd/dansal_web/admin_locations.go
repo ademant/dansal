@@ -174,9 +174,8 @@ func adminLocationJSONHandler(client *DansalClient) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			writeJSONError(w, r, http.StatusBadRequest, "invalid id")
+		id, ok := intPathValueOrJSON400(w, r, "id", "invalid id")
+		if !ok {
 			return
 		}
 		loc, err := client.GetLocation(r.Context(), id)
@@ -195,9 +194,8 @@ func adminLocationUpdateJSONHandler(cfg *Config, client *DansalClient) http.Hand
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			writeJSONError(w, r, http.StatusBadRequest, "invalid id")
+		id, ok := intPathValueOrJSON400(w, r, "id", "invalid id")
+		if !ok {
 			return
 		}
 		existing, err := client.GetLocation(r.Context(), id)
@@ -427,6 +425,7 @@ func adminLocationEditPageHandler(cfg *Config, tmpls *Templates, client *DansalC
 		}
 
 		title := i18n.T(r, "admin_edit")
+		flash := flashTake(r.URL.Query().Get("msg"))
 		renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, AdminLocationEditData{
 			Location:      loc,
 			Parent:        parent,
@@ -435,7 +434,7 @@ func adminLocationEditPageHandler(cfg *Config, tmpls *Templates, client *DansalC
 			From:          safeReturnPath(r.URL.Query().Get("from")),
 			AssignedOrgs:  assignedOrgs,
 			AvailableOrgs: availableOrgs,
-			Saved:         r.URL.Query().Get("saved") == "1",
+			Saved:         flash.LocationSaved,
 		}))
 	}
 }
@@ -523,7 +522,7 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		}
 		client.invalidateLocations()
 		go notifyIndexNowPaths(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []string{fmt.Sprintf("/location/%d", id)})
-		http.Redirect(w, r, fmt.Sprintf("/admin/locations/%d/edit?saved=1", id), http.StatusSeeOther)
+		flashRedirect(w, r, fmt.Sprintf("/admin/locations/%d/edit", id), flashToken(nil), FlashMsg{LocationSaved: true})
 	}
 }
 
@@ -832,9 +831,8 @@ func adminRoomQuickCreateHandler(client *DansalClient) http.HandlerFunc {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			writeJSONError(w, r, http.StatusBadRequest, "invalid location id")
+		id, ok := intPathValueOrJSON400(w, r, "id", "invalid location id")
+		if !ok {
 			return
 		}
 		var req struct {
@@ -865,9 +863,8 @@ func adminRoomQuickEditHandler(client *DansalClient) http.HandlerFunc {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		roomID, err := strconv.Atoi(r.PathValue("room_id"))
-		if err != nil {
-			writeJSONError(w, r, http.StatusBadRequest, "bad room_id")
+		roomID, ok := intPathValueOrJSON400(w, r, "room_id", "bad room_id")
+		if !ok {
 			return
 		}
 		body, err := io.ReadAll(r.Body)
@@ -928,14 +925,13 @@ func adminLocationSitePlanUploadHandler(cfg *Config, client *DansalClient) http.
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			writeJSONError(w, r, http.StatusBadRequest, "invalid id")
+		id, ok := intPathValueOrJSON400(w, r, "id", "invalid id")
+		if !ok {
 			return
 		}
 		// Extend deadline: AVIF re-encode can take 20-40 s.
 		adminWriteDeadline(w)
-		if err := r.ParseMultipartForm(32 << 20); err != nil {
+		if err := parseMultipartWithLimit(r, maxEventImageMultipartSize); err != nil {
 			writeJSONError(w, r, http.StatusBadRequest, "invalid multipart")
 			return
 		}
@@ -981,9 +977,8 @@ func adminLocationSitePlanDeleteHandler(cfg *Config, client *DansalClient) http.
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			writeJSONError(w, r, http.StatusBadRequest, "invalid id")
+		id, ok := intPathValueOrJSON400(w, r, "id", "invalid id")
+		if !ok {
 			return
 		}
 		token := getSessionToken(r)
@@ -1003,9 +998,8 @@ func adminLocationPlanPositionHandler(cfg *Config, client *DansalClient) http.Ha
 		if !ok {
 			return
 		}
-		roomID, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			writeJSONError(w, r, http.StatusBadRequest, "invalid id")
+		roomID, ok := intPathValueOrJSON400(w, r, "id", "invalid id")
+		if !ok {
 			return
 		}
 		var req struct {

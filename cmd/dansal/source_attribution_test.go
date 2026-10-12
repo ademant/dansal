@@ -26,9 +26,9 @@ func TestEventResponseIncludesSourceAttribution(t *testing.T) {
 		t.Fatalf("insert event: %v", err)
 	}
 
-	event, err := fetchEventByID(db, eventID)
+	event, err := getEventByID(db, eventID)
 	if err != nil {
-		t.Fatalf("fetchEventByID: %v", err)
+		t.Fatalf("getEventByID: %v", err)
 	}
 	if event.SourceAttribution != "Example Verein" {
 		t.Errorf("SourceAttribution = %q, want %q", event.SourceAttribution, "Example Verein")
@@ -47,9 +47,9 @@ func TestEventResponseIncludesSourceAttribution(t *testing.T) {
 	if err != nil {
 		t.Fatalf("insert second event: %v", err)
 	}
-	event2, err := fetchEventByID(db, eventID2)
+	event2, err := getEventByID(db, eventID2)
 	if err != nil {
-		t.Fatalf("fetchEventByID: %v", err)
+		t.Fatalf("getEventByID: %v", err)
 	}
 	if event2.SourceAttribution != "" || event2.SourceLicence != "" || event2.SourceTermsURL != "" {
 		t.Errorf("manual event source fields = %q %q %q, want all empty", event2.SourceAttribution, event2.SourceLicence, event2.SourceTermsURL)

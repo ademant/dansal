@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 )
 
 // EventDescriptionPageData holds what the dedicated description editor
@@ -22,9 +21,8 @@ func adminEventDescriptionPageHandler(cfg *Config, tmpls *Templates, client *Dan
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.Error(w, "invalid event id", http.StatusBadRequest)
+		id, ok := intPathValueOr400(w, r, "id", "invalid event id")
+		if !ok {
 			return
 		}
 		tok := getSessionToken(r)
@@ -48,9 +46,8 @@ func adminEventDescriptionSaveHandler(client *DansalClient) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(r.PathValue("id"))
-		if err != nil {
-			http.Error(w, "invalid event id", http.StatusBadRequest)
+		id, ok := intPathValueOr400(w, r, "id", "invalid event id")
+		if !ok {
 			return
 		}
 		tok := getSessionToken(r)

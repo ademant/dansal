@@ -116,6 +116,23 @@ func adminTimetablePageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 			locByID[l.ID] = l
 		}
 
+		// resolveLocation looks a location up by id, falling back to a direct
+		// API fetch when it's missing from allLocs — which GetLocations caps
+		// at apiListLimit rows (#1541), so any location past that row is
+		// otherwise silently invisible here regardless of how it's needed
+		// (a room's parent building, or the building's own name below).
+		resolveLocation := func(id int) Location {
+			if l, ok := locByID[id]; ok {
+				return l
+			}
+			l, err := client.GetLocation(ctx, id)
+			if err != nil {
+				log.Printf("timetable: resolve location %d: %v", id, err)
+				return Location{}
+			}
+			return l
+		}
+
 		// Collect the set of buildings (parent locations) whose rooms should be
 		// offered: primary building, extra event locations (multi-venue), plus
 		// the parent of any room already referenced by an existing timetable entry.
@@ -136,7 +153,7 @@ func adminTimetablePageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 			if e.LocationID == nil {
 				continue
 			}
-			if l, ok := locByID[*e.LocationID]; ok && l.ParentID != nil {
+			if l := resolveLocation(*e.LocationID); l.ParentID != nil {
 				buildingIDs[*l.ParentID] = true
 			}
 		}
@@ -150,7 +167,7 @@ func adminTimetablePageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 		}
 		var buildings []buildingGroup
 		for bid := range buildingIDs {
-			bl := locByID[bid]
+			bl := resolveLocation(bid)
 			name := bl.ShortName
 			if name == "" {
 				name = bl.Location
@@ -222,11 +239,14 @@ func adminTimetablePageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 			rooms = ordered
 		}
 
+		// topLocID (when set) is always in buildingIDs, so its name was
+		// already resolved — correctly, even past apiListLimit — by the
+		// buildings loop above; no need for a second, independent lookup.
 		topLocName := ""
-		if bl, ok := locByID[topLocID]; ok {
-			topLocName = bl.ShortName
-			if topLocName == "" {
-				topLocName = bl.Location
+		for _, b := range buildings {
+			if b.id == topLocID {
+				topLocName = b.name
+				break
 			}
 		}
 

@@ -74,6 +74,10 @@ Tokens are issued by:
 
 **Public endpoints** return published data only. Authenticated requests may return additional fields (e.g., unpublished events for the owner's organization).
 
+**Caller identity comes only from `Authorization`.** Any `X-User-ID`, `X-User-Role` or `X-Session-ID` header a client sends is discarded before the request reaches a handler (#1533), so these headers can't be used to impersonate another account.
+
+**Client IP:** the address used for rate limits and publisher-token pinning is the TCP peer, except that `X-Forwarded-For` / `X-Real-IP` are honoured when the peer is loopback — i.e. the request came through the local nginx reverse proxy (#1534). A client connecting directly can't spoof its IP by sending those headers.
+
 ## Roles and Permissions
 
 | Role | Permissions |
@@ -1060,6 +1064,25 @@ IDs are integers throughout the API, not strings.
 { "ids": [1, 2, 3], "organization_id": 7 }
 ```
 
+### Duplicate review
+
+Imports match incoming events against existing ones in tiers: exact UID; exact URL plus start time ±3h; location plus start time ±3h; title plus start time ±3h when no location resolved; and, as a last resort, same feed plus start time ±3h plus fuzzy title overlap. A location match only auto-merges when it's clearly the same event — same feed, or another feed with an identical or fuzzy-matching title, since titles get rewritten over an event's life and one venue can host several events at the same time. Other location matches, and the last tier, are inserted as new and both rows are flagged for review rather than merged. Admins resolve flagged pairs with:
+
+```
+GET  /api/v1/events/{id}/duplicate-check        # admin: flag state, partner, collision reasons, other colliding events
+POST /api/v1/events/{id}/duplicate-resolve      # admin: {"mode": "accept"} or {"mode": "resolved"}
+POST /api/v1/events/{id}/recheck-source         # re-fetch the event's original import URL and merge changes
+POST /api/v1/events/{id}/pending-edit/approve   # apply a visitor's pending edit (same auth as PATCH)
+POST /api/v1/events/{id}/pending-edit/reject    # discard it
+```
+
+- `"accept"` — the two are different events; clears the flags.
+- `"resolved"` — clears the flags only if the pair no longer collides (starts less than 3h apart with the same location and title, or the same feed and a fuzzy-matching title). Otherwise `409` with the remaining check result.
+
+Any `PUT` or `PATCH` to an event re-runs this check, so a by-hand fix of date or room clears the flag without a separate call.
+
+`recheck-source` returns `400` when the event has no source URL and `502` when the re-fetch fails.
+
 ### Syndication
 
 ```
@@ -1190,6 +1213,8 @@ POST   /api/v1/feeds/suggestions/{id}/reject
 Authentication required except where marked public. Fetch sources are iCal/JSON/RSS feeds imported automatically by the `dansal-fetch` timer.
 
 **Note:** until #1384 this collection was `/api/v1/fetchurl` (and `/api/v1/fetchurl-suggestions`); those paths still work as [deprecated aliases](#deprecated-routes).
+
+**SSRF guard:** feed URLs are fetched through a client that refuses private, loopback and link-local addresses. The same guard covers the `robots.txt` request dansal makes for each feed host (#1535), so a feed can't be pointed at internal services through that side request.
 
 **`category_filter` (array of strings, optional, iCal sources only):** when set, only VEVENTs whose `CATEGORIES` intersect the filter (case-insensitively) are imported — an empty/unset filter imports everything, same as before. Useful for a shared feed that mixes multiple event types (e.g. import only `CATEGORIES:Balfolk` entries from a venue's general events calendar) without needing separate title-keyword heuristics.
 

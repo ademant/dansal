@@ -12,6 +12,7 @@ For the `dansal` REST API (`/api/v1/...`), see [API.md](API.md).
 ## Table of Contents
 
 - [Content Pages](#content-pages)
+- [Legacy Gancio URLs](#legacy-gancio-urls)
 - [Feeds](#feeds)
 - [Discovery Files](#discovery-files)
 - [Map Tile Proxy](#map-tile-proxy)
@@ -104,6 +105,28 @@ year, `?year=YYYY` (defaults to the current year), meant for an organizer
 scoping a new festival date to see the whole year's existing landscape at a
 glance.
 
+## Legacy Gancio URLs
+
+dansal-web replaced a Gancio site, so the old URL structure is still answered
+explicitly rather than falling through to the homepage (which search engines
+would treat as a soft 404):
+
+```
+GET /event/{slug}            # 410 Gone — Gancio event slugs have no current equivalent
+GET /tag/{slug}              # 410 Gone
+GET /collection/{name}       # 410 Gone
+GET /place/{id}/{slug}       # 410 Gone
+GET /export                  # 410 Gone
+GET /media/{file}            # 410 Gone — legacy event images (#1458)
+GET /feed/rss[/][place/{id}] # 301 → /feed/events.rss
+GET /feed/                   # 301 → /feed/events.rss
+GET /add                     # 301 → /events/suggest
+```
+
+Gancio's RSS endpoints have a direct replacement, so they redirect. The
+identifiers above belong to a different database, so they can't be mapped to a
+current resource and return `410` instead (#1433).
+
 ## Feeds
 
 ```
@@ -144,6 +167,8 @@ GET /.well-known/webfinger           # ActivityPub actor discovery (?resource=ac
 GET /.well-known/host-meta           # LRDD pointer to WebFinger, XRD/XML (RFC 6415)
 GET /.well-known/host-meta.json      # same, JSON LRDD — some Fediverse clients prefer this over XML
 GET /.well-known/nodeinfo            # ActivityPub server metadata pointer
+GET /nodeinfo/2.0                    # NodeInfo 2.0 document
+GET /nodeinfo/2.1                    # NodeInfo 2.1 document
 GET /.well-known/security.txt        # security contact (RFC 9116)
 GET /{indexnow-key}.txt              # IndexNow ownership verification (only if a key is configured)
 ```
@@ -166,6 +191,11 @@ rel="alternate" type="application/activity+json">` pointing specifically at
 the relay actor (`web.yaml`'s `relay_actor_name`, e.g. `/org/relay`) —
 issue #951 — so the site's federation identity is discoverable from any
 page, not only the pages of orgs that happen to have their own actor.
+
+`/.well-known/nodeinfo` links to both NodeInfo schema versions and, when a
+relay actor is configured (`relay_actor_name`), also advertises that relay
+actor as an `Application` (FEP-2677, #1521) so remote servers can find it
+without a WebFinger lookup.
 
 `/{indexnow-key}.txt` is served dynamically from the `indexnow_key` set in
 webmin's site-config — the path segment must exactly match `{key}.txt`, any
@@ -233,7 +263,8 @@ GET /embed/org/{slug}        # organization profile card with upcoming events
 GET /embed/next              # minimal upcoming events ticker
 GET /embed/locations         # map of all locations with event counts
 GET /embed/calendar          # combined map + filterable event list
-GET /embed/manifest.json     # machine-readable description of the six widgets above
+GET /embed/timetable/{id}    # one event's full multi-room, multi-day timetable grid
+GET /embed/manifest.json     # machine-readable description of every widget above
 ```
 
 Designed to be placed in an `<iframe>` on a third-party site (e.g. the

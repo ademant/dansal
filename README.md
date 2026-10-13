@@ -3,7 +3,7 @@
 **Open-source calendar and event platform for folk and social dance communities**
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Go](https://img.shields.io/badge/go-1.26%2B-blue)](https://go.dev/)
+[![Go](https://img.shields.io/badge/go-1.27%2B-blue)](https://go.dev/)
 [![SQLite](https://img.shields.io/badge/database-SQLite-blue)](https://sqlite.org/)
 
 ## 🎯 What is dansal?
@@ -24,7 +24,7 @@ dansal helps dance communities organize, publish, and discover events — from b
 - Recurring event series with shared banner image and template defaults
 - Image uploads (AVIF/JPEG) for events, series, organizations, musicians, venues, and instructors; AI-generated badge overlay when flagged
 - Suggest-an-event wizard for unauthenticated submissions (with image upload)
-- Multi-step duplicate detection (UID, URL, location+time, title+time, fuzzy)
+- Duplicate detection (UID, URL, location+time, title+time, fuzzy) with a review queue for uncertain matches
 - Timetable per event (schedule slots)
 
 **Feeds & import**
@@ -89,10 +89,10 @@ dansal helps dance communities organize, publish, and discover events — from b
 ### Sophisticated Data Management
 - **5-tier deduplication** prevents duplicate events from multiple feeds:
   1. Exact UID match
-  2. Exact URL match
-  3. Location + start_time ±3h
-  4. Title + start_time ±3h
-  5. Fuzzy title + source + start_time ±3h (flags for admin review)
+  2. Exact URL match (plus start_time ±3h)
+  3. Location + start_time ±3h — auto-merges only for the same feed or a matching title; other location matches are flagged for review, since one venue can host several events at once
+  4. Title + start_time ±3h (when no location resolved)
+  5. Same feed + fuzzy title + start_time ±3h (inserted as new and flagged for admin review)
 - **Location aliasing**: Feed locations auto-match to DB locations after first manual mapping
 - **Parent-child locations**: Rooms inherit address/coordinates/parking from parent buildings
 - **Geocoding cache**: Reduces external API calls
@@ -115,7 +115,7 @@ dansal helps dance communities organize, publish, and discover events — from b
 - **SQLite databases**: No external DB server required, easy backups
 
 ### Internationalization
-- **12 built-in languages**: Basque (br), Catalan (ca), Czech (cs), German (de), English (en), Spanish (es), French (fr), Italian (it), Dutch (nl), Polish (pl), Portuguese (pt), Ukrainian (uk)
+- **12 built-in languages**: Breton (br), Catalan (ca), Czech (cs), German (de), English (en), Spanish (es), French (fr), Italian (it), Dutch (nl), Polish (pl), Portuguese (pt), Ukrainian (uk)
 
 ## 📖 Documentation
 
@@ -126,13 +126,14 @@ dansal helps dance communities organize, publish, and discover events — from b
 | System administrators | [Admin Guide](ADMIN_GUIDE.md) |
 | Developers | [Developer Guide](DEVELOPER_GUIDE.md) |
 | REST API reference | [API.md](API.md) |
+| Web frontend routes (pages, feeds, embeds) | [WEB.md](WEB.md) |
 | Docker deployment | [Docker Guide](DOCKER.md) |
 
 ## 🔧 Quick Start
 
 ```bash
 # 1. Build
-go version   # must be 1.26+
+go version   # must be 1.27+
 make build
 
 # 2. Set up a new instance (interactive — asks for ports, domain, SMTP, …)
@@ -174,3 +175,7 @@ Contributions are welcome — code, translations, and documentation alike. See [
 ## 📜 License
 
 [MIT License](LICENSE) — Copyright © 2024 dansal contributors
+
+---
+
+_This README was last updated at commit [`a45ebec`](https://github.com/ademant/dansal/commit/a45ebec) (2026-10-13)._

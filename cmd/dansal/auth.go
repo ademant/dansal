@@ -513,12 +513,22 @@ func logout(w http.ResponseWriter, r *http.Request) {
 //
 // ok=true means a valid credential was resolved and the request headers
 // were set. ok=false has two cases, distinguished by noAuth:
-//   - noAuth=true: no Authorization header was present. resolveCaller wrote
-//     nothing; the caller decides how to proceed (reject or continue
-//     unauthenticated).
+//   - noAuth=true: no Authorization header was present. The caller decides
+//     how to proceed (reject or continue unauthenticated).
 //   - noAuth=false: the header was present but malformed/invalid/expired.
 //     resolveCaller has already written a 401 error response.
+//
+// #1533: a client-forged X-User-ID/X-User-Role/X-Session-ID on the
+// incoming request must never reach a handler. OptionalTokenMiddleware
+// calls the handler even when ok=false/noAuth=true (that's its purpose —
+// allow unauthenticated requests through with reduced access), so these
+// headers are stripped unconditionally up front, before anything else
+// runs, rather than only being set on success as before.
 func resolveCaller(w http.ResponseWriter, r *http.Request) (ok bool, noAuth bool) {
+	r.Header.Del("X-User-ID")
+	r.Header.Del("X-User-Role")
+	r.Header.Del("X-Session-ID")
+
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		return false, true

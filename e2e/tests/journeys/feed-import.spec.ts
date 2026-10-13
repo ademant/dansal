@@ -161,6 +161,12 @@ test.describe("Admin: feed import, preview, and duplicate detection", () => {
     await page.locator("#save-btn").click();
     await page.waitForURL(/\/admin\/events\/\d+\/edit/);
     const seedId = idFromEditURL(page.url());
+    // Captured now, not recomputed from baseStart later: the single-event
+    // import's pre-filled form round-trips through minute-granularity
+    // date/time inputs, so the saved start_time can be a few seconds off
+    // baseStart's raw JS value even though nothing is wrong — "unchanged"
+    // below means "same as right after this save", not "equals baseStart".
+    const seedOriginal = await authedJSON(page, token, `/api/v1/events/${seedId}`);
 
     // -- The real batch: a brand-new event, a near-duplicate of the seed
     //    (same location, start time within the ±3h tier-3 window, but a
@@ -212,8 +218,22 @@ test.describe("Admin: feed import, preview, and duplicate detection", () => {
     const newRow = page.locator("tr").filter({ hasText: newTitle });
     await expect(newRow.locator(".badge.status-new")).toBeVisible();
 
+    // #1539: #1424 changed tier 3 so a manual import (no persisted feed
+    // source — the preview→confirm path here never carries one) never
+    // auto-merges on venue+time alone; it's inserted as new and flagged for
+    // review instead, so the row shows "new" + a possible-duplicate hint
+    // pointing at the seed, not "updated". A real tier-3 auto-merge (same
+    // persisted feed source re-sending the event) has no feasible e2e
+    // fixture here — building one needs a reachable feed URL, and the SSRF
+    // guard blocks every address this sandbox could serve one from (the
+    // same reason this spec uploads a file instead of configuring a feed
+    // to begin with) — so that path stays covered by
+    // TestTier3MergeOrReview (dedup_test.go) only.
     const dupRow = page.locator("tr").filter({ hasText: dupTitle });
-    await expect(dupRow.locator(".badge.status-updated")).toBeVisible();
+    await expect(dupRow.locator(".badge.status-new")).toBeVisible();
+    const dupHint = dupRow.locator(".badge.status-hint");
+    await expect(dupHint).toBeVisible();
+    await expect(dupHint).toHaveAttribute("href", `/admin/events/${seedId}/edit`);
 
     // Manually map the alias event's feed-only location name to L2.
     const aliasLocRow = page.locator("tr").filter({ hasText: aliasFeedLocName });
@@ -244,28 +264,49 @@ test.describe("Admin: feed import, preview, and duplicate detection", () => {
     expect(createdNew.organization_id).toBe(orgId);
     expect(createdNew.is_published).toBe(true);
 
-    // -- The near-duplicate merged into the seed event (tier 3: same
-    //    location + start time within 3h, no title check) rather than
-    //    creating a second row at L1. The import-confirm path creates
-    //    events with no `source` set (the preview→confirm round-trip
-    //    doesn't carry the feed's identity through), which takes
-    //    insertEvent's plain (non-source) update branch — that one
-    //    updates start_time/end_time/description but deliberately leaves
-    //    title alone (titles are expected to be hand-edited over an
-    //    event's lifetime), so assert on those instead. --
+    // -- The near-duplicate did NOT merge into the seed event (#1424/#1539:
+    //    tier 3 only auto-merges a venue+time match when it's clearly the
+    //    same event — same persisted feed source, or another feed with an
+    //    overlapping title; neither applies to an ad hoc manual import). It
+    //    was inserted as its own row at L1, and both it and the seed were
+    //    flagged for review — the seed itself is left completely
+    //    untouched. --
     const seedAfter = await authedJSON(page, token, `/api/v1/events/${seedId}`);
-    expect(seedAfter.description).toBe(dupDescription);
-    // iCal DTSTART only carries second precision — compare at that
-    // granularity rather than exact milliseconds.
-    expect(Math.floor(new Date(seedAfter.start_time).getTime() / 1000)).toBe(
+    expect(seedAfter.title).toBe(seedOriginal.title);
+    expect(seedAfter.description).toBe(seedOriginal.description);
+    expect(seedAfter.start_time).toBe(seedOriginal.start_time);
+    expect(seedAfter.needs_duplicate_review).toBe(true);
+    expect(seedAfter.duplicate_of_id).toBeTruthy();
+
+    // flagDuplicateReview (events.go) points each side at the other, so the
+    // new row's id is right there on the seed — no need to diff a listing.
+    const dupEvent = await authedJSON(
+      page,
+      token,
+      `/api/v1/events/${seedAfter.duplicate_of_id}`
+    );
+    expect(dupEvent.title).toBe(dupTitle);
+    expect(dupEvent.description).toBe(dupDescription);
+    expect(Math.floor(new Date(dupEvent.start_time).getTime() / 1000)).toBe(
       Math.floor(dupStart.getTime() / 1000)
     );
+    expect(dupEvent.needs_duplicate_review).toBe(true);
+    expect(dupEvent.duplicate_of_id).toBe(seedId);
+
     const l1Events = await authedJSON(
       page,
       token,
       `/api/v1/events?location_id=${l1Id}&include_past=true&limit=1000`
     );
-    expect(Array.isArray(l1Events) ? l1Events.length : -1).toBe(1);
+    expect(Array.isArray(l1Events) ? l1Events.length : -1).toBe(2);
+
+    // Flagged pairs must be cleaned up, unlike ordinary seeded events
+    // (e2e-testing skill) — deleting the new row auto-clears the seed's
+    // flag too (hardDeleteEvent's duplicate-review cleanup).
+    await page.request.fetch(`${API_BASE}/api/v1/events/${dupEvent.id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
 
     // -- The manually mapped location persisted the feed's name as an
     //    alias on L2, so future imports of the same feed auto-match. --

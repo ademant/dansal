@@ -31,6 +31,11 @@ provide.
   (`helpers/mailguard.ts`) instead of timing out.
 - **Admin CLI access** for user fixtures: `ADMIN_CLI` / `ADMIN_SOCKET`
   (see the skill).
+- **Webmin** (optional) for `security-regressions.spec.ts`'s #1536 coverage:
+  `WEBMIN_URL` pointing at a running `dansal-webmin` instance, e.g.
+  `http://localhost:8090`. When unset, that one test is skipped rather than
+  failing — most target instances (including `dev` as of writing) don't run
+  webmin alongside the suite.
 
 ## Running against dev
 

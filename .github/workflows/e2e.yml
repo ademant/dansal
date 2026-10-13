@@ -96,6 +96,17 @@ jobs:
           # reaches /dashboard and just times out after 30s (#1530).
           sudo sed -i 's|dansal_url: "http://127.0.0.1:8000"|dansal_url: "http://127.0.0.1:18000"|' /etc/dansal/e2e/web.yaml
           grep -q 'dansal_url: "http://127.0.0.1:18000"' /etc/dansal/e2e/web.yaml
+          # Same dansal_url fix as web.yaml above, for webmin's own calls to
+          # the API (admin-session revalidation, GET /api/v1/me) — #1537's
+          # webmin CSRF e2e coverage needs dansal_webmin actually reachable.
+          # admin_socket/web_db_path are left untouched: both already match
+          # packaging's defaults verbatim (/var/lib/dansal/dansal.sock,
+          # /var/lib/dansal-web/web.db — the same paths config.yaml/web.yaml
+          # resolve to unsed, per the comment atop this step), so dansal_web's
+          # already-chowned/created web.db and dansal's already-created
+          # socket are exactly what webmin needs, no further sed required.
+          sudo sed -i 's|dansal_url: "http://127.0.0.1:8000"|dansal_url: "http://127.0.0.1:18000"|' /etc/dansal/e2e/webmin.yaml
+          grep -q 'dansal_url: "http://127.0.0.1:18000"' /etc/dansal/e2e/webmin.yaml
           # Redirected (rather than left on the step's own stdout) because a
           # background `&` process's output isn't captured once this step's
           # synchronous commands finish — a startup failure here otherwise
@@ -105,6 +116,8 @@ jobs:
           sleep 2
           ./dansal_web --config /etc/dansal/e2e/web.yaml > /tmp/dansal_web.log 2>&1 &
           sleep 2
+          ./dansal_webmin --config /etc/dansal/e2e/webmin.yaml > /tmp/dansal_webmin.log 2>&1 &
+          sleep 2
 
       - name: Run journey tests
         run: |
@@ -113,6 +126,7 @@ jobs:
         env:
           BASE_URL: http://localhost:18080
           API_URL: http://localhost:18000
+          WEBMIN_URL: http://localhost:18090
           ADMIN_SOCKET: /var/lib/dansal/dansal.sock
           ADMIN_NO_SUDO: "1"
           # Without this, helpers/seed.ts's ADMIN_CLI defaults to the bare
@@ -126,6 +140,7 @@ jobs:
         run: |
           echo "=== dansal.log ==="; cat /tmp/dansal.log || true
           echo "=== dansal_web.log ==="; cat /tmp/dansal_web.log || true
+          echo "=== dansal_webmin.log ==="; cat /tmp/dansal_webmin.log || true
 
       - name: Upload test results
         if: always()

@@ -76,9 +76,24 @@ func (s Session[T]) Clear(w http.ResponseWriter) {
 	s.cookies.Clear(w)
 }
 
-// ClientIP returns the client's IP address, honouring X-Forwarded-For and
-// X-Real-IP set by the reverse proxy and falling back to the remote peer.
+// ClientIP returns the client's IP address, honouring X-Forwarded-For/
+// X-Real-IP only when the request's actual TCP peer is loopback — i.e. it
+// arrived via the local nginx reverse proxy, which dansal-web/dansal-webmin
+// always bind behind (127.0.0.1 listen addresses, see CLAUDE.md). Anything
+// else is a direct connection, so those headers are client-controlled and
+// must not be trusted: otherwise a caller can spoof a fresh X-Forwarded-For
+// per request to defeat IP-keyed rate limiting (#1534).
 func ClientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
+		if host != "" {
+			return host
+		}
+		return r.RemoteAddr
+	}
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		if parts := strings.Split(xff, ","); len(parts) > 0 {
 			return strings.TrimSpace(parts[0])
@@ -87,10 +102,7 @@ func ClientIP(r *http.Request) string {
 	if xr := r.Header.Get("X-Real-IP"); xr != "" {
 		return strings.TrimSpace(xr)
 	}
-	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		return host
-	}
-	return r.RemoteAddr
+	return host
 }
 
 // ParseExpiry parses an API-provided session expiry (RFC3339), falling back to

@@ -49,7 +49,13 @@ function futureDateStr(): string {
 }
 
 /**
- * Fill the 6-step wizard and submit as the current page's user.
+ * Fill and submit the six-step wizard on whatever page it is currently
+ * showing.
+ *
+ * Split out of submitSuggestWizard so the "suggest another event" scenario
+ * (#1468) can reuse it after clicking the done page's button — that lands on
+ * the wizard via ?next=1 instead of a fresh goto, and the tab-local
+ * sessionStorage prefill is exactly what that scenario is asserting.
  *
  * The custom date-picker widget is bypassed via page.evaluate() — we set the
  * hidden sg-date-from / sg-date-to inputs directly.  The form's onsubmit
@@ -60,18 +66,16 @@ function futureDateStr(): string {
  * only required in that configuration — which is exactly when we need it to
  * receive the manage-link.
  */
-async function submitSuggestWizard(
+async function submitWizardOnCurrentPage(
   page: import("@playwright/test").Page,
   title: string,
-  email: string
-): Promise<string> {
-  await page.goto(`${WEB_BASE}/events/suggest`);
-
+  email: string,
+  dateStr: string
+): Promise<void> {
   // Step 1: fill title
   await page.fill("#wiz-title", title);
 
   // Set date hidden inputs (bypasses the calendar popup widget)
-  const dateStr = futureDateStr();
   await page.evaluate((d) => {
     (document.getElementById("sg-date-from") as HTMLInputElement).value = d;
     (document.getElementById("sg-date-to") as HTMLInputElement).value = d;
@@ -84,7 +88,8 @@ async function submitSuggestWizard(
     await page.locator("#wiz-next").click();
   }
 
-  // Step 6: fill email (required when HintSMTP is true)
+  // Step 6: fill email (required when HintSMTP is true). On the ?next=1 page
+  // it is already prefilled from sessionStorage — refilling is a no-op.
   const emailInput = page.locator('input[name="email"]');
   if (await emailInput.isVisible()) {
     await emailInput.fill(email);
@@ -100,12 +105,36 @@ async function submitSuggestWizard(
   // as board.spec.ts's #1260 form-token wait.
   await page.waitForTimeout(1100);
   // Submit (the form's onsubmit listener reads sg-date-from / sg-start-time
-  // and writes the combined ISO datetime into sg-start / name="start_time")
+  // and writes the combined ISO datetime into sg-start / name="start_time").
+  // On success the handler 303s to /events/suggest/done; on any rejection
+  // (rate limit, throttle, pending lock, bad token) suggestError re-renders
+  // the wizard in place with a .form-error alert and the URL stays on
+  // /events/suggest/submit — so wait for either outcome instead of blocking
+  // for the full test timeout on a navigation that will never happen.
   await page.locator('.wiz-step[data-step="6"] button[type="submit"]').click();
-  await page.waitForURL(/\/events\/suggest\/done/);
+  try {
+    await page.waitForURL(/\/events\/suggest\/done/, { timeout: 15000 });
+  } catch {
+    const err = page.locator(".form-error").first();
+    if (await err.count()) {
+      throw new Error(
+        `suggest submit was rejected: ${(await err.innerText()).trim()}`
+      );
+    }
+    throw new Error("suggest submit did not reach the done page");
+  }
+}
 
+async function submitSuggestWizard(
+  page: import("@playwright/test").Page,
+  title: string,
+  email: string
+): Promise<string> {
+  await page.goto(`${WEB_BASE}/events/suggest`);
   // Return the date we set so the manage-link steps can assert the prefill
   // actually displayed it (#1389).
+  const dateStr = futureDateStr();
+  await submitWizardOnCurrentPage(page, title, email, dateStr);
   return dateStr;
 }
 
@@ -454,5 +483,148 @@ test("suggest-wizard: full lifecycle (A→C→B→D→approve)", async ({
   } finally {
     await anonCtx.close();
     await deleteSuggestionsByTitle(page, adminToken, title);
+  }
+});
+
+/**
+ * Suggest-an-event wizard — several events in a row from ONE email address
+ * (#1468: "suggest another event" button, tab-local prefill, remaining-count
+ * hint).
+ *
+ * On top of #1467's event-scoped double-submit lock, the done page's
+ * "suggest another event" button links to /events/suggest?next=1, which
+ * restores only the tab-local (sessionStorage) identity prefill — suggester
+ * name/email, contact, URL, venue. Title, dates, description, tags, people
+ * and timetable deliberately start empty so the next event is entered fresh.
+ * This scenario files a second, different event with the same visitor and
+ * address, and asserts the per-address remaining count decremented and both
+ * suggestions are queued for review under that one address.
+ *
+ * ⚠ Rate-limit budget: POST /api/v1/events/suggest is capped at
+ * NewRateLimiter(3, 10*time.Minute) keyed on the CLIENT IP ALONE
+ * (cmd/dansal/suggest.go) — not ip+user-agent like the web tier's
+ * publicThrottle, so the per-run unique UA this suite otherwise uses to dodge
+ * throttles does NOT help here. dansal_web does not forward the visitor IP to
+ * the API for this call (only Login/UseMagicLogin set X-Forwarded-For), so
+ * every suggestion the suite submits through the web form is charged to the
+ * same loopback bucket. This test spends 2 and suggest-wizard's lifecycle
+ * spends 1: the whole 10-minute budget for one project. Running both projects
+ * back-to-back, or re-running with a recent earlier run still inside the
+ * window, will start getting HTTP 429 (surfaced by the web tier as the
+ * generic suggest_error_submit message). Space runs out, restart the API
+ * (clears the in-memory limiter), or run a single project while iterating.
+ */
+test("suggest-wizard: several events in a row with one email address (#1468)", async ({
+  page,
+  browser,
+}) => {
+  skipWithoutMailbox(); // #1423
+  const checkResp = await page.request.fetch(`${WEB_BASE}/events/suggest`);
+  if (checkResp.status() === 404) {
+    test.skip(
+      true,
+      "suggest not configured (set smtp_sendmail in web.yaml to run this test)"
+    );
+    return;
+  }
+
+  // uniqueTitle() is Date.now()-based, so two calls in the same millisecond
+  // would collide — suffix each so the two events are always distinct (and
+  // therefore never dedup against each other).
+  const title1 = `${uniqueTitle()} A`;
+  const title2 = `${uniqueTitle()} B`;
+  const SUBMITTER_EMAIL = `e2e-suggest-multi-${Date.now()}@example.com`;
+  const adminToken = await getTokenFromCookie(page);
+
+  const anonCtx = await browser.newContext({
+    storageState: { cookies: [], origins: [] },
+    userAgent: `Mozilla/5.0 (E2E suggest-multi test ${Date.now()})`,
+  });
+  const anonPage = await anonCtx.newPage();
+  try {
+    // ── First event ────────────────────────────────────────────────────
+    await submitSuggestWizard(anonPage, title1, SUBMITTER_EMAIL);
+
+    // The done page offers "suggest another event" and — because this
+    // instance applies the per-address cap (SMTP configured + an address was
+    // given) — a sized remaining hint. Read cap/left from the button's own
+    // link instead of hardcoding the config default.
+    const anotherBtn = anonPage.locator(
+      'a.suggest-done-btn[href^="/events/suggest?next=1"]'
+    );
+    await expect(
+      anotherBtn,
+      "done page must offer to suggest another event"
+    ).toBeVisible();
+    const firstParams = new URLSearchParams(
+      ((await anotherBtn.getAttribute("href")) ?? "").split("?")[1] ?? ""
+    );
+    const cap = Number(firstParams.get("cap"));
+    const left1 = Number(firstParams.get("left"));
+    expect(cap, "the per-address cap must be reported on the done page").toBeGreaterThan(0);
+    expect(
+      left1,
+      "after the first of two suggestions, cap-1 must remain"
+    ).toBe(cap - 1);
+
+    await anotherBtn.click();
+    await anonPage.waitForURL(/\/events\/suggest\?next=1/);
+
+    // ── Tab-local prefill: identity carried over, the event reset ───────
+    // The email is restored from sessionStorage; title/date stay empty so the
+    // visitor is not accidentally resubmitting the previous event.
+    await expect(
+      anonPage.locator('input[name="email"]'),
+      "the suggester address must be prefilled from the previous submit"
+    ).toHaveValue(SUBMITTER_EMAIL);
+    await expect(anonPage.locator("#wiz-title")).toHaveValue("");
+    // The same remaining hint the done page showed rides through ?next=1.
+    await expect(anonPage.locator(".suggest-hint-left")).toBeVisible();
+
+    // ── Second event — same address, different title and date ───────────
+    const date2 = new Date();
+    date2.setDate(date2.getDate() + 31);
+    await submitWizardOnCurrentPage(
+      anonPage,
+      title2,
+      SUBMITTER_EMAIL,
+      date2.toISOString().slice(0, 10)
+    );
+
+    // The remaining count ticked down by exactly one.
+    const secondBtn = anonPage.locator(
+      'a.suggest-done-btn[href^="/events/suggest?next=1"]'
+    );
+    await expect(secondBtn).toBeVisible();
+    const secondParams = new URLSearchParams(
+      ((await secondBtn.getAttribute("href")) ?? "").split("?")[1] ?? ""
+    );
+    expect(
+      Number(secondParams.get("left")),
+      "the second of two suggestions must leave cap-2 remaining"
+    ).toBe(cap - 2);
+
+    // ── Both suggestions wait for review under the one address ──────────
+    const listResp = await page.request.fetch(
+      `${API_BASE}/api/v1/events?is_published=false&include_past=true&limit=1000`,
+      { headers: { Authorization: `Bearer ${adminToken}` } }
+    );
+    const unpublished = await listResp.json();
+    for (const title of [title1, title2]) {
+      const found = Array.isArray(unpublished)
+        ? unpublished.find((e: any) => e.title === title)
+        : undefined;
+      expect(found, `suggestion "${title}" must be waiting for review`).toBeTruthy();
+      expect(
+        found.suggester_email,
+        "both suggestions must be attributed to the one address"
+      ).toBe(SUBMITTER_EMAIL);
+    }
+  } finally {
+    // Delete first: on a timeout the anon context may already be gone, and a
+    // throwing close() in a finally block would skip the cleanup after it.
+    await deleteSuggestionsByTitle(page, adminToken, title1);
+    await deleteSuggestionsByTitle(page, adminToken, title2);
+    await anonCtx.close().catch(() => {});
   }
 });

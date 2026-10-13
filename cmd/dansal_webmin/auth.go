@@ -194,8 +194,52 @@ func clearSession(w http.ResponseWriter) {
 	session.Clear(w)
 }
 
+// requestHostname returns r.Host with any ":port" suffix stripped, so it can
+// be compared against a parsed Origin/Referer URL's Hostname() (which never
+// includes a port either).
+func requestHostname(r *http.Request) string {
+	if host, _, err := net.SplitHostPort(r.Host); err == nil {
+		return host
+	}
+	return r.Host
+}
+
+// checkOrigin implements the same same-origin CSRF defense dansal_web's
+// checkAdminOrigin does for its admin routes (#748), ported here for webmin
+// (#1536): when an Origin or Referer header is present, reject unless its
+// host matches the request's own Host header — webmin has no separate
+// "public domain" config the way dansal_web does (cfg.Domain, for
+// ActivityPub actor URLs), so the Host header nginx forwards
+// (proxy_set_header Host $host; deploy/nginx/dansal-webmin.conf) is the
+// right comparison target: it's the host the request actually reached,
+// which a cross-site attacker cannot control, unlike Origin/Referer. Both
+// headers absent is allowed — SameSite=Lax already covers the primary
+// browser CSRF vector in that case.
+func checkOrigin(r *http.Request) bool {
+	for _, h := range []string{"Origin", "Referer"} {
+		if v := r.Header.Get(h); v != "" {
+			u, err := url.Parse(v)
+			if err != nil || !strings.EqualFold(u.Hostname(), requestHostname(r)) {
+				return false
+			}
+			return true
+		}
+	}
+	return true
+}
+
 func requireLogin(cfg *Config, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// #1536: reject a cross-site write before any auth/session logic runs,
+		// mirroring dansal_web's adminRateLimit/checkAdminOrigin. GET/HEAD are
+		// read-only and left unchecked, same scope as dansal_web's own check
+		// (which only wraps POST/PUT/DELETE routes).
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && !checkOrigin(r) {
+			log.Printf("dansal-webmin: CSRF_BLOCK ip=%s origin=%q referer=%q", webcommon.ClientIP(r), r.Header.Get("Origin"), r.Header.Get("Referer"))
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+
 		// Cert auth: trust the nginx-forwarded mTLS headers only when the
 		// direct peer is loopback — webmin is designed to sit behind a local
 		// nginx that terminates mTLS and sets these headers itself (#994). An

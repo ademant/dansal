@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 )
@@ -143,6 +144,16 @@ func approveFetchSuggestionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// robots.txt (#1545): checked before any org/location is created, so a
+	// refused approval leaves nothing behind. An empty body means no acknowledgement.
+	var ack robotsAckRequest
+	json.NewDecoder(r.Body).Decode(&ack)
+	robotsRule := robotsDisallowRule(r.Context(), row.FeedURL)
+	if robotsRule != "" && !ack.RobotsAck {
+		writeErrorCode(w, "robots_not_acknowledged", fmt.Sprintf("robots.txt restricts this URL (%s); confirm to approve it as manual-only", robotsRule), http.StatusConflict)
+		return
+	}
+
 	var mappings []FetchSuggestLocationMapping
 	json.Unmarshal([]byte(row.LocationMappingsJSON), &mappings)
 
@@ -219,6 +230,9 @@ func approveFetchSuggestionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	src := FetchSource{ID: int(sourceID), URL: row.FeedURL, Type: row.FeedType, OrganizationID: &orgID}
+	if robotsRule != "" {
+		recordRobotsAck(&src, robotsRule, ack.RobotsAckReason, resolveDisplayName(callerID))
+	}
 	allEvents, counts, fetchErr := importFromSource(r.Context(), src)
 	if fetchErr != nil {
 		recordFetchResult(src, 0, fetchErr)

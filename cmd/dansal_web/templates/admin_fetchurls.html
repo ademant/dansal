@@ -52,7 +52,7 @@
   {{if .OrganizationID}}{{with index $.Data.OrgMap (derefInt .OrganizationID)}}{{$orgName = .Name}}{{end}}{{end}}
   <tr data-fetch-row data-fetch-id="{{.ID}}">
     <td class="col-check cell-cb"><input type="checkbox" name="src_ids" value="{{.ID}}" class="row-check"></td>
-    <td class="url-cell cell-url"><span title="{{.URL}}">{{.URL}}</span></td>
+    <td class="url-cell cell-url"><span title="{{.URL}}">{{.URL}}</span>{{if .RobotsAckAt}} <span class="tag" title="{{.RobotsAckRule}}">{{$.Strings.T "fetch_robots_manual_badge"}}</span>{{end}}</td>
     <td class="cell-type">{{.Type}}</td>
     <td class="mobile-hide">{{range .Tags}}<span class="tag">{{.}}</span>{{end}}</td>
     <td class="cell-org">{{$orgName}}</td>

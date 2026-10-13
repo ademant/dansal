@@ -135,6 +135,11 @@ func fetchSuggestPreviewHandler(w http.ResponseWriter, r *http.Request) {
 		writeErrorCode(w, "no_events_in_feed", "no events found in feed", http.StatusUnprocessableEntity)
 		return
 	}
+	// robots.txt (#1545): the preview still works (one-off look), but the UI must
+	// tell the visitor that approval will be manual-only. The body stays the bare array.
+	if rule := robotsDisallowRule(r.Context(), normURL); rule != "" {
+		w.Header().Set("X-Robots-Disallowed", rule)
+	}
 	json.NewEncoder(w).Encode(reqs)
 }
 

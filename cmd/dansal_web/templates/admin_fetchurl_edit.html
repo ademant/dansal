@@ -21,6 +21,16 @@
   {{if .Source.OrganizationID}}<input type="hidden" name="organization_id" value="{{derefInt .Source.OrganizationID}}">{{end}}
 </form>
 
+{{with .Source}}{{if .RobotsRule}}{{if not .RobotsAckAt}}
+<div class="form-notice" role="status">
+  <p>{{$.Strings.T "fetch_robots_notice"}}</p>
+  <p><code>{{.RobotsRule}}</code></p>
+  <form method="post" action="/admin/fetchurls/{{.ID}}/robots-ack">
+    <button type="submit" class="btn-primary">{{$.Strings.T "fetch_robots_accept_btn"}}</button>
+  </form>
+</div>
+{{end}}{{end}}{{if .RobotsAckAt}}<p class="form-hint">{{$.Strings.TF "fetch_robots_accepted" .RobotsAckBy .RobotsAckAt}}</p>{{end}}{{end}}
+
 <form method="post" class="edit-form" id="fetch-edit-form">
   <label>{{$.Strings.T "fetch_url"}}</label>
   <div class="url-row">

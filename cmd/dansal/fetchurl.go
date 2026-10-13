@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -33,6 +34,11 @@ type FetchURLRequest struct {
 	TemplateData   string   `json:"template_data,omitempty"`
 	KuferConfig    string   `json:"kufer_config,omitempty"`
 	CategoryFilter []string `json:"category_filter,omitempty"`
+	// RobotsAck (#1545): the caller accepts that robots.txt restricts this
+	// URL. Required to save a robots-disallowed feed; the source is then
+	// fetched on manual action only, never by fetch-all.
+	RobotsAck       bool   `json:"robots_ack"`
+	RobotsAckReason string `json:"robots_ack_reason"`
 }
 
 // FetchSourcePatchRequest is the body accepted by PATCH /api/v1/fetchurl/{id}.
@@ -89,6 +95,16 @@ type FetchSource struct {
 	// fetched. The recurring importer (fetch-all) skips opted-out sources;
 	// already-imported events and their attribution are left as-is.
 	OptOut bool `json:"opt_out,omitempty"`
+	// RobotsAck* (#1545): recorded acceptance that robots.txt restricts this
+	// feed. Empty RobotsAckAt = not acknowledged. Acknowledged sources are
+	// fetched only by an explicit manual action, never by fetch-all.
+	RobotsAckAt     string `json:"robots_ack_at,omitempty"`
+	RobotsAckBy     string `json:"robots_ack_by,omitempty"`
+	RobotsAckReason string `json:"robots_ack_reason,omitempty"`
+	RobotsAckRule   string `json:"robots_ack_rule,omitempty"`
+	// RobotsRule is the robots.txt rule that disallows this URL right now.
+	// Not stored: set only on the single-source GET (see getFetchSource).
+	RobotsRule string `json:"robots_rule,omitempty"`
 }
 
 // KuferConfig is the JSON stored in fetch_sources.kufer_config for type="kufer"
@@ -106,7 +122,7 @@ type KuferConfig struct {
 }
 
 // fetchSourceCols is the SELECT column list for fetch_sources rows.
-const fetchSourceCols = "id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, last_result, created_at, template_id, template_mode, COALESCE(template_data,''), COALESCE(kufer_config,''), COALESCE(category_filter,''), imported_once, licence, attribution, terms_url, opt_out"
+const fetchSourceCols = "id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, last_result, created_at, template_id, template_mode, COALESCE(template_data,''), COALESCE(kufer_config,''), COALESCE(category_filter,''), imported_once, licence, attribution, terms_url, opt_out, robots_ack_at, robots_ack_by, robots_ack_reason, robots_ack_rule"
 
 // templateImportData mirrors the JSON stored in event_templates.data.
 // Timetable uses the same TimetableEntryRequest as the direct API and event
@@ -616,7 +632,7 @@ func scanFetchSource(s scanner) (FetchSource, error) {
 	var lastFetched, lastResult sql.NullString
 	var orgID, templateID sql.NullInt64
 	var templateMode sql.NullString
-	if err := s.Scan(&src.ID, &src.URL, &src.Type, &tagsJSON, &danceIDsCSV, &orgID, &lastFetched, &lastResult, &src.CreatedAt, &templateID, &templateMode, &src.TemplateData, &src.KuferConfig, &categoryFilterJSON, &src.ImportedOnce, &src.Licence, &src.Attribution, &src.TermsURL, &src.OptOut); err != nil {
+	if err := s.Scan(&src.ID, &src.URL, &src.Type, &tagsJSON, &danceIDsCSV, &orgID, &lastFetched, &lastResult, &src.CreatedAt, &templateID, &templateMode, &src.TemplateData, &src.KuferConfig, &categoryFilterJSON, &src.ImportedOnce, &src.Licence, &src.Attribution, &src.TermsURL, &src.OptOut, &src.RobotsAckAt, &src.RobotsAckBy, &src.RobotsAckReason, &src.RobotsAckRule); err != nil {
 		return FetchSource{}, err
 	}
 	if tagsJSON != "" {
@@ -751,6 +767,47 @@ func getFetchSource(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// The restriction is shown on the single-source view only: listing every
+	// feed would look up robots.txt for each host on every page load.
+	if rule := robotsDisallowRule(r.Context(), src.URL); rule != "" {
+		src.RobotsRule = rule
+	}
+	writeJSON(w, src)
+}
+
+// POST /api/v1/feeds/{id}/robots-ack — an admin or member of the source's
+// organization accepts that robots.txt restricts this feed (#1545). The feed
+// is then fetched on manual action only. Stores who accepted, when, why and
+// against which rule. Does nothing when robots.txt does not restrict the feed.
+func robotsAckFetchSource(w http.ResponseWriter, r *http.Request) {
+	callerID, callerRole := callerFromRequest(r)
+	if callerRole == RolePublisher {
+		writeError(w, "Forbidden: publishers may not trigger fetch sources", http.StatusForbidden)
+		return
+	}
+	id := r.PathValue("id")
+	src, err := scanFetchSource(db.QueryRow(
+		"SELECT "+fetchSourceCols+" FROM fetch_sources WHERE id = ?", id,
+	))
+	if !rowOr404(w, err, "Fetch source not found") {
+		return
+	}
+	if callerRole != RoleAdmin {
+		if !requireExistingOrgMember(w, callerID, nullIntFromPtr(src.OrganizationID)) {
+			return
+		}
+	}
+	var ack robotsAckRequest
+	if !decodeJSONBody(w, r, &ack) {
+		return
+	}
+	rule := robotsDisallowRule(r.Context(), src.URL)
+	if rule == "" {
+		writeJSON(w, src)
+		return
+	}
+	recordRobotsAck(&src, rule, ack.RobotsAckReason, resolveDisplayName(callerID))
+	log.Printf("robots-ack: source_id=%d url=%q rule=%q caller=%d", src.ID, src.URL, rule, callerID)
 	writeJSON(w, src)
 }
 
@@ -877,15 +934,16 @@ func importFromSource(ctx context.Context, src FetchSource) ([]Event, ImportCoun
 	if u, err := url.Parse(src.URL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return nil, ImportCounts{}, fmt.Errorf("fetch URL must use http or https: %q", src.URL)
 	}
-	// robots.txt + Crawl-delay (#1484, compliance G9 phase-66): this is the
-	// one dispatch point every recurring (fetch-all) import goes through,
-	// deliberately not fetchFeedBody itself — see checkRobots' doc comment
-	// for why recheck_source.go and the suggest-a-feed preview must stay
-	// exempt. Sources run concurrently (adminFetchAll, #1249), so two
-	// sources sharing a host can both pass the Crawl-delay check in the same
-	// run before either records its attempt; that's an accepted minor gap,
-	// not a correctness issue — delay spacing still holds across runs.
-	if allowed, reason := checkRobots(ctx, src.URL); !allowed {
+	// robots.txt (#1484, #1545). A feed robots.txt disallows is refused unless
+	// someone has recorded an acknowledgement; an acknowledged feed is fetched
+	// on manual action only (fetch-all skips it before it gets here). The
+	// Crawl-delay spacing applies to every fetch. Only the importer's dispatch
+	// point is gated, not fetchFeedBody, so the suggest-a-feed preview and the
+	// single-event recheck stay exempt (see checkRobots' doc comment).
+	if rule := robotsDisallowRule(ctx, src.URL); rule != "" && src.RobotsAckAt == "" {
+		return nil, ImportCounts{}, fmt.Errorf("%w: %s", errRobotsNotAcknowledged, rule)
+	}
+	if allowed, reason := checkCrawlDelay(ctx, src.URL); !allowed {
 		return nil, ImportCounts{}, fmt.Errorf("%s", reason)
 	}
 	noteRobotsFetchAttempt(src.URL)
@@ -1605,6 +1663,15 @@ func fetchURL(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// robots.txt (#1545): saving a feed that robots.txt disallows requires the
+	// caller to accept the restriction. Refused before anything is written, so
+	// the UI can show the notice and resend with robots_ack set.
+	robotsRule := robotsDisallowRule(r.Context(), req.URL)
+	if robotsRule != "" && !req.RobotsAck {
+		writeErrorCode(w, "robots_not_acknowledged", fmt.Sprintf("robots.txt restricts this URL (%s); confirm to save it as manual-only", robotsRule), http.StatusConflict)
+		return
+	}
+
 	sourceID, err := upsertFetchSource(req.URL, req.Type, req.Tags, req.OrganizationID, callerID)
 	if err != nil {
 		writeInternalError(w, err)
@@ -1632,6 +1699,9 @@ func fetchURL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	src := FetchSource{ID: int(sourceID), URL: req.URL, Type: req.Type, Tags: req.Tags, OrganizationID: req.OrganizationID, TemplateID: req.TemplateID, TemplateMode: req.TemplateMode, TemplateData: req.TemplateData, KuferConfig: req.KuferConfig, CategoryFilter: req.CategoryFilter}
+	if robotsRule != "" {
+		recordRobotsAck(&src, robotsRule, req.RobotsAckReason, resolveDisplayName(callerID))
+	}
 	allEvents, counts, err := importFromSource(r.Context(), src)
 	if err != nil {
 		recordFetchResult(src, 0, err)
@@ -1870,6 +1940,11 @@ func fetchURLByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	allEvents, counts, err := importFromSource(r.Context(), src)
+	if errors.Is(err, errRobotsNotAcknowledged) {
+		// Not a fetch failure: the feed is refused until someone accepts robots.txt (#1545).
+		writeErrorCode(w, "robots_not_acknowledged", err.Error(), http.StatusConflict)
+		return
+	}
 	if err != nil {
 		recordFetchResult(src, 0, err)
 		log.Printf("fetchurl: source_id=%d url=%q type=%s result=error caller=%d err=%v", src.ID, src.URL, src.Type, callerID, err)

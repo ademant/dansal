@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"sync"
@@ -64,12 +66,36 @@ var robotsCache = &robotsImportCache{
 // (cmd/dansal/users.go): a transient failure to reach a third party must not
 // turn into a different, harder-to-notice failure here.
 func checkRobots(ctx context.Context, rawURL string) (allowed bool, reason string) {
+	if rule := robotsDisallowRule(ctx, rawURL); rule != "" {
+		return false, "robots.txt disallows fetching this path for our user-agent"
+	}
+	return checkCrawlDelay(ctx, rawURL)
+}
+
+// errRobotsNotAcknowledged marks a feed that robots.txt disallows for dansal
+// and whose organization/user has not yet accepted that restriction (#1545).
+// Callers answer it with 409 so the UI can show the notice and ask again.
+var errRobotsNotAcknowledged = errors.New("robots.txt restricts this feed; confirm to continue")
+
+// robotsDisallowRule returns a human-readable description of the robots.txt
+// rule that blocks rawURL for our user-agent, or "" when it is allowed or
+// robots.txt could not be read (fail open, see fetchRobotsForHost).
+func robotsDisallowRule(ctx context.Context, rawURL string) string {
 	u, err := url.Parse(rawURL)
 	if err != nil || u.Host == "" {
-		return true, ""
+		return ""
 	}
-	host := u.Host
+	entry := robotsEntryFor(ctx, u)
+	if entry.data != nil && !entry.data.TestAgent(u.Path, robotsUserAgent) {
+		return fmt.Sprintf("disallowed for %q on %s (path %s)", robotsUserAgent, u.Host, u.Path)
+	}
+	return ""
+}
 
+// robotsEntryFor returns the cached robots.txt entry for u's host, fetching it
+// when missing or older than robotsCacheTTL.
+func robotsEntryFor(ctx context.Context, u *url.URL) robotsEntry {
+	host := u.Host
 	robotsCache.mu.Lock()
 	entry, ok := robotsCache.byHost[host]
 	stale := !ok || time.Since(entry.fetchedAt) > robotsCacheTTL
@@ -81,14 +107,21 @@ func checkRobots(ctx context.Context, rawURL string) (allowed bool, reason strin
 		robotsCache.byHost[host] = entry
 		robotsCache.mu.Unlock()
 	}
+	return entry
+}
 
-	if entry.data != nil && !entry.data.TestAgent(u.Path, robotsUserAgent) {
-		return false, "robots.txt disallows fetching this path for our user-agent"
+// checkCrawlDelay reports whether the host's Crawl-delay has elapsed since our
+// last fetch attempt to it. Allow/Disallow is checked separately by
+// robotsDisallowRule, so an acknowledged source can still be spaced out.
+func checkCrawlDelay(ctx context.Context, rawURL string) (allowed bool, reason string) {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Host == "" {
+		return true, ""
 	}
-
+	entry := robotsEntryFor(ctx, u)
 	if entry.crawlDelay > 0 {
 		robotsCache.mu.Lock()
-		last, seen := robotsCache.hostLastFetch[host]
+		last, seen := robotsCache.hostLastFetch[u.Host]
 		robotsCache.mu.Unlock()
 		if seen && time.Since(last) < entry.crawlDelay {
 			return false, "Crawl-delay for this host has not elapsed yet"
@@ -149,4 +182,22 @@ func fetchRobotsForHost(ctx context.Context, u *url.URL) robotsEntry {
 		delay = g.CrawlDelay
 	}
 	return robotsEntry{data: data, fetchedAt: now, crawlDelay: delay}
+}
+
+// robotsAckRequest is the optional acknowledgement a caller sends with a
+// feed-creating request when robots.txt disallows the URL (#1545).
+type robotsAckRequest struct {
+	RobotsAck       bool   `json:"robots_ack"`
+	RobotsAckReason string `json:"robots_ack_reason"`
+}
+
+// recordRobotsAck stores that someone accepted robots.txt restricting a feed,
+// and mirrors it onto src so the same request can import it (#1545).
+func recordRobotsAck(src *FetchSource, rule, reason, byName string) {
+	src.RobotsAckAt = time.Now().UTC().Format(time.RFC3339)
+	src.RobotsAckBy = byName
+	src.RobotsAckReason = reason
+	src.RobotsAckRule = rule
+	db.Exec("UPDATE fetch_sources SET robots_ack_at = ?, robots_ack_by = ?, robots_ack_reason = ?, robots_ack_rule = ? WHERE id = ?",
+		src.RobotsAckAt, src.RobotsAckBy, src.RobotsAckReason, src.RobotsAckRule, src.ID)
 }

@@ -67,6 +67,11 @@
     <input type="text" id="tags" name="tags" placeholder="folk, balfolk">
   </div>
   <div class="form-actions">
+    {{if .RobotsNotice}}<div class="form-notice" role="alert">
+      <p>{{$.Strings.T "fetch_robots_notice"}}</p>
+      <p><code>{{.RobotsNotice}}</code></p>
+      <label><input type="checkbox" name="robots_ack" value="1" required> {{$.Strings.T "fetch_robots_accept"}}</label>
+    </div>{{end}}
     <button type="submit" class="btn-primary">{{$.Strings.T "fetch_add"}}</button>
     {{if .FromImport}}
     <a href="/admin/events{{if .CreatedAfter}}?created_after={{.CreatedAfter}}&include_past=1{{end}}" class="btn-sm">{{$.Strings.T "admin_skip"}}</a>

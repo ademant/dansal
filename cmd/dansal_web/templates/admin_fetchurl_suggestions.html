@@ -27,6 +27,7 @@
     <td style="white-space:nowrap">{{formatDate $.LangCode .CreatedAt}}</td>
     <td style="white-space:nowrap">
       <form method="post" action="/admin/fetchurl-suggestions/{{.ID}}/approve" style="display:inline">
+        <label class="form-hint"><input type="checkbox" name="robots_ack" value="1"> {{$.Strings.T "fetch_robots_accept_short"}}</label>
         <button type="submit" class="btn-sm btn-ok">{{$.Strings.T "admin_reg_approve"}}</button>
       </form>
       <form method="post" action="/admin/fetchurl-suggestions/{{.ID}}/reject" style="display:inline">

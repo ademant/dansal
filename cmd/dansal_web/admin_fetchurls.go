@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"net/url"
@@ -88,8 +89,11 @@ func adminFetchurlsHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 }
 
 type AdminFetchurlNewData struct {
-	Orgs              []Organization
-	Templates         []EventTemplate
+	Orgs      []Organization
+	Templates []EventTemplate
+	// RobotsNotice (#1545) is the API's "robots.txt restricts this URL (rule)"
+	// message; the form then asks for the acceptance checkbox.
+	RobotsNotice      string
 	ErrorKey          string
 	ErrorDetail       string // #1421: API validation message / reference
 	ErrorRef          string
@@ -220,7 +224,10 @@ func adminFetchurlNewPostHandler(cfg *Config, tmpls *Templates, db *sql.DB, clie
 		createdAfter := r.FormValue("created_after")
 		kuferConfig := kuferConfigFromForm(r)
 		token := getSessionToken(r)
-		if _, err := client.CreateFetchSource(r.Context(), rawURL, typ, tags, orgID, templateID, templateMode, fetchTemplateData(db, templateID), kuferConfig, token); err != nil {
+		robotsAck := r.FormValue("robots_ack") != ""
+		_, err := client.CreateFetchSource(r.Context(), rawURL, typ, tags, orgID, templateID, templateMode, fetchTemplateData(db, templateID), kuferConfig, robotsAck, robotsAckReasonAdmin, token)
+		if err != nil {
+			robotsNotice, restricted := robotsNotAcknowledgedMessage(err)
 			orgs, _ := client.GetOrganizations(r.Context())
 			orgIDInt := 0
 			if orgID != nil {
@@ -232,10 +239,16 @@ func adminFetchurlNewPostHandler(cfg *Config, tmpls *Templates, db *sql.DB, clie
 				tplIDInt = *templateID
 			}
 			title := i18n.T(r, "fetch_new_title")
+			errorKey := "fetch_add_error"
+			if restricted {
+				// Not an error in the feed itself: the user must accept robots.txt first (#1545).
+				errorKey = ""
+			}
 			renderTemplate(w, tmpls.adminFetchurlNew, tmplData(r, cfg, i18n, title, AdminFetchurlNewData{
 				Orgs:              orgs,
 				Templates:         templates,
-				ErrorKey:          "fetch_add_error",
+				ErrorKey:          errorKey,
+				RobotsNotice:      robotsNotice,
 				URL:               rawURL,
 				Type:              typ,
 				OrgID:             orgIDInt,
@@ -492,6 +505,16 @@ func adminFetchurlRunHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 			}
 		}
 		result, runErr := client.RunFetchSource(r.Context(), id, token)
+		if _, restricted := robotsNotAcknowledgedMessage(runErr); restricted {
+			// The feed needs an accepted robots.txt restriction before any manual
+			// fetch; the edit page explains and offers the acceptance (#1545).
+			if r.Header.Get("Accept") == "application/json" {
+				writeJSONError(w, r, http.StatusConflict, runErr.Error())
+				return
+			}
+			http.Redirect(w, r, fmt.Sprintf("/admin/fetchurls/%d/edit", id), http.StatusSeeOther)
+			return
+		}
 		if r.Header.Get("Accept") == "application/json" {
 			w.Header().Set("Content-Type", "application/json")
 			if runErr != nil {
@@ -599,5 +622,37 @@ func adminFetchurlBulkHandler(cfg *Config, client *DansalClient) http.HandlerFun
 			}
 		}
 		http.Redirect(w, r, "/admin/fetchurls", http.StatusSeeOther)
+	}
+}
+
+// robotsAckReasonAdmin is the recorded reason when an admin accepts a
+// robots.txt restriction through the feed form (#1545).
+const robotsAckReasonAdmin = "accepted in the admin UI (robots.txt restriction, manual fetch only)"
+
+// adminFetchurlRobotsAckHandler records the acceptance of a robots.txt
+// restriction for an existing feed, so it can be fetched manually (#1545).
+// Same authorization as the manual run: admin, or a member of the source's org.
+func adminFetchurlRobotsAckHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
+			return
+		}
+		token := getSessionToken(r)
+		if su.Role != "admin" {
+			src, ferr := client.GetFetchSource(r.Context(), id, token)
+			if ferr != nil || src.OrganizationID == nil || !memberOrgSet(r, client, su)[*src.OrganizationID] {
+				forbidden(w, r)
+				return
+			}
+		}
+		if err := client.AckRobotsFetchSource(r.Context(), id, robotsAckReasonAdmin, token); err != nil {
+			log.Printf("robots-ack fetchurl %d: %v", id, err)
+		}
+		http.Redirect(w, r, fmt.Sprintf("/admin/fetchurls/%d/edit", id), http.StatusSeeOther)
 	}
 }

@@ -582,6 +582,7 @@ func main() {
 		r.HandleFunc("POST /admin/fetchurls/{id}/edit", adminRateLimit(adminFetchurlSaveHandler(cfg, tmpls, db, client, i18n)))
 		r.HandleFunc("POST /admin/fetchurls/{id}/delete", adminRateLimit(adminFetchurlDeleteHandler(cfg, client)))
 		r.HandleFunc("POST /admin/fetchurls/{id}/run", adminRateLimit(adminFetchurlRunHandler(cfg, client)))
+		r.HandleFunc("POST /admin/fetchurls/{id}/robots-ack", adminRateLimit(adminFetchurlRobotsAckHandler(cfg, client)))
 
 		// Pending feed-suggestion review (#1333 phase 2).
 		r.HandleFunc("GET /admin/fetchurl-suggestions", adminFetchurlSuggestionsHandler(cfg, tmpls, client, i18n))

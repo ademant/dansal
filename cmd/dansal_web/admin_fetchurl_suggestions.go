@@ -52,9 +52,14 @@ func adminFetchurlSuggestionApproveHandler(client *DansalClient) http.HandlerFun
 		}
 		token := getSessionToken(r)
 		flash := "fetchurl_suggestion_approved"
-		if err := client.ApproveFetchSuggestion(r.Context(), token, id); err != nil {
+		// robots_ack: the reviewer accepts a robots.txt restriction on the feed (#1545).
+		robotsAck := r.FormValue("robots_ack") != ""
+		if err := client.ApproveFetchSuggestion(r.Context(), token, id, robotsAck, robotsAckReasonAdmin); err != nil {
 			log.Printf("approve fetchurl suggestion %d: %v", id, err)
 			flash = "fetchurl_suggestion_approve_error"
+			if _, restricted := robotsNotAcknowledgedMessage(err); restricted {
+				flash = "fetchurl_suggestion_robots_error"
+			}
 		}
 		http.Redirect(w, r, "/admin/fetchurl-suggestions?flash="+flash, http.StatusSeeOther)
 	}

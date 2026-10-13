@@ -128,6 +128,7 @@ var writeSchemaRoutes = []SchemaRoute{
 	{"/api/v1/instructors/{id}", []string{http.MethodPut, http.MethodPatch}, reflect.TypeFor[InstructorRequest]()},
 	{"/api/v1/feeds", []string{http.MethodPost}, reflect.TypeFor[FetchURLRequest]()},
 	{"/api/v1/feeds/{id}", []string{http.MethodPatch}, reflect.TypeFor[FetchSourcePatchRequest]()},
+	{"/api/v1/feeds/{id}/robots-ack", []string{http.MethodPost}, reflect.TypeFor[robotsAckRequest]()},
 	// Deprecated aliases of the two above (#1384).
 	{"/api/v1/fetchurl", []string{http.MethodPost}, reflect.TypeFor[FetchURLRequest]()},
 	{"/api/v1/fetchurl/{id}", []string{http.MethodPatch}, reflect.TypeFor[FetchSourcePatchRequest]()},

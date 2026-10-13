@@ -2951,6 +2951,23 @@ func migrateDB() {
 			db.Exec("ALTER TABLE fetch_sources ADD COLUMN opt_out INTEGER NOT NULL DEFAULT 0")
 		}
 	}
+	// #1545: a feed that robots.txt disallows needs an explicit, recorded
+	// acknowledgement, and is then fetched on manual action only (never by fetch-all).
+	robotsAckCols := []string{"robots_ack_at", "robots_ack_by", "robots_ack_reason", "robots_ack_rule"}
+	if !applied(49) {
+		for _, col := range robotsAckCols {
+			db.Exec("ALTER TABLE fetch_sources ADD COLUMN " + col + " TEXT NOT NULL DEFAULT ''")
+		}
+		mark(49)
+	}
+	// Safety net: ensure each robots column exists even if migration 49 was pre-marked.
+	for _, col := range robotsAckCols {
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('fetch_sources') WHERE name=?", col).Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE fetch_sources ADD COLUMN " + col + " TEXT NOT NULL DEFAULT ''")
+		}
+	}
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -4057,7 +4074,11 @@ func createTables() error {
 		licence TEXT NOT NULL DEFAULT '',
 		attribution TEXT NOT NULL DEFAULT '',
 		terms_url TEXT NOT NULL DEFAULT '',
-		opt_out INTEGER NOT NULL DEFAULT 0
+		opt_out INTEGER NOT NULL DEFAULT 0,
+		robots_ack_at TEXT NOT NULL DEFAULT '',
+		robots_ack_by TEXT NOT NULL DEFAULT '',
+		robots_ack_reason TEXT NOT NULL DEFAULT '',
+		robots_ack_rule TEXT NOT NULL DEFAULT ''
 	);
 	CREATE TABLE IF NOT EXISTS location_organizations (
 		location_id INTEGER NOT NULL,
@@ -5044,6 +5065,7 @@ func main() {
 	smux.Handle("POST /api/v1/feeds/bulk-assign-org", auth(bulkAssignFetchSourceOrg))
 	smux.Handle("POST /api/v1/fetchurl/bulk-assign-org", auth(deprecatedAlias("/api/v1/feeds/bulk-assign-org", bulkAssignFetchSourceOrg))) // deprecated (#1384)
 	smux.Handle("GET /api/v1/feeds/{id}", auth(getFetchSource))
+	smux.Handle("POST /api/v1/feeds/{id}/robots-ack", auth(robotsAckFetchSource))
 	smux.Handle("GET /api/v1/fetchurl/{id}", auth(deprecatedAlias("/api/v1/feeds/{id}", getFetchSource))) // deprecated (#1384)
 	smux.Handle("PATCH /api/v1/feeds/{id}", auth(patchFetchSource))
 	smux.Handle("PATCH /api/v1/fetchurl/{id}", auth(deprecatedAlias("/api/v1/feeds/{id}", patchFetchSource))) // deprecated (#1384)

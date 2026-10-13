@@ -319,6 +319,19 @@ func adminFetchAll() adminResponse {
 		sources = append(sources, src)
 	}
 
+	// robots.txt (#1545): a feed robots.txt disallows is never polled
+	// automatically, even when an acknowledgement is on record — the
+	// acknowledgement only allows manual fetches. Logged once per run.
+	kept := sources[:0]
+	for _, src := range sources {
+		if robotsDisallowRule(context.Background(), src.URL) != "" {
+			log.Printf("fetch-all: source_id=%d skipped: robots.txt disallows it (manual fetch only)", src.ID)
+			continue
+		}
+		kept = append(kept, src)
+	}
+	sources = kept
+
 	type sourceResult struct {
 		ID     int    `json:"id"`
 		URL    string `json:"url"`

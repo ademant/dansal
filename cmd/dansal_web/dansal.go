@@ -898,6 +898,14 @@ type FetchSource struct {
 	Attribution    string   `json:"attribution,omitempty"`
 	TermsURL       string   `json:"terms_url,omitempty"`
 	OptOut         bool     `json:"opt_out,omitempty"`
+	// Robots* (#1545): robots.txt restriction state. RobotsAck* is the recorded
+	// acceptance (empty RobotsAckAt = not accepted); RobotsRule is set on the
+	// single-feed view when robots.txt currently disallows the URL.
+	RobotsAckAt     string `json:"robots_ack_at,omitempty"`
+	RobotsAckBy     string `json:"robots_ack_by,omitempty"`
+	RobotsAckReason string `json:"robots_ack_reason,omitempty"`
+	RobotsAckRule   string `json:"robots_ack_rule,omitempty"`
+	RobotsRule      string `json:"robots_rule,omitempty"`
 }
 
 // KuferConfig mirrors cmd/dansal's type of the same name — the JSON shape
@@ -1697,11 +1705,15 @@ func (c *DansalClient) DeleteOrganization(ctx context.Context, id int, token str
 	return nil
 }
 
-func (c *DansalClient) CreateFetchSource(ctx context.Context, rawURL, typ string, tags []string, orgID *int, templateID *int, templateMode, templateData string, kuferConfig string, token string) (int, error) {
+func (c *DansalClient) CreateFetchSource(ctx context.Context, rawURL, typ string, tags []string, orgID *int, templateID *int, templateMode, templateData string, kuferConfig string, robotsAck bool, robotsReason, token string) (int, error) {
 	payload := map[string]any{
 		"url":  rawURL,
 		"type": typ,
 		"tags": tags,
+	}
+	if robotsAck {
+		payload["robots_ack"] = true
+		payload["robots_ack_reason"] = robotsReason
 	}
 	if orgID != nil {
 		payload["organization_id"] = *orgID
@@ -4038,9 +4050,33 @@ func (c *DansalClient) ListFetchSuggestions(ctx context.Context, token string) (
 }
 
 // ApproveFetchSuggestion calls POST /api/v1/feeds/suggestions/{id}/approve.
-func (c *DansalClient) ApproveFetchSuggestion(ctx context.Context, token string, id int) error {
+// robotsAck is sent only when the reviewer has accepted a robots.txt
+// restriction on the feed (#1545); the API refuses approval without it.
+func (c *DansalClient) ApproveFetchSuggestion(ctx context.Context, token string, id int, robotsAck bool, robotsReason string) error {
 	path := fmt.Sprintf("/api/v1/feeds/suggestions/%d/approve", id)
-	return c.do(ctx, http.MethodPost, path, token, nil, nil)
+	var body []byte
+	if robotsAck {
+		body, _ = json.Marshal(map[string]any{"robots_ack": true, "robots_ack_reason": robotsReason})
+	}
+	return c.do(ctx, http.MethodPost, path, token, body, nil)
+}
+
+// AckRobotsFetchSource calls POST /api/v1/feeds/{id}/robots-ack: the caller
+// accepts that robots.txt restricts this feed, so it is fetched manually only (#1545).
+func (c *DansalClient) AckRobotsFetchSource(ctx context.Context, id int, reason, token string) error {
+	body, _ := json.Marshal(map[string]any{"robots_ack_reason": reason})
+	return c.do(ctx, http.MethodPost, fmt.Sprintf("/api/v1/feeds/%d/robots-ack", id), token, body, nil)
+}
+
+// robotsNotAcknowledgedMessage reports whether err is the API's "robots.txt
+// restricts this feed; confirm to continue" refusal, and returns its message
+// (which names the matched rule) for the UI.
+func robotsNotAcknowledgedMessage(err error) (string, bool) {
+	var ae *apiHTTPError
+	if errors.As(err, &ae) && ae.ErrorCode == "robots_not_acknowledged" {
+		return ae.Message, true
+	}
+	return "", false
 }
 
 // RejectFetchSuggestion calls POST /api/v1/feeds/suggestions/{id}/reject.

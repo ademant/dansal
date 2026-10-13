@@ -20,6 +20,12 @@ const PATHS = [
   "/help",
   "/cities",
   "/festivals",
+  // #1542: impressum/privacy/terms render through the same base.html chrome
+  // as every other public page (and 404 harmlessly when unconfigured — see
+  // about-and-info-pages.spec.ts), so they belong in this sweep too.
+  "/impressum",
+  "/privacy",
+  "/terms",
 ];
 
 test.describe("Public pages load without JavaScript errors (#1385)", () => {

@@ -114,6 +114,13 @@ func noteRobotsFetchAttempt(rawURL string) {
 // taken from u since robots.txt is scoped per-origin (a host served over
 // both http and https could in principle answer differently), though in
 // practice fetch_sources URLs are expected to be https.
+//
+// Uses safeClient, not fetchClient (#1535): the host comes from the same
+// admin/publisher-supplied fetch_source URL the main feed fetch already
+// guards against SSRF for, so the robots.txt companion request needs the
+// identical private/internal-address block — any publisher can otherwise
+// point a feed at a loopback/link-local/metadata address and have this
+// fetch hit it directly.
 func fetchRobotsForHost(ctx context.Context, u *url.URL) robotsEntry {
 	now := time.Now()
 	robotsURL := u.Scheme + "://" + u.Host + "/robots.txt"
@@ -121,7 +128,7 @@ func fetchRobotsForHost(ctx context.Context, u *url.URL) robotsEntry {
 	if err != nil {
 		return robotsEntry{fetchedAt: now}
 	}
-	resp, err := fetchClient.Do(req)
+	resp, err := safeClient.Do(req)
 	if err != nil {
 		return robotsEntry{fetchedAt: now} // unreachable: fail open
 	}

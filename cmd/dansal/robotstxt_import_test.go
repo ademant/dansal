@@ -11,6 +11,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 )
@@ -25,8 +26,44 @@ func resetRobotsCacheForTest(t *testing.T) {
 	t.Cleanup(func() { robotsCache = old })
 }
 
+// withUnsafeTestClient swaps safeClient for a plain client for the duration
+// of a test (#1535 made the robots.txt fetch go through the same SSRF-guarded
+// safeClient the main feed fetch uses, which otherwise refuses to dial the
+// loopback address every httptest.Server here runs on).
+func withUnsafeTestClient(t *testing.T) {
+	t.Helper()
+	old := safeClient
+	safeClient = &http.Client{Timeout: 5 * time.Second}
+	t.Cleanup(func() { safeClient = old })
+}
+
+// TestFetchRobotsForHost_BlocksPrivateAddress covers #1535: the robots.txt
+// companion fetch must go through the same SSRF-guarded safeClient as the
+// main feed fetch, not the unguarded fetchClient. Deliberately does NOT call
+// withUnsafeTestClient, so this exercises the real safeClient/safeDialContext
+// — against httptest's loopback address, the dial must be refused and the
+// fetch must fail (closed), even though the server would otherwise happily
+// serve a parseable robots.txt.
+func TestFetchRobotsForHost_BlocksPrivateAddress(t *testing.T) {
+	resetRobotsCacheForTest(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("User-agent: *\nDisallow: /\n"))
+	}))
+	defer srv.Close()
+
+	u, err := url.Parse(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry := fetchRobotsForHost(context.Background(), u)
+	if entry.data != nil {
+		t.Fatal("fetchRobotsForHost reached a loopback address — it must be using the SSRF-guarded safeClient, not the unguarded fetchClient")
+	}
+}
+
 func TestCheckRobotsDisallowed(t *testing.T) {
 	resetRobotsCacheForTest(t)
+	withUnsafeTestClient(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/robots.txt" {
 			w.Write([]byte("User-agent: *\nDisallow: /\n"))
@@ -47,6 +84,7 @@ func TestCheckRobotsDisallowed(t *testing.T) {
 
 func TestCheckRobotsAllowedSpecificPath(t *testing.T) {
 	resetRobotsCacheForTest(t)
+	withUnsafeTestClient(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/robots.txt" {
 			w.Write([]byte("User-agent: *\nDisallow: /private\nAllow: /feed.ics\n"))
@@ -66,6 +104,7 @@ func TestCheckRobotsAllowedSpecificPath(t *testing.T) {
 
 func TestCheckRobotsNoRobotsTxtAllowsEverything(t *testing.T) {
 	resetRobotsCacheForTest(t)
+	withUnsafeTestClient(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound) // no robots.txt at all
 	}))
@@ -87,6 +126,7 @@ func TestCheckRobotsUnreachableFailsOpen(t *testing.T) {
 
 func TestCheckRobotsCrawlDelay(t *testing.T) {
 	resetRobotsCacheForTest(t)
+	withUnsafeTestClient(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/robots.txt" {
 			w.Write([]byte("User-agent: *\nCrawl-delay: 3600\n"))
@@ -115,6 +155,7 @@ func TestCheckRobotsCrawlDelay(t *testing.T) {
 // DB at all, so this needs no DB setup.
 func TestImportFromSourceRespectsRobotsDisallow(t *testing.T) {
 	resetRobotsCacheForTest(t)
+	withUnsafeTestClient(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/robots.txt" {
 			w.Write([]byte("User-agent: *\nDisallow: /\n"))

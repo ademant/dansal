@@ -237,14 +237,27 @@ export async function ensureIndexWeekFixture(
   const countsByDate: Record<string, number> = {};
   weekDates.forEach((d) => (countsByDate[d] = 0));
   const tagsPresent = new Set<string>();
+  const visibleDateSet = new Set(visibleDates);
   const slots = new SlotAllocator(todayIso, new Date().getHours());
   let nearbyCount = 0;
   let farCount = 0;
   let farEventTitle = "";
   weekEvents.forEach((e: any) => {
     const d = (e.start_time || "").slice(0, 10);
-    if (d in countsByDate) countsByDate[d]++;
-    (e.tags || []).forEach((t: string) => tagsPresent.add(t));
+    // #1540: countsByDate (busiest-day invariant) and tagsPresent (home-
+    // group invariant) decide what this fixture still needs to create —
+    // an event on an already-past day is invisible on the public index
+    // (future-only, include_past defaults false) and must not count
+    // toward "this day/tag is already covered", or the fixture silently
+    // creates nothing for a group/day only satisfied in the past.
+    if (visibleDateSet.has(d)) {
+      if (d in countsByDate) countsByDate[d]++;
+      (e.tags || []).forEach((t: string) => tagsPresent.add(t));
+    }
+    // Slot seeding stays whole-week regardless of visibility: it only
+    // exists to keep a new fixture event outside dansal's own ±3h dedup
+    // window of any EXISTING event at the same location+day — dedup
+    // doesn't care whether that existing event is publicly visible.
     if (e.location_id) slots.seed(d, e.location_id);
     if (e.location_id === nearbyLocationId) nearbyCount++;
     if (e.location_id === farLocationId) {

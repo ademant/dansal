@@ -33,7 +33,7 @@
         <span title="{{$.Strings.T "loc_event_count"}}">📅 {{index $.Data.LocEventCounts .ID}}</span>
       </div>
       <div class="dash-org-actions">
-        <a href="/admin/events/new?org_id={{$.Data.Org.ID}}&amp;location_id={{.ID}}" class="btn-sm">+ {{$.Strings.T "admin_event_new_title"}}</a>
+        <a href="/admin/events/new?org_id={{$.Data.Org.ID}}&amp;loc_id={{.ID}}" class="btn-sm">+ {{$.Strings.T "admin_event_new_title"}}</a>
         <a href="/admin/organization/{{$.Data.Slug}}?location_id={{.ID}}{{if $.Data.FilterIncludePast}}&amp;include_past=1{{end}}" class="btn-sm" title="{{$.Strings.T "org_loc_filter_btn"}}">🔍</a>
       </div>
     </div>

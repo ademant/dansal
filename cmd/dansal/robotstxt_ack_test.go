@@ -33,6 +33,7 @@ func robotsDisallowAllServer(t *testing.T, disallow string, feedFetchOK bool) *h
 
 func TestRobotsDisallowRuleDescribesMatch(t *testing.T) {
 	resetRobotsCacheForTest(t)
+	withUnsafeTestClient(t)
 	srv := robotsDisallowAllServer(t, "/private/", true)
 	defer srv.Close()
 
@@ -48,6 +49,7 @@ func TestRobotsDisallowRuleDescribesMatch(t *testing.T) {
 // can answer 409 and the UI can ask for consent. The feed itself is never requested.
 func TestImportFromSourceRefusesUnacknowledgedDisallowed(t *testing.T) {
 	resetRobotsCacheForTest(t)
+	withUnsafeTestClient(t)
 	srv := robotsDisallowAllServer(t, "/", false)
 	defer srv.Close()
 
@@ -61,7 +63,9 @@ func TestImportFromSourceRefusesUnacknowledgedDisallowed(t *testing.T) {
 // fetch. (The loopback SSRF guard may still stop the request afterwards; the
 // assertion is only that robots.txt is not the reason.)
 func TestImportFromSourceAcknowledgedPassesRobotsGate(t *testing.T) {
+	setupDedupTestDB(t)
 	resetRobotsCacheForTest(t)
+	withUnsafeTestClient(t)
 	srv := robotsDisallowAllServer(t, "/", true)
 	defer srv.Close()
 
@@ -82,6 +86,7 @@ func TestImportFromSourceAcknowledgedPassesRobotsGate(t *testing.T) {
 func TestFetchAllSkipsRobotsDisallowedEvenIfAcknowledged(t *testing.T) {
 	setupDedupTestDB(t)
 	resetRobotsCacheForTest(t)
+	withUnsafeTestClient(t)
 	srv := robotsDisallowAllServer(t, "/private/", true)
 	defer srv.Close()
 

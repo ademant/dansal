@@ -344,7 +344,7 @@ func nominatimGeocodeSearchHandler(cfg *Config) http.HandlerFunc {
 // admin_locations_maintenance.html) is an admin-only page — no public form
 // does reverse geocoding — so this stays behind requireLogin rather than
 // being reachable by anyone the way the public search proxy has to be.
-func nominatimGeocodeReverseHandler(cfg *Config) http.HandlerFunc {
+func nominatimGeocodeReverseHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := requireLogin(w, r); !ok {
 			return
@@ -368,8 +368,15 @@ func nominatimGeocodeReverseHandler(cfg *Config) http.HandlerFunc {
 			http.Error(w, "lon is required", http.StatusBadRequest)
 			return
 		}
+		lang := sanitizeNominatimLang(r.URL.Query().Get("lang"))
+		latKey, lonKey := reverseGeocodeKey(lat), reverseGeocodeKey(lon)
+		if body, ok := getReverseGeocodeCache(db, latKey, lonKey, lang, geocodeReverseCacheTTL); ok {
+			w.Write(body)
+			return
+		}
+
 		params := url.Values{"format": {"json"}, "lat": {lat}, "lon": {lon}, "addressdetails": {"1"}}
-		if lang := sanitizeNominatimLang(r.URL.Query().Get("lang")); lang != "" {
+		if lang != "" {
 			params.Set("accept-language", lang)
 		}
 		body, err := nominatimGet(r.Context(), cfg, "/reverse", params)
@@ -377,8 +384,33 @@ func nominatimGeocodeReverseHandler(cfg *Config) http.HandlerFunc {
 			logHTTPError(w, r, "geocode reverse failed", http.StatusBadGateway)
 			return
 		}
+		if len(body) > 0 {
+			if err := setReverseGeocodeCache(db, latKey, lonKey, lang, body); err != nil {
+				log.Printf("geocode reverse: cache store: %v", err)
+			}
+		}
 		w.Write(body)
 	}
+}
+
+// geocodeReverseCacheTTL bounds how long a cached reverse lookup is served
+// before it is fetched from Nominatim again (#1549).
+const geocodeReverseCacheTTL = 90 * 24 * time.Hour
+
+// reverseGeocodeKey rounds a coordinate string to 4 decimal places (~11 m),
+// the granularity reverse-geocode results are cached at (#1549). raw has
+// already passed strconv.ParseFloat in the handler. "-0.0000" is folded to
+// "0.0000" so a coordinate just below zero doesn't form a separate key.
+func reverseGeocodeKey(raw string) string {
+	f, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return raw
+	}
+	key := strconv.FormatFloat(f, 'f', 4, 64)
+	if key == "-0.0000" {
+		key = "0.0000"
+	}
+	return key
 }
 
 // waitGeocodeSlot blocks until at least geocodeMinInterval has passed since

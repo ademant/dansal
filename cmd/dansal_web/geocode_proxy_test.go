@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -181,7 +182,8 @@ func TestNominatimGeocodeReverseHandler(t *testing.T) {
 
 	geocodeThrottle = newSubmissionThrottle(100, time.Minute)
 	cfg := &Config{Domain: "example.test"}
-	handler := nominatimGeocodeReverseHandler(cfg)
+	db := initDB(filepath.Join(t.TempDir(), "web.db"))
+	handler := nominatimGeocodeReverseHandler(cfg, db)
 
 	t.Run("without login: rejected", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/search/geocode/reverse?lat=48.1&lon=-1.6", nil)
@@ -216,7 +218,8 @@ func TestNominatimGeocodeReverseHandler(t *testing.T) {
 func TestNominatimGeocodeReverseHandlerRequiresCoords(t *testing.T) {
 	geocodeThrottle = newSubmissionThrottle(100, time.Minute)
 	cfg := &Config{Domain: "example.test"}
-	handler := nominatimGeocodeReverseHandler(cfg)
+	db := initDB(filepath.Join(t.TempDir(), "web.db"))
+	handler := nominatimGeocodeReverseHandler(cfg, db)
 
 	req := httptest.NewRequest(http.MethodGet, "/search/geocode/reverse?lat=48.1", nil)
 	req = withSessionUser(req, &SessionUser{ID: 1, Role: "admin"})

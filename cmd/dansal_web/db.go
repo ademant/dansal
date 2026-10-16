@@ -382,6 +382,37 @@ CREATE TABLE IF NOT EXISTS org_slug_redirects (
 		}
 	}
 
+	// Migration v9 (#1549): geocode_reverse_cache — caches successful Nominatim
+	// reverse-geocoding responses keyed by coordinates rounded to 4 decimals
+	// (~11 m) and the accept-language value, since that changes display_name.
+	// Expired rows are simply re-fetched on demand; no sweeper.
+	if !migrationApplied(db, 9) {
+		db.Exec(`CREATE TABLE IF NOT EXISTS geocode_reverse_cache (
+			lat_key    TEXT    NOT NULL,
+			lon_key    TEXT    NOT NULL,
+			lang       TEXT    NOT NULL,
+			body       BLOB    NOT NULL,
+			fetched_at INTEGER NOT NULL,
+			PRIMARY KEY (lat_key, lon_key, lang)
+		)`)
+		db.Exec("INSERT OR IGNORE INTO schema_migrations VALUES (9)")
+	}
+	// Safety net: ensure the table exists even if v9 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='geocode_reverse_cache'").Scan(&n)
+		if n == 0 {
+			db.Exec(`CREATE TABLE IF NOT EXISTS geocode_reverse_cache (
+				lat_key    TEXT    NOT NULL,
+				lon_key    TEXT    NOT NULL,
+				lang       TEXT    NOT NULL,
+				body       BLOB    NOT NULL,
+				fetched_at INTEGER NOT NULL,
+				PRIMARY KEY (lat_key, lon_key, lang)
+			)`)
+		}
+	}
+
 	return db
 }
 
@@ -936,6 +967,33 @@ func setGeocodeCache(db *sql.DB, query, resultsJSON string) error {
 	_, err := db.Exec(
 		"INSERT INTO geocode_cache(query, results_json, fetched_at) VALUES(?,?,?) ON CONFLICT(query) DO UPDATE SET results_json=excluded.results_json, fetched_at=excluded.fetched_at",
 		query, resultsJSON, time.Now().Unix(),
+	)
+	return err
+}
+
+// getReverseGeocodeCache returns the cached Nominatim reverse response for the
+// given rounded-coordinate key and language if one exists and is younger than
+// maxAge, otherwise (nil, false). Like getGeocodeCache, maxAge is measured from
+// fetched_at and not refreshed on reads.
+func getReverseGeocodeCache(db *sql.DB, latKey, lonKey, lang string, maxAge time.Duration) ([]byte, bool) {
+	var body []byte
+	var fetchedAt int64
+	err := db.QueryRow("SELECT body, fetched_at FROM geocode_reverse_cache WHERE lat_key = ? AND lon_key = ? AND lang = ?", latKey, lonKey, lang).Scan(&body, &fetchedAt)
+	if err != nil {
+		return nil, false
+	}
+	if time.Now().Unix()-fetchedAt > int64(maxAge.Seconds()) {
+		return nil, false
+	}
+	return body, true
+}
+
+// setReverseGeocodeCache stores (or refreshes) a successful Nominatim reverse
+// response, resetting fetched_at so the TTL restarts from this fetch.
+func setReverseGeocodeCache(db *sql.DB, latKey, lonKey, lang string, body []byte) error {
+	_, err := db.Exec(
+		"INSERT INTO geocode_reverse_cache(lat_key, lon_key, lang, body, fetched_at) VALUES(?,?,?,?,?) ON CONFLICT(lat_key, lon_key, lang) DO UPDATE SET body=excluded.body, fetched_at=excluded.fetched_at",
+		latKey, lonKey, lang, body, time.Now().Unix(),
 	)
 	return err
 }

@@ -356,7 +356,7 @@ func main() {
 		r.HandleFunc("GET /search/results", searchResultsHandler(tmpls, i18n, client))
 		r.HandleFunc("GET /search/geocode", geocodeHandler(cfg, db))
 		r.HandleFunc("GET /search/geocode/search", nominatimGeocodeSearchHandler(cfg))
-		r.HandleFunc("GET /search/geocode/reverse", nominatimGeocodeReverseHandler(cfg))
+		r.HandleFunc("GET /search/geocode/reverse", nominatimGeocodeReverseHandler(cfg, db))
 		r.HandleFunc("GET /events/{id}", eventHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /events/{id}/assign-org", adminRateLimit(eventAssignOrgHandler(cfg, client)))
 		r.HandleFunc("POST /events/{id}/board", contactBoardPostHandler(cfg, db, client, i18n))

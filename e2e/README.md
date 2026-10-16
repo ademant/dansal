@@ -36,6 +36,13 @@ provide.
   `http://localhost:8090`. When unset, that one test is skipped rather than
   failing — most target instances (including `dev` as of writing) don't run
   webmin alongside the suite.
+- **A writable web.db** (optional) for specs that seed a `site_settings` row
+  directly since dansal_web itself has no endpoint that writes one (only the
+  separate webmin binary does): `WEB_DB_PATH` pointing at the file, e.g.
+  `/var/lib/dansal-web/web.db`. Used by `activitypub.spec.ts` (IndexNow key)
+  and `about-and-info-pages.spec.ts` (impressum/privacy/terms/security.txt —
+  all 404 until configured). When unset, those specs fall back to asserting
+  whatever the unconfigured behavior already is, rather than failing.
 
 ## Running against dev
 

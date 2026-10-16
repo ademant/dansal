@@ -10,8 +10,10 @@ import (
 )
 
 // setupDedupTestDB creates a fresh in-memory DB and swaps it into the
-// package-level db var for the duration of the test.
-func setupDedupTestDB(t *testing.T) *sql.DB {
+// package-level db var for the duration of the test or benchmark.
+// testing.TB (rather than *testing.T) so bench_test.go's *testing.B can
+// reuse this same setup instead of a second hand-copied version (#1543).
+func setupDedupTestDB(t testing.TB) *sql.DB {
 	t.Helper()
 	old := db
 	t.Cleanup(func() { db = old })

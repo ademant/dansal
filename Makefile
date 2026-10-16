@@ -12,7 +12,7 @@ SYSTEMDDIR := /etc/systemd/system
 .DEFAULT_GOAL := build
 
 .PHONY: build build-dansal build-dansal_web build-dansal_admin build-dansal_webmin build-dansal_doc \
-        run fmt vet vulncheck clean install install-web install-webmin install-doc install-units setup-instance \
+        run fmt vet vulncheck bench clean install install-web install-webmin install-doc install-units setup-instance \
         update check-config deb deploy-nginx deploy-nginx-webmin deploy-nginx-doc deploy-nginx-default install-nginx-brotli deploy-fail2ban deploy-logrotate deploy-full \
         wp-zip deploy-wp rollback list
 
@@ -59,6 +59,15 @@ vet:
 
 vulncheck:
 	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+# bench (#1543) runs only the cmd/dansal package's testing.B benchmarks —
+# the import/dedup/insert hot paths that have no other regression guard.
+# -bench=. is what actually selects benchmarks; a plain `go test` (CI, this
+# Makefile's other targets) never runs them. Not wired into any CI gate:
+# benchmark noise isn't a pass/fail signal, just a number to compare by eye
+# (or feed into benchstat) across commits.
+bench:
+	go test -bench=. -benchmem ./cmd/dansal/
 
 run: build-dansal
 	./dansal --config ./config.yaml

@@ -12,7 +12,7 @@ SYSTEMDDIR := /etc/systemd/system
 .DEFAULT_GOAL := build
 
 .PHONY: build build-dansal build-dansal_web build-dansal_admin build-dansal_webmin build-dansal_doc \
-        run fmt vet vulncheck bench clean install install-web install-webmin install-doc install-units setup-instance \
+        run fmt vet vulncheck bench stress clean install install-web install-webmin install-doc install-units setup-instance \
         update check-config deb deploy-nginx deploy-nginx-webmin deploy-nginx-doc deploy-nginx-default install-nginx-brotli deploy-fail2ban deploy-logrotate deploy-full \
         wp-zip deploy-wp rollback list
 
@@ -68,6 +68,16 @@ vulncheck:
 # (or feed into benchstat) across commits.
 bench:
 	go test -bench=. -benchmem ./cmd/dansal/
+
+# stress (#1544) runs the k6 HTTP load tests in stress/ against a running
+# scratch instance. Needs k6 on PATH and STRESS_BASE_URL (loopback only unless
+# STRESS_ALLOW_REMOTE=1). Not part of CI: it writes events, so it is never
+# pointed at dev or prod by default. See stress/README.md.
+stress:
+	@test -n "$(STRESS_BASE_URL)" || (echo "set STRESS_BASE_URL, e.g. make stress STRESS_BASE_URL=http://127.0.0.1:18000" && exit 1)
+	@command -v k6 >/dev/null || (echo "k6 not found on PATH (https://k6.io/docs/get-started/installation/)" && exit 1)
+	STRESS_BASE_URL="$(STRESS_BASE_URL)" STRESS_ALLOW_REMOTE="$(STRESS_ALLOW_REMOTE)" STRESS_INTERNAL_SECRET="$(STRESS_INTERNAL_SECRET)" k6 run stress/read.js
+	STRESS_BASE_URL="$(STRESS_BASE_URL)" STRESS_ALLOW_REMOTE="$(STRESS_ALLOW_REMOTE)" STRESS_INTERNAL_SECRET="$(STRESS_INTERNAL_SECRET)" STRESS_TOKEN="$(STRESS_TOKEN)" k6 run stress/write.js
 
 run: build-dansal
 	./dansal --config ./config.yaml

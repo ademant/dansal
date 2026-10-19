@@ -12,7 +12,7 @@ SYSTEMDDIR := /etc/systemd/system
 .DEFAULT_GOAL := build
 
 .PHONY: build build-dansal build-dansal_web build-dansal_admin build-dansal_webmin build-dansal_doc \
-        run fmt vet vulncheck bench clean install install-web install-webmin install-doc install-units setup-instance \
+        run fmt vet vulncheck bench stress k6-install test-deps e2e-up e2e-down e2e-status e2e-run e2e-test clean install install-web install-webmin install-doc install-units setup-instance \
         update check-config deb deploy-nginx deploy-nginx-webmin deploy-nginx-doc deploy-nginx-default install-nginx-brotli deploy-fail2ban deploy-logrotate deploy-full \
         wp-zip deploy-wp rollback list
 
@@ -69,27 +69,78 @@ vulncheck:
 bench:
 	go test -bench=. -benchmem ./cmd/dansal/
 
-run: build-dansal
-	./dansal --config ./config.yaml
+# k6 is pinned and built into GOPATH/bin, so `make stress` and `make test-deps`
+# need no system package and no network beyond the Go module proxy (#1544).
+K6_VERSION := v1.8.2
+K6_BIN     := $(shell go env GOPATH)/bin/k6
 
-clean:
-	rm -f dansal dansal_web dansal_admin dansal_webmin dansal_doc *.deb
+$(K6_BIN):
+	go install go.k6.io/k6@$(K6_VERSION)
 
-# E2E Playwright tests
+k6-install: $(K6_BIN)
+
+# stress (#1544) runs the k6 HTTP load tests in stress/ against a running
+# scratch instance. It isn't part of CI: the write script creates real events,
+# so it is never pointed at dev or prod by default. See stress/README.md.
+stress: $(K6_BIN)
+	@test -n "$(STRESS_BASE_URL)" || (echo "set STRESS_BASE_URL, e.g. make stress STRESS_BASE_URL=http://127.0.0.1:18000" && exit 1)
+	STRESS_BASE_URL="$(STRESS_BASE_URL)" STRESS_ALLOW_REMOTE="$(STRESS_ALLOW_REMOTE)" STRESS_INTERNAL_SECRET="$(STRESS_INTERNAL_SECRET)" $(K6_BIN) run stress/read.js
+	STRESS_BASE_URL="$(STRESS_BASE_URL)" STRESS_ALLOW_REMOTE="$(STRESS_ALLOW_REMOTE)" STRESS_INTERNAL_SECRET="$(STRESS_INTERNAL_SECRET)" STRESS_TOKEN="$(STRESS_TOKEN)" $(K6_BIN) run stress/write.js
+
+# Everything the e2e suite and the k6 scripts need on this machine: npm
+# packages and the Playwright browser (with its OS libraries, which
+# `--with-deps` installs via apt and so asks for sudo), plus k6.
+test-deps: e2e-install $(K6_BIN)
+
+# E2E stack. `e2e-up` runs the API, web and webmin binaries from `make build`
+# on ports 18000/18080/18090 as the current user, with no sudo: configs and
+# data are generated under e2e/.run/ (see scripts/e2e-stack.sh). CI does the
+# same with sudo against /etc and /var/lib; this is the local equivalent.
+e2e-up:
+	scripts/e2e-stack.sh up
+
+e2e-down:
+	scripts/e2e-stack.sh down
+
+e2e-status:
+	scripts/e2e-stack.sh status
+
+# e2e-run runs Playwright against an already-running stack. Variables:
+#   E2E_PROJECT  desktop | mobile | all (default all)
+#   E2E_SPEC     spec path or glob, e.g. tests/journeys/checkin.spec.ts
+#   E2E_GREP     only tests whose title matches this pattern
+E2E_PROJECT ?= all
+E2E_DATA    := $(CURDIR)/e2e/.run/data
+E2E_ENV     := BASE_URL=http://127.0.0.1:18080 API_URL=http://127.0.0.1:18000 \
+	WEBMIN_URL=http://127.0.0.1:18090 ADMIN_SOCKET=$(E2E_DATA)/dansal.sock \
+	ADMIN_NO_SUDO=1 ADMIN_CLI=$(CURDIR)/dansal_admin WEB_DB_PATH=$(E2E_DATA)/web.db
+
+e2e-run:
+	cd e2e && $(E2E_ENV) npx playwright test \
+		$(if $(filter-out all,$(E2E_PROJECT)),--project=$(E2E_PROJECT)) \
+		$(E2E_SPEC) $(if $(E2E_GREP),--grep "$(E2E_GREP)")
+
+# e2e-test brings the stack up, runs the suite, and always stops the stack
+# again, returning the test exit status.
+e2e-test:
+	$(MAKE) e2e-up
+	@status=0; $(MAKE) e2e-run || status=$$?; $(MAKE) e2e-down; exit $$status
+
 e2e-install:
 	cd e2e && npm ci && npx playwright install --with-deps chromium
 
 e2e: e2e-install
-	cd e2e && npx playwright test
+	$(MAKE) e2e-test E2E_PROJECT=all
 
 e2e-desktop: e2e-install
-	cd e2e && npx playwright test --project=desktop
+	$(MAKE) e2e-test E2E_PROJECT=desktop
 
 e2e-mobile: e2e-install
-	cd e2e && npx playwright test --project=mobile
+	$(MAKE) e2e-test E2E_PROJECT=mobile
 
 e2e-a11y: e2e-install
-	cd e2e && npx playwright test tests/accessibility/
+	$(MAKE) e2e-test E2E_SPEC=tests/accessibility/
+
 
 install: build
 	@[ "$(shell id -u)" = "0" ] || { echo "install requires root"; exit 1; }

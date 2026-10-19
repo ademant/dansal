@@ -1330,6 +1330,8 @@ All request bodies are capped at `server.max_body_bytes` (default 1MB). Exceedin
 
 For bulk-create endpoints that accept a JSON array (`POST /api/v1/events`, `/locations`, `/musicians` — see their sections below), this 1MB cap is the practical constraint on batch size, not server processing time: a benchmark of event insertion against the production schema showed ~800 events/sec, so the 1MB body limit is reached (roughly 1,000–2,000 events for typical payloads, more for minimal ones) well before any request-processing timeout would be. **Recommended safe batch size: up to ~1,000 items per request** for typical payloads; split larger imports into multiple requests rather than relying on a single very large array.
 
+**Load testing.** The ~800 events/sec figure above is an in-process benchmark (`make bench`). It doesn't include HTTP or concurrent writers. The k6 scripts in [`stress/`](stress/README.md) (`make stress`) measure the read path and concurrent `POST /api/v1/events` against a scratch instance. No measured HTTP throughput or safe concurrency limit is recorded here yet; add it from a baseline run on the target hardware.
+
 ## Usage Examples
 
 ### Login and create an event

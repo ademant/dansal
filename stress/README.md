@@ -38,6 +38,19 @@ make stress STRESS_BASE_URL=http://127.0.0.1:18000 STRESS_TOKEN=… \
   STRESS_INTERNAL_SECRET=…
 ```
 
+For a local run on the same host, `E2E_INTERNAL_SECRET` starts the scratch
+stack with the exemption, and `STRESS_INTERNAL_SECRET` sends it from k6:
+
+```bash
+E2E_INTERNAL_SECRET=… make e2e-up
+make stress STRESS_BASE_URL=http://127.0.0.1:18000 STRESS_INTERNAL_SECRET=… STRESS_TOKEN=…
+make e2e-down
+```
+
+`make e2e-up` wipes the scratch data first, so `write.js` events from an earlier
+run disappear. `STRESS_TOKEN` must be a session token: a magic link from
+`dansal_admin magic-link` (admin accounts can't use password login).
+
 Or run one script on its own:
 
 ```bash
@@ -49,6 +62,35 @@ STRESS_BASE_URL=http://127.0.0.1:18000 STRESS_TOKEN=… k6 run stress/write.js
 
 It leaves events titled `stress-test …` on the scratch instance. Delete them
 there, or drop the scratch instance's database after the run.
+
+## Baseline (scratch instance, 2026-10-19)
+
+Single host, loopback only, `make build` binaries, `E2E_INTERNAL_SECRET` set so
+the scripts were exempt from the per-IP limiter. Figures are a starting point,
+not a capacity claim.
+
+**Read (`read.js`, 0 to 70 VUs, about 2 min):** 0.00% failed, 60,270 checks passed.
+- list (`tag=workshop`, future window, limit 20): p95 190 ms, median 53 ms
+- iCal (`text/calendar`): p95 140 ms, median 38 ms
+
+**Write (`write.js`, 0 to 20 VUs):** this is where the writers queue.
+- With the internal secret, about 99.7% of creates did not return `201`, but
+  only 0.02% were 5xx. The other responses were not 5xx and have not been
+  identified yet. The likely cause is the per-account mutation limit
+  (`account_mutation_rate_limit`, 600/min), which the internal secret does not
+  exempt. Confirm by counting status codes before drawing conclusions.
+- A 40-way parallel burst of 120 creates gave 12 × `201`, 88 × `500`, and 20 with
+  no response. The 500 bodies are the generic `Internal server error` with an
+  `error_id`. The journal shows the cause: `internal error: database is locked`
+  (182 lines in the test window, all from the scratch process).
+
+So the failure mode the issue predicted is real: concurrent event inserts
+contend on SQLite and surface as 500s, not queued or retried writes. Before
+raising load, decide whether to serialize writes in the app, retry on
+`SQLITE_BUSY`, or raise `busy_timeout`. Those are separate changes.
+
+Note on logs: the API logs to syslog, not to a file. Read them with
+`journalctl -t dansal@config` (the tag comes from the config path).
 
 ## Thresholds
 

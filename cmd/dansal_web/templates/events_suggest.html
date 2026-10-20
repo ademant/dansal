@@ -295,6 +295,8 @@
         <label for="sg-url">{{$.Strings.T "evt_website"}} {{template "sg-help" (dict "id" "website" "S" $.Strings)}}
           <input type="url" id="sg-url" name="url" placeholder="https://...">
         </label>
+        <p class="sg-url-note" data-status="no_events" role="status" hidden>{{$.Strings.T "sg_url_check_no_events"}}</p>
+        <p class="sg-url-note" data-status="unreachable" role="status" hidden>{{$.Strings.T "sg_url_check_unreachable"}}</p>
         <p class="sg-src-date-warn date-warn-note" hidden><span class="sg-src-date-msg"></span> <button type="button" class="btn-secondary sg-src-date-use">{{$.Strings.T "sg_src_date_use"}}</button></p>
       </div>
       <div class="form-row form-row-2col">
@@ -456,6 +458,8 @@
 /* #1417: source-date warning */
 .sg-src-date-warn{display:flex!important;align-items:center;gap:.5rem;flex-wrap:wrap;padding:.35rem .6rem;border-left:3px solid #d97706;background:var(--badge-warn-bg,#fff3cd);border-radius:3px}
 .sg-src-date-warn[hidden]{display:none!important}
+.sg-url-note{margin:.35rem 0 0;padding:.35rem .6rem;border-left:3px solid #d97706;background:var(--badge-warn-bg,#fff3cd);border-radius:3px;font-size:.9rem}
+.sg-url-note[hidden]{display:none!important}
 .sg-src-date-use{padding:.2rem .6rem;font-size:.8rem}
 /* #1414: venue picker */
 .sg-venue-search{display:flex;gap:.5rem}
@@ -1138,17 +1142,29 @@ function applyTimeDefaults(dateFrom, dateTo) {
       window.sgDateApply(srcDates[0], toISO);
     });
   });
-  // Website field: look the URL up once per change, only with a date set.
+  // Website field (#1559): checked when the field loses focus (change fires
+  // on blur). Warn only: a note under the field says when the page has no
+  // event data we can read or could not be reached; every field stays
+  // editable by hand. Dates are offered whenever the page names any.
   var urlInp = document.getElementById('sg-url');
+  var urlNotes = document.querySelectorAll('.sg-url-note');
+  function showUrlNote(status) {
+    urlNotes.forEach(function(p){ p.hidden = p.getAttribute('data-status') !== status; });
+  }
   if (urlInp) urlInp.addEventListener('change', function(){
     var u = urlInp.value.trim();
-    var from = (document.getElementById('sg-date-from') || {}).value || '';
-    if (!/^https?:\/\//i.test(u) || u === lastURL || !from) return;
-    lastURL = u;
+    if (!/^https?:\/\//i.test(u)) { lastURL = ''; showUrlNote(''); return; }
+    if (u === lastURL) return;
     fetch('/events/suggest/url-dates?url=' + encodeURIComponent(u))
-      .then(function(r){ return r.ok ? r.json() : {dates: []}; })
-      .then(function(res){ if (urlInp.value.trim() === u && res.dates && res.dates.length) window.sgSetSourceDates(res.dates); })
-      .catch(function(){});
+      .then(function(r){ return r.ok ? r.json() : {status: 'unreachable', dates: []}; })
+      .then(function(res){
+        if (urlInp.value.trim() !== u || res.status === 'skipped') { showUrlNote(''); return; }
+        // An unreachable page is retried on the next blur; the rest is final.
+        lastURL = res.status === 'unreachable' ? '' : u;
+        showUrlNote(res.status === 'ok' ? '' : res.status);
+        window.sgSetSourceDates(res.dates || []);
+      })
+      .catch(function(){ lastURL = ''; showUrlNote('unreachable'); });
   });
 })();
 

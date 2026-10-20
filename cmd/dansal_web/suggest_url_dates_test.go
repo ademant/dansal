@@ -82,3 +82,46 @@ func TestSuggestSourceDateOnlyInImportMode(t *testing.T) {
 		t.Error("manage link must not treat its stored date as a source date")
 	}
 }
+
+// #1559: the website check reports why it found no dates, so the form can
+// say what happened. Only no_events and unreachable show a note; the rest is
+// silent. The API answers 422 for an unparseable body and 502 when it could
+// not fetch the URL (suggestPreviewHandler).
+func TestSuggestURLDatesStatus(t *testing.T) {
+	cases := []struct {
+		name   string
+		status int
+		body   string
+		want   string
+		dates  string
+	}{
+		{"events found", http.StatusOK, `[{"title":"Ball","start_time":"2026-10-03T20:00:00+02:00"}]`, urlDatesOK, "2026-10-03"},
+		{"page without event data", http.StatusUnprocessableEntity, `{"error":"no machine-readable events"}`, urlDatesNoEvents, ""},
+		{"empty event list", http.StatusOK, `[]`, urlDatesNoEvents, ""},
+		{"fetch failed", http.StatusBadGateway, `{"error":"fetch failed"}`, urlDatesUnreachable, ""},
+		{"rate limited by the API", http.StatusTooManyRequests, `rate limit exceeded`, urlDatesSkipped, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tc.status)
+				w.Write([]byte(tc.body))
+			}))
+			defer api.Close()
+			publicThrottle = newSubmissionThrottleForget(100, time.Minute, time.Hour)
+			h := suggestURLDatesHandler(&Config{SMTPHost: "smtp.example.test"}, &DansalClient{BaseURL: api.URL, HTTP: api.Client()})
+			rec := httptest.NewRecorder()
+			h(rec, httptest.NewRequest(http.MethodGet, "/events/suggest/url-dates?url=https%3A%2F%2Fbalfolk-aachen.de%2Fveranstaltungen%2F", nil))
+			var res urlDatesResponse
+			if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil || rec.Code != http.StatusOK {
+				t.Fatalf("status %d, body %s", rec.Code, rec.Body.String())
+			}
+			if res.Status != tc.want {
+				t.Errorf("status = %q, want %q", res.Status, tc.want)
+			}
+			if strings.Join(res.Dates, ",") != tc.dates {
+				t.Errorf("dates = %q, want %q", res.Dates, tc.dates)
+			}
+		})
+	}
+}

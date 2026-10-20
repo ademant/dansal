@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"log"
 	"mime/multipart"
 	"net/http"
@@ -20,8 +21,35 @@ import (
 
 const urlDatesMax = 20
 
+// Status values for urlDatesResponse.Status. The check is advisory: only
+// urlDatesNoEvents and urlDatesUnreachable show a note on the form.
+const (
+	urlDatesOK          = "ok"          // event data found; Dates lists its start days
+	urlDatesNoEvents    = "no_events"   // page fetched, no iCal/JSON/schema.org event data
+	urlDatesUnreachable = "unreachable" // fetch failed, timed out or was refused
+	urlDatesSkipped     = "skipped"     // rate-limited, or not a checkable URL: no note
+)
+
 type urlDatesResponse struct {
-	Dates []string `json:"dates"`
+	Dates  []string `json:"dates"`
+	Status string   `json:"status"`
+}
+
+// urlDatesStatus maps a preview failure to a status: the API answers 422
+// when the fetched body has no parseable events and 502 when it could not
+// fetch the URL (suggestPreviewHandler); anything else is treated as
+// unreachable so the suggester is told the check did not work.
+func urlDatesStatus(err error) string {
+	var ae *apiHTTPError
+	if errors.As(err, &ae) {
+		switch ae.StatusCode {
+		case http.StatusUnprocessableEntity:
+			return urlDatesNoEvents
+		case http.StatusTooManyRequests:
+			return urlDatesSkipped
+		}
+	}
+	return urlDatesUnreachable
 }
 
 func suggestURLDatesHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
@@ -30,16 +58,18 @@ func suggestURLDatesHandler(cfg *Config, client *DansalClient) http.HandlerFunc 
 			http.NotFound(w, r)
 			return
 		}
-		empty := urlDatesResponse{Dates: []string{}}
+		respond := func(status string, dates []string) {
+			writeJSONResponse(w, http.StatusOK, urlDatesResponse{Dates: dates, Status: status})
+		}
 		raw := strings.TrimSpace(r.URL.Query().Get("url"))
 		u, err := url.Parse(raw)
 		if raw == "" || len(raw) > 2000 || err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-			writeJSONResponse(w, http.StatusOK, empty)
+			respond(urlDatesSkipped, []string{})
 			return
 		}
 		key := getClientIP(r) + "|" + r.UserAgent()
 		if publicThrottle.isBlocked(key) {
-			writeJSONResponse(w, http.StatusOK, empty)
+			respond(urlDatesSkipped, []string{})
 			return
 		}
 		publicThrottle.record(key)
@@ -51,10 +81,14 @@ func suggestURLDatesHandler(cfg *Config, client *DansalClient) http.HandlerFunc 
 		events, err := client.SuggestEventPreview(r.Context(), &body, mw.FormDataContentType())
 		if err != nil {
 			log.Printf("suggest url-dates: %v", err)
-			writeJSONResponse(w, http.StatusOK, empty)
+			respond(urlDatesStatus(err), []string{})
 			return
 		}
-		writeJSONResponse(w, http.StatusOK, urlDatesResponse{Dates: startDates(events)})
+		if len(events) == 0 {
+			respond(urlDatesNoEvents, []string{})
+			return
+		}
+		respond(urlDatesOK, startDates(events))
 	}
 }
 

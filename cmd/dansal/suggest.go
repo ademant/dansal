@@ -333,6 +333,7 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	req.Timetable = dropBlankTimetableRows(req.Timetable)
 	if err := validateTimetableRequests(req.Timetable); err != nil {
 		writeError(w, "timetable: "+err.Error(), http.StatusBadRequest)
 		return

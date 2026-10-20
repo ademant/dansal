@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -281,20 +282,47 @@ func timetableAuthCheck(w http.ResponseWriter, userRole string, callerID, eventI
 	return requireEventOrg(w, userRole, callerID, orgID, nil, false)
 }
 
+// isBlankTimetableRow reports whether a row has no content at all. The suggest
+// and timetable forms send an empty row when nothing is entered (#1558); such
+// a row is dropped rather than rejected. A row with some content but no title
+// is still a validation error.
+func isBlankTimetableRow(r TimetableEntryRequest) bool {
+	return r.StartTime == "" && r.EndTime == "" && r.Title == "" && r.Description == "" &&
+		r.Room == "" && r.EntryType == "" && r.EntryDate == "" && r.Difficulty == "" &&
+		r.LocationID == nil && r.MusicianID == nil && r.InstructorID == nil
+}
+
+// dropBlankTimetableRows returns reqs without the blank rows (#1558).
+func dropBlankTimetableRows(reqs []TimetableEntryRequest) []TimetableEntryRequest {
+	out := make([]TimetableEntryRequest, 0, len(reqs))
+	for _, r := range reqs {
+		if !isBlankTimetableRow(r) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 func readTimetableBody(w http.ResponseWriter, r *http.Request) (reqs []TimetableEntryRequest, ok bool) {
 	body, ok := readBodyOrError(w, r)
 	if !ok {
 		return nil, false
 	}
-	if json.Unmarshal(body, &reqs) != nil || len(reqs) == 0 || reqs[0].Title == "" {
-		var single TimetableEntryRequest
-		if err := json.Unmarshal(body, &single); err != nil {
+	// Decide array vs single object by the first byte, not by the first row's
+	// title: a blank first row is a valid array element (#1558).
+	if trimmed := bytes.TrimLeft(body, " \t\r\n"); len(trimmed) > 0 && trimmed[0] == '[' {
+		if err := json.Unmarshal(body, &reqs); err != nil || len(reqs) == 0 {
 			writeError(w, "invalid request body", http.StatusBadRequest)
 			return nil, false
 		}
-		reqs = []TimetableEntryRequest{single}
+		return reqs, true
 	}
-	return reqs, true
+	var single TimetableEntryRequest
+	if err := json.Unmarshal(body, &single); err != nil {
+		writeError(w, "invalid request body", http.StatusBadRequest)
+		return nil, false
+	}
+	return []TimetableEntryRequest{single}, true
 }
 
 func insertEntry(q querier, eventID int, req TimetableEntryRequest) (TimetableEntry, error) {
@@ -344,6 +372,7 @@ func addTimetableEntries(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	reqs = dropBlankTimetableRows(reqs)
 	if err := validateTimetableRequests(reqs); err != nil {
 		writeError(w, err.Error(), http.StatusBadRequest)
 		return
@@ -395,6 +424,7 @@ func replaceTimetable(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Invalid request body: expected JSON array", http.StatusBadRequest)
 		return
 	}
+	reqs = dropBlankTimetableRows(reqs)
 	if err := validateTimetableRequests(reqs); err != nil {
 		writeError(w, err.Error(), http.StatusBadRequest)
 		return

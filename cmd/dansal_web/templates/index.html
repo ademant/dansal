@@ -92,6 +92,8 @@
 .week-nav button:hover{background:var(--btn-bg-h)}
 .week-label{font-weight:600;font-size:.95rem;flex:1;text-align:center}
 .week-table-wrap{overflow-x:auto}
+a.cal-evt.cal-watched{background:#fff3b0;color:#1f2937}
+html.dark a.cal-evt.cal-watched{background:#5c4a00;color:#fff7d6}
 .week-table{width:100%;border-collapse:collapse;table-layout:fixed}
 .week-table th{background:var(--bg-subtle);font-weight:600;font-size:.8rem;padding:.5rem .4rem;text-align:center;border:1px solid var(--border-lite);white-space:nowrap;color:var(--fg-2)}
 .week-table td{vertical-align:top;padding:.4rem;border:1px solid var(--border-lite);min-width:120px}
@@ -500,6 +502,22 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     return d;
   }
 
+  // #1554: when the watchlist changes, refresh the watched map markers and the
+  // weekly calendar (so watched events get their yellow cell).
+  function refreshWatchedMarkers(){
+    if(!window.L) return;
+    var byId={};
+    eventsGeo.forEach(function(e){ byId[e.id]=e; });
+    Object.keys(allMarkers).forEach(function(id){
+      var e=byId[id];
+      if(e) allMarkers[id].setIcon(eventIcon(e));
+    });
+  }
+  document.addEventListener('watchlistchange',function(){
+    refreshWatchedMarkers();
+    renderWeek();
+  });
+
   function renderWeek(){
     var ws = getWeekStart(weekOffset);
     // Week navigation (prev/next, mini calendar, swipe) can move past what's
@@ -550,8 +568,10 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 
     function evtCls(r){
       var avail=r.dataset.availability||'';
+      // #1554: events on the visitor's watchlist get a yellow cell.
+      var watched=(typeof watchlistHas==='function') && watchlistHas(parseInt(r.dataset.id,10));
       return 'cal-evt'+(isPastRow(r)?' cal-evt-past':'')+(r.classList.contains('is-cancelled')?' cal-cancelled':'')+
-        (avail==='sold_out'?' cal-sold-out':avail==='limited'?' cal-limited':'');
+        (avail==='sold_out'?' cal-sold-out':avail==='limited'?' cal-limited':'')+(watched?' cal-watched':'');
     }
     function feeSym(r){
       var fee=r.dataset.fee||'';
@@ -1157,7 +1177,11 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     }
     if (e.x) color='#9e9e9e';
     var op=e.x?'0.65':'1';
-    var inner=emoji
+    // #1554: a watchlisted event shows a gold star instead of its type glyph.
+    var watched=(typeof watchlistHas==='function') && watchlistHas(e.id);
+    var inner=watched
+      ? '<span style="color:#ffd54a;font-size:16px;line-height:1;display:block">&#9733;</span>'
+      : emoji
       ? '<span style="font-size:15px;line-height:1;display:block">'+emoji+'</span>'
       : '<span style="width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.8);display:block"></span>';
     var html='<div style="opacity:'+op+';width:32px;height:44px;display:flex;flex-direction:column;align-items:center">'

@@ -1087,6 +1087,44 @@ function watchlistRow(it,list){
   return li;
 }
 
+// watchlistExport downloads the list as a JSON file. The file names the dansal
+// instance it came from, so an import on another instance can refuse it.
+window.watchlistExport=function(){
+  var doc={format:'dansal-watchlist',version:1,instance:location.host,
+           exported_at:new Date().toISOString(),ids:watchlistRead()};
+  var url=URL.createObjectURL(new Blob([JSON.stringify(doc,null,2)],{type:'application/json'}));
+  var a=document.createElement('a');
+  a.href=url; a.download='dansal-watchlist.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); },1000);
+};
+
+// watchlistImport merges a watchlist file into the local list (union, capped at
+// WL_MAX). It checks the format, version, instance and id rules first.
+window.watchlistImport=function(input){
+  var file=input.files&&input.files[0];
+  input.value='';
+  if(!file) return;
+  var list=document.getElementById('wl-list');
+  var msg=document.getElementById('wl-io-msg');
+  var say=function(key){ if(msg) msg.textContent=list?(list.getAttribute('data-msg-'+key)||''):''; };
+  if(file.size>20000){ say('bad'); return; }
+  file.text().then(function(t){
+    var doc=JSON.parse(t);
+    if(!doc||doc.format!=='dansal-watchlist'||doc.version!==1||!Array.isArray(doc.ids)){ throw 'bad'; }
+    if(doc.instance!==location.host){ throw 'instance'; }
+    var ids=doc.ids;
+    for(var i=0;i<ids.length;i++){ if(!Number.isInteger(ids[i])||ids[i]<=0) throw 'bad'; }
+    var have=watchlistRead();
+    var merged=have.slice();
+    ids.forEach(function(id){ if(merged.indexOf(id)<0) merged.push(id); });
+    var capped=merged.length>WL_MAX;
+    watchlistWrite(merged);
+    if(capped) say('capped'); else say('ok');
+    watchlistRender();
+  }).catch(function(e){ say(e==='instance'?'instance':'bad'); });
+};
+
 document.addEventListener('DOMContentLoaded',function(){
   watchlistUI();
   watchlistRender();

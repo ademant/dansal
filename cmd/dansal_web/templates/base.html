@@ -121,6 +121,10 @@ nav{background:#1a1a2e;color:#fff;padding:.5rem 1rem;margin:0 -1rem 0;display:fl
 .nav-brand:hover{opacity:.85}
 .nav-watchlist{color:#ffd54a;text-decoration:none;font-size:1.4rem;line-height:1;padding:.2rem .3rem;flex-shrink:0}
 .nav-watchlist:hover{opacity:.85}
+.wl-row-star,.wl-tile-star{background:none;border:0;cursor:pointer;color:#c79a00;font-size:1.1rem;line-height:1;padding:.1rem .2rem}
+.wl-row-star{margin-right:.2rem}
+.wl-tile-wrap{position:relative}
+.wl-tile-wrap>.wl-tile-star{position:absolute;top:.2rem;right:.2rem}
 .wl-row{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem .8rem;padding:.4rem 0;border-bottom:1px solid var(--border,#ddd)}
 .wl-meta{color:var(--fg-muted,#666);font-size:.9rem}
 .wl-cancelled{color:var(--badge-danger-fg,#b00020);font-size:.9rem}
@@ -652,6 +656,7 @@ document.addEventListener('DOMContentLoaded', function(){
     data-kitchen="{{if index $ea "kitchen"}}1{{else}}0{{end}}">
   <td class="col-time">{{if $.DateRange}}{{formatDateRange $.LangCode $.DateFormat .StartTime .EndTime}}{{else}}{{isoTime .StartTime}}{{end}}</td>
   <td>
+    <button type="button" class="wl-row-star" data-wl-star="{{.ID}}" data-fn="watchlistToggle" data-args="[{{.ID}}]" aria-pressed="false" title="{{$.Strings.T "wl_header_title"}}" aria-label="{{$.Strings.T "wl_header_title"}}">☆</button>
     <a href="/events/{{.ID}}"{{if .IsCancelled}} class="title-cancelled"{{end}}>{{.Title}}</a>
     {{if .SeriesID}}<span class="badge" title="{{$.Strings.T "badge_recurring"}}">🔁</span>{{end}}
     {{if eq .Availability "limited"}}<span class="badge avail-limited">{{$.Strings.T "badge_limited"}}</span>{{end}}

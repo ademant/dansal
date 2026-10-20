@@ -4,5 +4,12 @@
 <h1>{{.Title}}</h1>
 <p class="wl-local-note">{{.Strings.T "wl_local_note"}}</p>
 <p id="wl-empty" class="wl-empty" hidden>{{.Strings.T "wl_empty"}}</p>
-<ul id="wl-list" class="wl-list" data-endpoint="/watchlist/events" data-remove-label="{{.Strings.T "wl_remove_btn"}}" data-cancelled-label="{{.Strings.T "wl_cancelled"}}"></ul>
+<div class="wl-io">
+  <button type="button" class="btn-secondary" data-fn="watchlistExport" data-args="[]">{{.Strings.T "wl_export_btn"}}</button>
+  <label class="btn-secondary wl-import-lbl">{{.Strings.T "wl_import_btn"}}
+    <input type="file" id="wl-import" accept=".json,application/json" data-fn="watchlistImport" data-args='["@this"]' data-on="change">
+  </label>
+  <p id="wl-io-msg" class="wl-io-msg" role="status"></p>
+</div>
+<ul id="wl-list" class="wl-list" data-endpoint="/watchlist/events" data-remove-label="{{.Strings.T "wl_remove_btn"}}" data-cancelled-label="{{.Strings.T "wl_cancelled"}}" data-msg-ok="{{.Strings.T "wl_msg_ok"}}" data-msg-bad="{{.Strings.T "wl_msg_bad"}}" data-msg-instance="{{.Strings.T "wl_msg_instance"}}" data-msg-capped="{{.Strings.T "wl_msg_capped"}}"></ul>
 {{end}}

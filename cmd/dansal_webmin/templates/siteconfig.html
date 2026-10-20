@@ -237,6 +237,14 @@
 </div>
 
 <div class="card">
+  <div class="card-title">Saved watchlists</div>
+  <div class="form-group">
+    <label>Keep unused watchlists for <span class="hint">(months)</span></label>
+    <input type="number" name="watchlist_retention_months" value="{{.WatchlistRetentionMonths}}" min="1" max="120" style="max-width:80px">
+    <div class="hint">A watchlist saved under a key is deleted after this many months without a save or a load. Default 12.</div>
+  </div>
+</div>
+<div class="card">
   <div class="card-title">Rescheduled event badge</div>
   <div class="form-group">
     <label>Show badge within <span class="hint">(days before start_time)</span></label>

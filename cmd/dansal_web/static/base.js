@@ -1125,6 +1125,100 @@ window.watchlistImport=function(input){
   }).catch(function(e){ say(e==='instance'?'instance':'bad'); });
 };
 
+// ─── server copy under a random key (#1554) ────────────────────────────────
+// The browser keeps a UUID (identifies this browser's list on the server) and,
+// once a save has created one, the random key. Saving with a key updates the
+// server list; saving without one creates a new key. Loading with a key merges
+// the server ids into this browser's list and keeps the key for later saves.
+var WL_UUID_KEY='dansal_watchlist_uuid', WL_SKEY='dansal_watchlist_key';
+
+function watchlistBrowserID(){
+  try{
+    var u=localStorage.getItem(WL_UUID_KEY);
+    if(!u){
+      u=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():(Date.now()+'-'+Math.random().toString(36).slice(2));
+      localStorage.setItem(WL_UUID_KEY,u);
+    }
+    return u;
+  }catch(e){ return ''; }
+}
+
+function watchlistStoredKey(){
+  try{ return localStorage.getItem(WL_SKEY)||''; }catch(e){ return ''; }
+}
+
+// wlMsg shows a status line from the page's data-msg-<name> attributes.
+function wlMsg(name){
+  var list=document.getElementById('wl-list');
+  var msg=document.getElementById('wl-io-msg');
+  if(msg&&list) msg.textContent=list.getAttribute('data-msg-'+name)||'';
+}
+
+function wlShowKey(key){
+  var box=document.getElementById('wl-key-box');
+  var out=document.getElementById('wl-key-out');
+  if(out) out.textContent=key;
+  if(box) box.hidden=false;
+}
+
+window.watchlistSaveServer=function(){
+  var key=watchlistStoredKey();
+  var hp=document.querySelector('input[name="dansal_phone2"]');
+  fetch('/watchlist/form-token',{credentials:'same-origin'})
+  .then(function(r){ if(!r.ok) throw 'bad'; return r.json(); })
+  // The guard refuses a form token younger than a second (formguard.go), so
+  // hold the save until the token is old enough.
+  .then(function(t){ return new Promise(function(res){ setTimeout(function(){ res(t); },1200); }); })
+  .then(function(t){
+    var body=new URLSearchParams();
+    body.set('_form_token',t.form_token);
+    body.set('dansal_phone2',hp?hp.value:'');
+    body.set('uuid',watchlistBrowserID());
+    body.set('ids',watchlistRead().join(','));
+    if(key) body.set('key',key);
+    return fetch('/watchlist/save',{method:'POST',credentials:'same-origin',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body.toString()});
+  })
+  .then(function(r){
+    if(r.status===429) throw 'rate';
+    if(r.status===404) throw 'unknown';
+    if(!r.ok) throw 'bad';
+    return r.json();
+  })
+  .then(function(d){
+    if(d.key){ try{ localStorage.setItem(WL_SKEY,d.key); }catch(e){} wlShowKey(d.key); }
+    wlMsg('saved');
+  })
+  .catch(function(e){
+    wlMsg(e==='rate'?'rate':e==='unknown'?'key-unknown':'server-bad');
+  });
+};
+
+window.watchlistLoadServer=function(){
+  var input=document.getElementById('wl-key-in');
+  var key=((input&&input.value)||'').trim().toLowerCase();
+  if(!/^[0-9a-f]{32}$/.test(key)){ wlMsg('key-unknown'); return; }
+  fetch('/watchlist/load',{credentials:'same-origin',headers:{'X-Watchlist-Key':key}})
+  .then(function(r){
+    if(r.status===429) throw 'rate';
+    if(r.status===404) throw 'unknown';
+    if(!r.ok) throw 'bad';
+    return r.json();
+  })
+  .then(function(d){
+    var merged=watchlistRead().slice();
+    (d.ids||[]).forEach(function(id){ if(merged.indexOf(id)<0) merged.push(id); });
+    watchlistWrite(merged);
+    try{ localStorage.setItem(WL_SKEY,key); }catch(e){}
+    if(input) input.value='';
+    wlMsg('loaded');
+    watchlistRender();
+  })
+  .catch(function(e){
+    wlMsg(e==='rate'?'rate':e==='unknown'?'key-unknown':'server-bad');
+  });
+};
+
 document.addEventListener('DOMContentLoaded',function(){
   watchlistUI();
   watchlistRender();

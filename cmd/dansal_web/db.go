@@ -413,6 +413,33 @@ CREATE TABLE IF NOT EXISTS org_slug_redirects (
 		}
 	}
 
+	// Migration v10 (#1554): watchlists — a server copy of a visitor's watchlist,
+	// identified by a random key the browser holds. Only hashes are stored: the
+	// browser UUID (uuid_hash) and the key (key_hash). Rows expire after the
+	// webmin-configured retention (see sweepWatchlists).
+	if !migrationApplied(db, 10) {
+		db.Exec(`CREATE TABLE IF NOT EXISTS watchlists (
+			uuid_hash  TEXT    PRIMARY KEY,
+			key_hash   TEXT    NOT NULL UNIQUE,
+			ids_json   TEXT    NOT NULL,
+			updated_at INTEGER NOT NULL
+		)`)
+		db.Exec("INSERT OR IGNORE INTO schema_migrations VALUES (10)")
+	}
+	// Safety net: ensure the table exists even if v10 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='watchlists'").Scan(&n)
+		if n == 0 {
+			db.Exec(`CREATE TABLE IF NOT EXISTS watchlists (
+				uuid_hash  TEXT    PRIMARY KEY,
+				key_hash   TEXT    NOT NULL UNIQUE,
+				ids_json   TEXT    NOT NULL,
+				updated_at INTEGER NOT NULL
+			)`)
+		}
+	}
+
 	return db
 }
 
@@ -945,6 +972,7 @@ func startDataRetentionSweep(cfg *Config, db *sql.DB) {
 		defer ticker.Stop()
 		for range ticker.C {
 			sweepGeocodeCache(cfg, db)
+			sweepWatchlists(db)
 		}
 	}()
 }

@@ -1,0 +1,8 @@
+{{define "content"}}
+{{/* #1554: the watchlist page is a shell. base.js reads the ids from
+     localStorage and fills #wl-list through POST /watchlist/events. */}}
+<h1>{{.Title}}</h1>
+<p class="wl-local-note">{{.Strings.T "wl_local_note"}}</p>
+<p id="wl-empty" class="wl-empty" hidden>{{.Strings.T "wl_empty"}}</p>
+<ul id="wl-list" class="wl-list" data-endpoint="/watchlist/events" data-remove-label="{{.Strings.T "wl_remove_btn"}}" data-cancelled-label="{{.Strings.T "wl_cancelled"}}"></ul>
+{{end}}

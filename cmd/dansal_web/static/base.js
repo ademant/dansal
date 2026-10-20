@@ -984,3 +984,113 @@ function mediaMoveRow(btn,dir){
   if(dir<0) row.parentNode.insertBefore(row,sib); else row.parentNode.insertBefore(sib,row);
   mediaEditorChanged(ed);
 }
+
+// ─── watchlist (#1554) ───────────────────────────────────────────────────────
+// The visitor's watchlist lives in this browser only: one localStorage key
+// holding {v:1, ids:[…]}. The server stores nothing for it; the watchlist page
+// resolves the ids through POST /watchlist/events and drops ids it reports missing.
+var WL_KEY='dansal_watchlist', WL_MAX=200;
+
+function watchlistRead(){
+  try{
+    var o=JSON.parse(localStorage.getItem(WL_KEY)||'null');
+    if(o&&o.v===1&&Array.isArray(o.ids)){
+      return o.ids.filter(function(x){return Number.isInteger(x)&&x>0;});
+    }
+  }catch(e){}
+  return [];
+}
+
+function watchlistWrite(ids){
+  ids=ids.slice(0,WL_MAX);
+  try{ localStorage.setItem(WL_KEY,JSON.stringify({v:1,ids:ids})); }catch(e){}
+  watchlistUI();
+}
+
+window.watchlistToggle=function(id){
+  id=parseInt(id,10);
+  var ids=watchlistRead();
+  var i=ids.indexOf(id);
+  if(i>=0){ ids.splice(i,1); } else { ids.unshift(id); }
+  watchlistWrite(ids);
+  if(i>=0 && document.getElementById('wl-list')) watchlistRender();
+};
+
+// watchlistUI keeps every star in step with storage: the header star is filled
+// when the list has entries, and each event star reflects its own event.
+function watchlistUI(){
+  var ids=watchlistRead();
+  var hdr=document.getElementById('wl-header-star');
+  if(hdr) hdr.textContent=ids.length?'★':'☆';
+  var stars=document.querySelectorAll('[data-wl-star]');
+  for(var s=0;s<stars.length;s++){
+    var on=ids.indexOf(parseInt(stars[s].getAttribute('data-wl-star'),10))>=0;
+    stars[s].textContent=on?'★':'☆';
+    stars[s].setAttribute('aria-pressed',on?'true':'false');
+  }
+}
+
+// watchlistRender fills the watchlist page from storage. Titles are set with
+// textContent, never innerHTML.
+function watchlistRender(){
+  var list=document.getElementById('wl-list');
+  if(!list) return;
+  var empty=document.getElementById('wl-empty');
+  var ids=watchlistRead();
+  list.textContent='';
+  if(!ids.length){ if(empty) empty.hidden=false; return; }
+  if(empty) empty.hidden=true;
+  fetch(list.getAttribute('data-endpoint'),{
+    method:'POST', credentials:'same-origin',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ids:ids})
+  }).then(function(r){ if(!r.ok) throw new Error('lookup '+r.status); return r.json(); })
+  .then(function(data){
+    var missing=data.missing||[];
+    if(missing.length){
+      watchlistWrite(watchlistRead().filter(function(id){return missing.indexOf(id)<0;}));
+    }
+    list.textContent='';
+    (data.items||[]).forEach(function(it){ list.appendChild(watchlistRow(it,list)); });
+    if(!watchlistRead().length && empty) empty.hidden=false;
+  }).catch(function(){
+    // Keep the stored list on any failure; a network or API error must not
+    // drop entries.
+  });
+}
+
+function watchlistRow(it,list){
+  var li=document.createElement('li');
+  li.className='wl-row';
+  var a=document.createElement('a');
+  a.href=it.path;
+  a.textContent=it.title;
+  li.appendChild(a);
+  var meta=document.createElement('span');
+  meta.className='wl-meta';
+  meta.textContent=[it.start_time?it.start_time.slice(0,16).replace('T',' '):'',it.location||''].filter(Boolean).join(' · ');
+  li.appendChild(meta);
+  if(it.cancelled){
+    var c=document.createElement('span');
+    c.className='wl-cancelled';
+    c.textContent=list.getAttribute('data-cancelled-label')||'';
+    li.appendChild(c);
+  }
+  var btn=document.createElement('button');
+  btn.type='button';
+  btn.className='btn-sm-secondary wl-remove';
+  btn.textContent=list.getAttribute('data-remove-label')||'×';
+  btn.setAttribute('data-fn','watchlistToggle');
+  btn.setAttribute('data-args','['+it.id+']');
+  btn.setAttribute('data-wl-remove','1');
+  li.appendChild(btn);
+  return li;
+}
+
+document.addEventListener('DOMContentLoaded',function(){
+  watchlistUI();
+  watchlistRender();
+});
+window.addEventListener('storage',function(e){
+  if(e.key===WL_KEY){ watchlistUI(); watchlistRender(); }
+});

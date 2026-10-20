@@ -188,7 +188,7 @@ The six gaps below (confirmed bookings, `pending_fetch_suggestions`, expired-unc
 
 All session cookies: `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`
 (`internal/websession/websession.go:74-114`). Logout sends
-`Clear-Site-Data: "cookies", "storage"` — purges localStorage across tabs
+`Clear-Site-Data: "cookies"` — purges the session cookies across tabs; localStorage is deliberately kept, since it holds per-device preferences and lists
 (`cmd/dansal_web/auth.go:239-250`).
 
 **Conclusion: no cookie banner is required** — there is nothing non-essential to consent

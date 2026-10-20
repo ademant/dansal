@@ -36,7 +36,11 @@ func TestSuggestManageRejectsMoveIntoPast(t *testing.T) {
 
 	now := time.Now().In(instanceTimezone)
 	future := now.AddDate(0, 1, 0)
-	past := now.AddDate(0, -2, 0)
+	// Noon, not the current clock time: the test moves the event by 30 minutes,
+	// and a time near midnight would cross into the next day and fail the
+	// same-day rule (sameLocalDay) at certain times of day.
+	p2 := now.AddDate(0, -2, 0).In(instanceTimezone)
+	past := time.Date(p2.Year(), p2.Month(), p2.Day(), 12, 0, 0, 0, instanceTimezone)
 	exp := now.AddDate(1, 0, 0).UTC().Format(time.RFC3339)
 	mustExec := func(q string, args ...any) {
 		t.Helper()

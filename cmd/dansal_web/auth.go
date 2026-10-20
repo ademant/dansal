@@ -243,9 +243,12 @@ func logoutHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			_ = client.Logout(r.Context(), token)
 		}
 		clearSession(w)
-		// Instruct the browser to purge cookies and storage on logout so
-		// stale session state does not linger in other open tabs (#1135).
-		w.Header().Set("Clear-Site-Data", `"cookies", "storage"`)
+		// Instruct the browser to purge the session cookies on logout so stale
+		// session state does not linger in other open tabs (#1135). Storage is
+		// deliberately not purged: localStorage holds per-browser preferences
+		// and lists (colour scheme, starred timetable entries, a future
+		// watchlist) that belong to the device, not to the session.
+		w.Header().Set("Clear-Site-Data", `"cookies"`)
 		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 	}
 }

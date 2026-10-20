@@ -409,6 +409,9 @@ func main() {
 		r.HandleFunc("GET /help", helpHandler(cfg, tmpls, i18n, help))
 		r.HandleFunc("GET /watchlist", watchlistPageHandler(cfg, tmpls, i18n))
 		r.HandleFunc("POST /watchlist/events", watchlistLookupHandler(client))
+		r.HandleFunc("GET /watchlist/form-token", watchlistFormTokenHandler())
+		r.HandleFunc("POST /watchlist/save", watchlistSaveHandler(cfg, db))
+		r.HandleFunc("GET /watchlist/load", watchlistLoadHandler(db))
 
 		r.HandleFunc("GET /login", loginPageHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /login", loginHandler(cfg, tmpls, client, i18n))

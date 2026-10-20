@@ -80,4 +80,26 @@ test.describe("Watchlist (#1554)", () => {
       .poll(() => page.evaluate(() => localStorage.getItem("dansal_watchlist")))
       .toBe(JSON.stringify({ v: 1, ids: [id] }));
   });
+  test("save the list on the server, then load it with the key in another browser", async ({ page, browser }) => {
+    const id = seed.eventIds[0];
+    await page.goto(`${EVENT_HREF_PREFIX}${id}`);
+    await page.locator(`[data-wl-star="${id}"]`).click();
+
+    await page.goto("/watchlist");
+    await page.locator(".wl-server button").nth(0).click();
+    // The save waits briefly for the form token to age (formguard.go), so
+    // poll for the key rather than reading it at once.
+    await expect(page.locator("#wl-key-out")).toHaveText(/^[0-9a-f]{32}$/);
+    const key = (await page.locator("#wl-key-out").textContent()) ?? "";
+
+    const other = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+    const second = await other.newPage();
+    await second.goto("/watchlist");
+    await second.locator("#wl-key-in").fill(key);
+    await second.locator(".wl-server button").nth(1).click();
+    await expect(
+      second.locator("#wl-list li.wl-row").filter({ hasText: seed.eventTitles[0] })
+    ).toBeVisible();
+    await other.close();
+  });
 });

@@ -310,27 +310,28 @@ func loadDefaultDanceIDs(db *sql.DB) map[int]bool {
 }
 
 type siteConfigData struct {
-	Flash                string
-	SiteName             string
-	Contact              string
-	HasLogo              bool
-	HasBanner            bool
-	HasFavicon           bool
-	HasAIBadge           bool
-	LogoAIGenerated      bool
-	BannerAIGenerated    bool
-	HasRelayAvatar       bool
-	HasRelayBanner       bool
-	Dances               []dance
-	DefaultDanceIDs      map[int]bool
-	MultiLangFields      []multiLangFieldView // #1461: impressum/privacy/terms/home_intro/default_desc_*
-	HolidayCountry       string
-	PlaceCountries       string                // #1429: countries for the city type-ahead's place table
-	PlaceImports         []places.ImportStatus // #1429: import state per country
-	IndexNowKey          string
-	RescheduledBadgeDays string
-	DateFormat           string // "" locale-based, "de" DD.MM.YYYY
-	TimeFormatSite       string // "" web.yaml default, "24h", "12h"
+	Flash                    string
+	SiteName                 string
+	Contact                  string
+	HasLogo                  bool
+	HasBanner                bool
+	HasFavicon               bool
+	HasAIBadge               bool
+	LogoAIGenerated          bool
+	BannerAIGenerated        bool
+	HasRelayAvatar           bool
+	HasRelayBanner           bool
+	Dances                   []dance
+	DefaultDanceIDs          map[int]bool
+	MultiLangFields          []multiLangFieldView // #1461: impressum/privacy/terms/home_intro/default_desc_*
+	HolidayCountry           string
+	PlaceCountries           string                // #1429: countries for the city type-ahead's place table
+	PlaceImports             []places.ImportStatus // #1429: import state per country
+	IndexNowKey              string
+	RescheduledBadgeDays     string
+	WatchlistRetentionMonths string
+	DateFormat               string // "" locale-based, "de" DD.MM.YYYY
+	TimeFormatSite           string // "" web.yaml default, "24h", "12h"
 	// Timezone and TimezoneOptions (#1394) are authoritative in the API's
 	// own config.yaml (server.timezone), not a site_settings value like
 	// DateFormat/TimeFormatSite above — read/written via the admin socket
@@ -437,6 +438,11 @@ func siteConfigPageHandler(cfg *Config, tmpls *Templates, db *sql.DB) http.Handl
 			data.PlaceImports, _ = places.Statuses(db)
 		}
 		data.IndexNowKey = getSiteSetting(db, "indexnow_key")
+		if v := getSiteSetting(db, "watchlist_retention_months"); v != "" {
+			data.WatchlistRetentionMonths = v
+		} else {
+			data.WatchlistRetentionMonths = "12"
+		}
 		if v := getSiteSetting(db, "rescheduled_badge_days"); v != "" {
 			data.RescheduledBadgeDays = v
 		} else {
@@ -506,6 +512,10 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		if tf := r.FormValue("time_format_site"); tf == "" || tf == "24h" || tf == "12h" {
 			setSiteSetting(db, "time_format", tf)
 		}
+		// #1554: how long an unused server-side watchlist is kept (months, 1–120).
+		if n, err := strconv.Atoi(strings.TrimSpace(r.FormValue("watchlist_retention_months"))); err == nil && n >= 1 && n <= 120 {
+			setSiteSetting(db, "watchlist_retention_months", strconv.Itoa(n))
+		}
 		if n, err := strconv.Atoi(strings.TrimSpace(r.FormValue("rescheduled_badge_days"))); err == nil && n >= 0 {
 			setSiteSetting(db, "rescheduled_badge_days", strconv.Itoa(n))
 		}
@@ -572,7 +582,7 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		if len(uploadedAssets) > 0 {
 			log.Printf("audit: site_settings assets=[%s] updated by user=%d", strings.Join(uploadedAssets, ","), callerID)
 		}
-		log.Printf("audit: site_settings keys=[site_name,contact,holiday_country,default_dance_ids,indexnow_key,rescheduled_badge_days,logo_ai_generated,banner_ai_generated,date_format,time_format,same_as,security_contact,security_policy,security_expires] updated by user=%d", callerID)
+		log.Printf("audit: site_settings keys=[site_name,contact,holiday_country,default_dance_ids,indexnow_key,rescheduled_badge_days,watchlist_retention_months,logo_ai_generated,banner_ai_generated,date_format,time_format,same_as,security_contact,security_policy,security_expires] updated by user=%d", callerID)
 
 		http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Settings saved"), http.StatusSeeOther)
 	}

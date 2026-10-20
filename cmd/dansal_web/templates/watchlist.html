@@ -11,5 +11,19 @@
   </label>
   <p id="wl-io-msg" class="wl-io-msg" role="status"></p>
 </div>
-<ul id="wl-list" class="wl-list" data-endpoint="/watchlist/events" data-remove-label="{{.Strings.T "wl_remove_btn"}}" data-cancelled-label="{{.Strings.T "wl_cancelled"}}" data-msg-ok="{{.Strings.T "wl_msg_ok"}}" data-msg-bad="{{.Strings.T "wl_msg_bad"}}" data-msg-instance="{{.Strings.T "wl_msg_instance"}}" data-msg-capped="{{.Strings.T "wl_msg_capped"}}"></ul>
+<section class="wl-server" aria-labelledby="wl-server-title">
+  <h2 id="wl-server-title">{{.Strings.T "wl_server_title"}}</h2>
+  <button type="button" class="btn-secondary" data-fn="watchlistSaveServer" data-args="[]">{{.Strings.T "wl_save_btn"}}</button>
+  <p id="wl-key-box" class="wl-key-box" hidden>
+    <span>{{.Strings.T "wl_key_label"}}:</span> <code id="wl-key-out"></code>
+    <span class="wl-key-warning">{{.Strings.T "wl_key_warning"}}</span>
+  </p>
+  <label class="wl-key-lbl">{{.Strings.T "wl_load_label"}}
+    <input type="text" id="wl-key-in" autocomplete="off" spellcheck="false" maxlength="32">
+  </label>
+  <button type="button" class="btn-secondary" data-fn="watchlistLoadServer" data-args="[]">{{.Strings.T "wl_load_btn"}}</button>
+  {{/* Honeypot (#1554): humans never see or fill this; bots that do get a fake success. */}}
+  <input type="text" name="dansal_phone2" class="wl-hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+</section>
+<ul id="wl-list" class="wl-list" data-endpoint="/watchlist/events" data-remove-label="{{.Strings.T "wl_remove_btn"}}" data-cancelled-label="{{.Strings.T "wl_cancelled"}}" data-msg-ok="{{.Strings.T "wl_msg_ok"}}" data-msg-bad="{{.Strings.T "wl_msg_bad"}}" data-msg-instance="{{.Strings.T "wl_msg_instance"}}" data-msg-capped="{{.Strings.T "wl_msg_capped"}}" data-msg-saved="{{.Strings.T "wl_msg_saved"}}" data-msg-loaded="{{.Strings.T "wl_msg_loaded"}}" data-msg-rate="{{.Strings.T "wl_msg_rate"}}" data-msg-key-unknown="{{.Strings.T "wl_msg_key_unknown"}}" data-msg-server-bad="{{.Strings.T "wl_msg_server_bad"}}"></ul>
 {{end}}

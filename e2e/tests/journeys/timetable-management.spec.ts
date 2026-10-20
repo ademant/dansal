@@ -90,4 +90,35 @@ test.describe("Admin: manage timetable", () => {
     await expect(ttRows.nth(0)).toContainText("Ouverture");
     await expect(ttRows.nth(2)).toContainText("Grand Bal");
   });
+  // #1558: an empty timetable row (the suggest form sends one when nothing is
+  // entered) is dropped rather than failing the whole save, while a row with a
+  // time but no title is still refused.
+  test("blank timetable rows are ignored; a partly filled row is still refused", async ({ page }) => {
+    const token = await getTokenFromCookie(page);
+    const eventId = seed.eventIds[0];
+    const put = (body: unknown[]) =>
+      page.request.fetch(`${API_BASE}/api/v1/events/${eventId}/timetable`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        data: JSON.stringify(body),
+      });
+
+    const blankThenValid = await put([
+      {},
+      { start_time: "18:00", end_time: "19:00", title: "Accueil", entry_type: "bal" },
+    ]);
+    expect(blankThenValid.status()).toBe(200);
+
+    const verify = await page.request.fetch(`${API_BASE}/api/v1/events/${eventId}`);
+    const timetable = (await verify.json()).timetable;
+    expect(timetable.length).toBe(1);
+    expect(timetable[0].title).toBe("Accueil");
+
+    const partial = await put([{ start_time: "19:00", end_time: "20:00" }]);
+    expect(partial.status()).toBe(400);
+    expect(await partial.text()).toContain("title is required");
+  });
 });

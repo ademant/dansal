@@ -43,10 +43,10 @@ jobs:
         run: |
           if [ "$SUITE" = smoke ]; then
             echo 'suite=smoke' >> "$GITHUB_OUTPUT"
-            echo 'matrix=[{"project":"desktop","grep":"@smoke"}]' >> "$GITHUB_OUTPUT"
+            echo 'matrix={"include":[{"project":"desktop","grep":"@smoke"}]}' >> "$GITHUB_OUTPUT"
           else
             echo 'suite=full' >> "$GITHUB_OUTPUT"
-            echo 'matrix=[{"project":"desktop","grep":""},{"project":"mobile","grep":""}]' >> "$GITHUB_OUTPUT"
+            echo 'matrix={"include":[{"project":"desktop","grep":""},{"project":"mobile","grep":""}]}' >> "$GITHUB_OUTPUT"
           fi
 
   e2e-journeys:

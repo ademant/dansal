@@ -41,7 +41,13 @@ async function openUserMenu(page: import("@playwright/test").Page): Promise<void
 test.describe("About popup", () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test("opens showing the app version; a second click closes it", async ({ page }) => {
+  // Deactivated (test.fixme) until the root cause is found: in headless
+  // Chromium, page.goto("/") on the homepage never reaches the load event
+  // because the deferred scripts (base.js, leaflet.js) never get response
+  // headers. curl and a Node keep-alive client get the same responses in
+  // milliseconds, so this is browser-side. Other pages load fine. See the
+  // investigation notes in the PR that deactivated these tests.
+  test.fixme("opens showing the app version; a second click closes it", async ({ page }) => {
     await page.goto("/");
     await openUserMenu(page);
     const aboutBtn = page.locator('button[title="About dansal"]');
@@ -56,7 +62,7 @@ test.describe("About popup", () => {
     await expect(popup).toBeHidden();
   });
 
-  test("the dansal link opens GitHub in a new tab without a referrer", async ({ page }) => {
+  test.fixme("the dansal link opens GitHub in a new tab without a referrer", async ({ page }) => {
     await page.goto("/");
     await openUserMenu(page);
     await page.locator('button[title="About dansal"]').click();
@@ -70,7 +76,7 @@ test.describe("About popup", () => {
 test.describe("Help modal", () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test("Help button opens the help modal", async ({ page }) => {
+  test.fixme("Help button opens the help modal", async ({ page }) => {
     await page.goto("/");
     await openUserMenu(page);
     const backdrop = page.locator("#hm-backdrop");

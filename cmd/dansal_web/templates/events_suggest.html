@@ -167,6 +167,8 @@
         {{template "sg-help-text" (dict "id" "start" "S" $.Strings)}}
         {{template "sg-help-text" (dict "id" "end" "S" $.Strings)}}
         <p id="sg-date-err" class="form-error" style="display:none;margin-top:.25rem"></p>
+        <!-- #1560: days-until hint for a valid date, same place as the error -->
+        <p id="sg-date-hint" class="sg-date-hint" style="display:none;margin-top:.25rem" role="status"></p>
         <p id="sg-time-err" class="form-error" style="display:none;margin-top:.25rem"></p>
         <!-- #1417: typed date vs. the date the source (import / website URL) names -->
         <p class="sg-src-date-warn date-warn-note" hidden><span class="sg-src-date-msg"></span> <button type="button" class="btn-secondary sg-src-date-use">{{$.Strings.T "sg_src_date_use"}}</button></p>
@@ -427,7 +429,8 @@
 .sg-date-col{flex:0 1 9.5rem;min-width:8rem}
 .sg-date-text{width:100%;padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem;box-sizing:border-box}
 .sg-date-text.sg-date-err{border-color:#dc3545;background:#fff5f5}
-.sg-time-col{flex:1;min-width:9rem}
+.sg-date-hint{padding:.35rem .6rem;border-left:3px solid #198754;background:#d1e7dd;color:#0f5132;border-radius:3px;font-size:.9rem}
+.sg-date-hint.is-far{border-left-color:#d97706;background:#fff3cd;color:#664d03}.sg-time-col{flex:1;min-width:9rem}
 .sg-time-col-label{display:block;font-weight:600;font-size:.88rem;color:#444;margin-bottom:.3rem}
 .sg-time-input{width:100%;padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem;box-sizing:border-box}
 .sg-time-swipe{display:none;align-items:flex-start;justify-content:center;gap:.5rem;background:#fff;border:1px solid #ccc;border-radius:6px;padding:.55rem .7rem}
@@ -821,7 +824,12 @@ document.addEventListener('click', function(e){
 // a day-first typist forcing their date into ISO and swapping day/month).
 var SG_DATE_FORMAT = '{{if eq $.DateFormat "de"}}de{{else}}iso{{end}}';
 var SG_DATE_INVALID_MSG = '{{if eq $.DateFormat "de"}}{{$.Strings.TF "suggest_date_invalid_format" "DD.MM.YYYY or DD.MM"}}{{else}}{{$.Strings.TF "suggest_date_invalid_format" "YYYY-MM-DD or MM-DD"}}{{end}}';
-var SG_DATE_PAST_MSG = '{{$.Strings.T "suggest_date_past"}}';
+var SG_DATE_PAST_MSG = {{$.Strings.T "suggest_date_past" | jsStr}};
+// #1560: days-until hint; %s is the day count. The far variant is appended
+// when the date is more than 8 months ahead.
+var SG_DATE_TODAY_MSG = {{$.Strings.T "suggest_date_today" | jsStr}};
+var SG_DATE_DAYS_MSG = {{$.Strings.T "suggest_date_days" | jsStr}};
+var SG_DATE_FAR_MSG = {{$.Strings.T "suggest_date_far" | jsStr}};
 
 function sgTodayISO() {
   var d = new Date();
@@ -892,6 +900,7 @@ document.addEventListener('DOMContentLoaded', function(){
   var toEl   = document.getElementById('sg-date-to');
   var txtEl  = document.getElementById('sg-date-text');
   var errEl  = document.getElementById('sg-date-err');
+  var hintEl = document.getElementById('sg-date-hint');
   window.sgDatePickerSet = initDateRangePicker({
     btn: btn,
     popup: popup,
@@ -915,6 +924,42 @@ document.addEventListener('DOMContentLoaded', function(){
     if (txtEl) txtEl.classList.remove('sg-date-err');
     if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
   }
+  // #1560: "Event in N days" for a valid date, green up to 8 months ahead and
+  // yellow beyond it, in the error's place. Advisory: nothing is blocked.
+  function showDateHint(iso) {
+    if (!hintEl) return;
+    if (!iso) { hintEl.style.display = 'none'; return; }
+    if (iso < sgTodayISO()) { hintEl.style.display = 'none'; setDateError(SG_DATE_PAST_MSG); return; }
+    clearDateError();
+    var days = Math.round((Date.parse(iso + 'T00:00:00Z') - Date.parse(sgTodayISO() + 'T00:00:00Z')) / 86400000);
+    var limit = new Date(); limit.setMonth(limit.getMonth() + 8);
+    var limitISO = limit.getFullYear() + '-' + String(limit.getMonth() + 1).padStart(2, '0') + '-' + String(limit.getDate()).padStart(2, '0');
+    var far = iso > limitISO;
+    hintEl.textContent = days === 0 ? SG_DATE_TODAY_MSG : SG_DATE_DAYS_MSG.replace('%s', days) + (far ? ' ' + SG_DATE_FAR_MSG : '');
+    hintEl.classList.toggle('is-far', far);
+    hintEl.style.display = '';
+  }
+  // Typed text must be a real date that is not in the past; an empty field
+  // is left to the submit-time checks, as before.
+  function typedDateOK() {
+    var v = txtEl ? txtEl.value.trim() : '';
+    if (!v) { clearDateError(); return true; }
+    var iso = sgParseDateText(v);
+    if (!iso) { setDateError(SG_DATE_INVALID_MSG); return false; }
+    if (iso < sgTodayISO()) { setDateError(SG_DATE_PAST_MSG); return false; }
+    clearDateError();
+    return true;
+  }
+  // #1560: the wizard's Next and step arrows call this on the date step, so a
+  // past or unreadable date cannot be left behind. Returns false and shows
+  // the error when the date blocks moving on.
+  window.sgDateValid = function() {
+    if (hintEl) hintEl.style.display = 'none';
+    if (!typedDateOK()) return false;
+    var f = fromEl.value;
+    if (f && f < sgTodayISO()) { setDateError(SG_DATE_PAST_MSG); return false; }
+    return true;
+  };
   // #1389/#1390: single writer for the date, so the hidden inputs, the button
   // label and the #1390 text field can never drift apart. The button is
   // refreshed via setRange, which is what the auto-prefill previously skipped
@@ -924,22 +969,15 @@ document.addEventListener('DOMContentLoaded', function(){
     if (t) toEl.value = t;
     if (txtEl && document.activeElement !== txtEl) txtEl.value = sgFormatDateForDisplay(fromEl.value);
     window.sgDatePickerSet(fromEl.value, toEl.value);
+    showDateHint(fromEl.value); // #1560
     if (window.sgCheckSourceDate) window.sgCheckSourceDate(); // #1417
   };
   if (txtEl) {
     txtEl.addEventListener('change', function(){
       var v = txtEl.value.trim();
       if (!v) { clearDateError(); return; }
+      if (!typedDateOK()) { if (hintEl) hintEl.style.display = 'none'; return; }
       var iso = sgParseDateText(v);
-      if (!iso) {
-        setDateError(SG_DATE_INVALID_MSG);
-        return;
-      }
-      if (iso < sgTodayISO()) {
-        setDateError(SG_DATE_PAST_MSG);
-        return;
-      }
-      clearDateError();
       // Keep an existing range only while the typed start still precedes its
       // end (ISO dates compare correctly as strings); a later date means the
       // old end is stale, so this is a single-day event. Either way the range
@@ -1571,6 +1609,8 @@ document.addEventListener('DOMContentLoaded', function(){
         return;
       }
     }
+    // #1560: a past or unreadable date keeps the suggester on "When?".
+    if (steps[current - 1] && steps[current - 1].querySelector('#sg-date-from') && window.sgDateValid && !window.sgDateValid()) return;
     // #1414: a new venue needs a name and a town before leaving "Where?".
     if (steps[current - 1] && steps[current - 1].querySelector('#sg-venue-new') && window.sgVenueValid && !window.sgVenueValid()) return;
     goTo(current + 1);

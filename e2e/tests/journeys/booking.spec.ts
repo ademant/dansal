@@ -59,7 +59,7 @@ test.describe("Booking flow", () => {
     await expect(page.locator(".booking-form input[name='email']")).toBeVisible();
   });
 
-  test("submitting booking form with valid data succeeds", async ({
+  test("submitting booking form with valid data succeeds", { tag: "@smoke" }, async ({
     page,
     metrics,
   }) => {

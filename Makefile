@@ -12,7 +12,7 @@ SYSTEMDDIR := /etc/systemd/system
 .DEFAULT_GOAL := build
 
 .PHONY: build build-dansal build-dansal_web build-dansal_admin build-dansal_webmin build-dansal_doc \
-        run fmt vet vulncheck bench stress k6-install test-deps e2e-up e2e-down e2e-status e2e-run e2e-test clean install install-web install-webmin install-doc install-units setup-instance \
+        run fmt vet vulncheck bench stress k6-install test-deps e2e-up e2e-down e2e-status e2e-run e2e-test e2e-smoke clean install install-web install-webmin install-doc install-units setup-instance \
         update check-config deb deploy-nginx deploy-nginx-webmin deploy-nginx-doc deploy-nginx-default install-nginx-brotli deploy-fail2ban deploy-logrotate deploy-full \
         wp-zip deploy-wp rollback list
 
@@ -119,6 +119,11 @@ e2e-run:
 	cd e2e && $(E2E_ENV) npx playwright test \
 		$(if $(filter-out all,$(E2E_PROJECT)),--project=$(E2E_PROJECT)) \
 		$(E2E_SPEC) $(if $(E2E_GREP),--grep "$(E2E_GREP)")
+
+# e2e-smoke runs only the @smoke-tagged journeys, desktop, the same set CI
+# gates PRs on (see e2e/README.md).
+e2e-smoke:
+	$(MAKE) e2e-test E2E_PROJECT=desktop E2E_GREP=@smoke
 
 # e2e-test brings the stack up, runs the suite, and always stops the stack
 # again, returning the test exit status.

@@ -44,7 +44,7 @@ test.describe("Public pages load without JavaScript errors (#1385)", () => {
     });
   }
 
-  test("an event page has no page errors", async ({ browser }) => {
+  test("an event page has no page errors", { tag: "@smoke" }, async ({ browser }) => {
     const context = await browser.newContext({
       storageState: { cookies: [], origins: [] },
     });

@@ -31,7 +31,7 @@ test.describe("Admin: create event", () => {
     await expect(page.locator(".event-table")).toBeVisible();
   });
 
-  test("creating a new event via admin form", async ({ page, metrics }) => {
+  test("creating a new event via admin form", { tag: "@smoke" }, async ({ page, metrics }) => {
     const m = await gotoAndMeasure(page, "/admin/events/new", metrics, "admin_create_event");
     // Scoped to #evt-form: the "form" fallback also matches the page nav's
     // own logout form, which is a Playwright strict-mode violation.

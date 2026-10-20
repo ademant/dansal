@@ -13,7 +13,7 @@ test.describe("Event details page", () => {
     await context.close();
   });
 
-  test("shows title, location, and description", async ({ page, metrics }) => {
+  test("shows title, location, and description", { tag: "@smoke" }, async ({ page, metrics }) => {
     const m = await gotoAndMeasure(
       page,
       `${EVENT_HREF_PREFIX}${seed.eventIds[0]}`,

@@ -13,7 +13,7 @@ test.describe("ICS export", () => {
     await context.close();
   });
 
-  test("event .ics link downloads valid VCALENDAR", async ({ page, metrics }) => {
+  test("event .ics link downloads valid VCALENDAR", { tag: "@smoke" }, async ({ page, metrics }) => {
     const start = Date.now();
     const resp = await page.request.fetch(
       `${EVENT_HREF_PREFIX}${seed.eventIds[0]}.ics`

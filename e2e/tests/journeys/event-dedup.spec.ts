@@ -69,7 +69,7 @@ test.describe("Event dedup tiers (API)", () => {
     await context.close();
   });
 
-  test("Tier 1: same uid merges regardless of title/time/location", async ({
+  test("Tier 1: same uid merges regardless of title/time/location", { tag: "@smoke" }, async ({
     page,
   }) => {
     const uid = `dedup-t1-${nonce}`;

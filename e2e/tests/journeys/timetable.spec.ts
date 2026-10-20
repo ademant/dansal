@@ -13,7 +13,7 @@ test.describe("Timetable view", () => {
     await context.close();
   });
 
-  test("timetable section shows entries for seeded event", async ({
+  test("timetable section shows entries for seeded event", { tag: "@smoke" }, async ({
     page,
     metrics,
   }) => {

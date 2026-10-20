@@ -20,7 +20,7 @@ test.describe("Discover events on index", () => {
     await context.close();
   });
 
-  test("index loads with event table visible", async ({ page, metrics }) => {
+  test("index loads with event table visible", { tag: "@smoke" }, async ({ page, metrics }) => {
     const m = await gotoAndMeasure(page, "/", metrics, "index_load");
     // The default "week" view only lists whatever the *current* calendar
     // week has (often nothing, since seeded events land 3-45 days out) and
@@ -50,7 +50,7 @@ test.describe("Discover events on index", () => {
     }
   });
 
-  test("clicking event row opens detail page", async ({ page, metrics }) => {
+  test("clicking event row opens detail page", { tag: "@smoke" }, async ({ page, metrics }) => {
     await page.goto("/");
     await goToAllView(page);
     await loadAllRows(page);

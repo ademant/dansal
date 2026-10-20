@@ -184,7 +184,7 @@ test.describe("Role-based access boundaries", () => {
     await editorContext.close();
   });
 
-  test("viewer (plain user) is denied admin-only actions and sees a scoped /admin/users view", async ({
+  test("viewer (plain user) is denied admin-only actions and sees a scoped /admin/users view", { tag: "@smoke" }, async ({
     page,
     browser,
   }) => {

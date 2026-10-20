@@ -21,7 +21,7 @@ const API_BASE = process.env.API_URL ?? "http://localhost:8000";
 const WEBMIN_URL = process.env.WEBMIN_URL;
 
 test.describe("#1533: anonymous requests cannot forge X-User-Role/X-User-ID", () => {
-  test("a hand-set admin role header does not reveal an unpublished event", async ({ page }) => {
+  test("a hand-set admin role header does not reveal an unpublished event", { tag: "@smoke" }, async ({ page }) => {
     const token = await getTokenFromCookie(page);
     const title = `E2E security draft ${Date.now()}`;
     const createResp = await page.request.fetch(`${API_BASE}/api/v1/events`, {

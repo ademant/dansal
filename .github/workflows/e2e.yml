@@ -1,14 +1,57 @@
 name: E2E Tests
 
+# Two tiers (#1555 follow-up):
+#   smoke — the @smoke-tagged journeys, desktop only, on every PR and push to
+#           main. Fast enough to gate a merge.
+#   full  — every journey on desktop and mobile, plus the WCAG sweep. Runs on
+#           release tags (called from release.yml, which waits for it before
+#           packaging), nightly, and on manual dispatch.
 on:
+  workflow_call:
+    inputs:
+      suite:
+        description: "smoke or full"
+        type: string
+        default: full
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: "smoke or full"
+        type: choice
+        options: [full, smoke]
+        default: full
+  schedule:
+    - cron: "0 3 * * *"
   push:
     branches: [main]
   pull_request:
     branches: [main]
 
 jobs:
+  # Picks the suite for this run. Pushes and PRs get smoke; schedule, manual
+  # runs and release calls get full, unless the caller passes suite explicitly.
+  plan:
+    name: Select suite
+    runs-on: ubuntu-latest
+    outputs:
+      suite: ${{ steps.pick.outputs.suite }}
+      matrix: ${{ steps.pick.outputs.matrix }}
+    steps:
+      - id: pick
+        env:
+          SUITE: ${{ inputs.suite || ((github.event_name == 'push' || github.event_name == 'pull_request') && 'smoke' || 'full') }}
+        run: |
+          if [ "$SUITE" = smoke ]; then
+            echo 'suite=smoke' >> "$GITHUB_OUTPUT"
+            echo 'matrix={"include":[{"project":"desktop","grep":"@smoke"}]}' >> "$GITHUB_OUTPUT"
+          else
+            echo 'suite=full' >> "$GITHUB_OUTPUT"
+            echo 'matrix={"include":[{"project":"desktop","grep":""},{"project":"mobile","grep":""}]}' >> "$GITHUB_OUTPUT"
+          fi
+
   e2e-journeys:
     name: Playwright Journeys (${{ matrix.project }})
+    needs: plan
     runs-on: ubuntu-latest
     # 20 min was never actually validated against a real run — every prior
     # CI run failed within 1-2 min at setup (#1522 etc.), so this cap never
@@ -18,8 +61,7 @@ jobs:
 
     strategy:
       fail-fast: false
-      matrix:
-        project: [desktop, mobile]
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
 
     steps:
       - uses: actions/checkout@v4
@@ -122,7 +164,7 @@ jobs:
       - name: Run journey tests
         run: |
           cd e2e
-          npx playwright test --project=${{ matrix.project }} tests/journeys/
+          npx playwright test --project=${{ matrix.project }} ${{ matrix.grep && format('--grep {0}', matrix.grep) || '' }} tests/journeys/
         env:
           BASE_URL: http://localhost:18080
           API_URL: http://localhost:18000
@@ -154,6 +196,8 @@ jobs:
 
   e2e-a11y:
     name: WCAG 2.1 AA Sweep (${{ matrix.project }})
+    needs: plan
+    if: needs.plan.outputs.suite == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 

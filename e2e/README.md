@@ -53,3 +53,14 @@ export ADMIN_SOCKET=/var/lib/dansal/dev/dansal.sock
 export DANSAL_MAIL_FILE=/var/lib/dansal-e2e-mail/dansal-e2e-mail.mbox
 npx playwright test tests/journeys/<file>.spec.ts --project=desktop --retries=0 --reporter=line --workers=1
 ```
+
+## Smoke and full suites
+
+Journeys tagged `@smoke` form the smoke suite: desktop only, run on every PR
+and push to `main` (`make e2e-smoke` locally). The full suite (desktop and
+mobile, plus the WCAG sweep) runs on release tags, nightly and on manual
+dispatch, and gates the release packaging job.
+
+Tag a journey as smoke with `test("title", { tag: "@smoke" }, async ...)`.
+Keep the smoke set small and green; the full suite is where new coverage
+goes first.

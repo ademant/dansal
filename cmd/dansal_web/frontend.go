@@ -809,6 +809,7 @@ type Templates struct {
 	adminInfo                 *template.Template
 	adminStats                *template.Template
 	impressum                 *template.Template
+	watchlist                 *template.Template
 	orgs                      *template.Template
 	suggestEvent              *template.Template
 	suggestDone               *template.Template
@@ -917,6 +918,7 @@ func loadTemplates() *Templates {
 		adminInfo:                 load("admin_info"),
 		adminStats:                load("admin_stats"),
 		impressum:                 load("impressum"),
+		watchlist:                 load("watchlist"),
 		orgs:                      load("orgs"),
 		suggestEvent:              load("events_suggest"),
 		suggestDone:               load("events_suggest_done"),

@@ -119,6 +119,12 @@ nav{background:#1a1a2e;color:#fff;padding:.5rem 1rem;margin:0 -1rem 0;display:fl
 .nav-brand{display:flex;align-items:center;gap:.4rem;text-decoration:none;flex-shrink:0}
 .nav-brand img{object-fit:contain;height:36px;width:36px}
 .nav-brand:hover{opacity:.85}
+.nav-watchlist{color:#ffd54a;text-decoration:none;font-size:1.4rem;line-height:1;padding:.2rem .3rem;flex-shrink:0}
+.nav-watchlist:hover{opacity:.85}
+.wl-row{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem .8rem;padding:.4rem 0;border-bottom:1px solid var(--border,#ddd)}
+.wl-meta{color:var(--fg-muted,#666);font-size:.9rem}
+.wl-cancelled{color:var(--badge-danger-fg,#b00020);font-size:.9rem}
+.wl-remove{margin-left:auto}
 .site-banner{max-width:960px;margin:0 auto 1.5rem;background:var(--site-banner-bg)}
 .site-banner img{width:100%;height:auto;display:block;border-radius:0}
 .nav-menu-wrap,.user-menu-wrap{position:relative}
@@ -365,6 +371,7 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
     </div>
   </div>
   
+  <a id="wl-header-star" class="nav-watchlist" href="/watchlist" title="{{.Strings.T "wl_header_title"}}" aria-label="{{.Strings.T "wl_header_title"}}">☆</a>
   <a class="nav-brand" href="/"><img src="/logo.avif" alt="{{.SiteName}}" width="36" height="36"></a>
   
   <div class="user-menu-wrap">

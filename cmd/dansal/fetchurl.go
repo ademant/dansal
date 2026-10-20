@@ -905,17 +905,23 @@ const fetchFailureAlertThreshold = 3
 // spamming on every retry. The counter (and alert eligibility) resets to 0 on
 // the next successful run.
 func recordFetchResult(src FetchSource, events int, fetchErr error) {
+	// Serialized with the imports' writes (#1561) so this bookkeeping write
+	// doesn't lose a race for SQLite's write lock.
 	if fetchErr != nil {
 		var failures int
+		importWriteMu.Lock()
 		db.QueryRow("UPDATE fetch_sources SET last_result = ?, consecutive_failures = consecutive_failures + 1 WHERE id = ? RETURNING consecutive_failures",
 			"error: "+fetchErr.Error(), src.ID).Scan(&failures)
+		importWriteMu.Unlock()
 		if failures == fetchFailureAlertThreshold {
 			notifyAdminsFetchFailure(src, failures, fetchErr)
 		}
 		return
 	}
+	importWriteMu.Lock()
 	db.Exec("UPDATE fetch_sources SET last_result = ?, consecutive_failures = 0 WHERE id = ?",
 		fmt.Sprintf("%d", events), src.ID)
+	importWriteMu.Unlock()
 }
 
 // notifyAdminsFetchFailure alerts admin users that a fetch source has failed
@@ -1164,11 +1170,60 @@ func fetchFeedBody(ctx context.Context, src FetchSource) ([]byte, error) {
 // per-entry database work (e.g. iCal image attachment or folkdance musician
 // resolution) around the importSingleEvent call. reqOf extracts the event
 // request from an entry for failure logging.
+// importWriteMu serializes the database work of every feed import (#1561).
+// Each import holds SQLite's write lock for its whole transaction (the DSN
+// uses _txlock=immediate), so parallel imports from fetch-all just queue on
+// _busy_timeout and fail with "database is locked". HTTP fetches stay
+// parallel: only the write step goes through this mutex.
+var importWriteMu sync.Mutex
+
+// importBusyRetries bounds how many times an import that hit lock contention
+// is retried before its error is reported (#1561). A busy error is transient,
+// so retrying keeps it out of consecutive_failures and the admin alert.
+const importBusyRetries = 3
+
+// isDBBusy reports whether err is SQLite's lock-contention error. SQLite says
+// "database is locked" for the write lock (SQLITE_BUSY) and "database table is
+// locked" for a shared-cache table lock (SQLITE_LOCKED); both are transient.
+func isDBBusy(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "database is locked") || strings.Contains(msg, "database table is locked")
+}
+
 func importEntries[T any](ctx context.Context, src FetchSource, entries []T, reqOf func(T) EventCreateRequest, finalize func(tx querier, entry T, td *templateImportData, counts *ImportCounts, allEvents *[]Event) error) ([]Event, ImportCounts, error) {
+	importWriteMu.Lock()
 	db.Exec("UPDATE fetch_sources SET last_fetched_at = ? WHERE id = ?", time.Now().UTC().Unix(), src.ID)
+	importWriteMu.Unlock()
 
 	td := parseTemplateData(src.TemplateData)
 	importStart := time.Now().Unix()
+
+	for attempt := 0; ; attempt++ {
+		allEvents, counts, err := importEntriesTx(ctx, src, entries, reqOf, finalize, td)
+		if err == nil {
+			go emitImportedEventWebhooks(allEvents, importStart)
+			return allEvents, counts, nil
+		}
+		if !isDBBusy(err) || attempt >= importBusyRetries {
+			return nil, ImportCounts{}, err
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ImportCounts{}, ctx.Err()
+		case <-time.After(time.Duration(attempt+1) * 500 * time.Millisecond):
+		}
+	}
+}
+
+// importEntriesTx runs one import attempt in a single transaction, under
+// importWriteMu. It returns a fresh result each call, so a retry after a busy
+// error starts from nothing (the transaction was rolled back).
+func importEntriesTx[T any](ctx context.Context, src FetchSource, entries []T, reqOf func(T) EventCreateRequest, finalize func(tx querier, entry T, td *templateImportData, counts *ImportCounts, allEvents *[]Event) error, td *templateImportData) ([]Event, ImportCounts, error) {
+	importWriteMu.Lock()
+	defer importWriteMu.Unlock()
 
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
@@ -1191,7 +1246,6 @@ func importEntries[T any](ctx context.Context, src FetchSource, entries []T, req
 	if err := tx.Commit(); err != nil {
 		return nil, ImportCounts{}, err
 	}
-	go emitImportedEventWebhooks(allEvents, importStart)
 	return allEvents, counts, nil
 }
 

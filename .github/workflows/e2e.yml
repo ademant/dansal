@@ -50,7 +50,7 @@ jobs:
           fi
 
   e2e-journeys:
-    name: Playwright Journeys (${{ matrix.project }}${{ matrix.grep && ', smoke' || '' }})
+    name: Playwright Journeys (${{ matrix.project }})
     needs: plan
     runs-on: ubuntu-latest
     # 20 min was never actually validated against a real run — every prior

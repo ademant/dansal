@@ -57,4 +57,27 @@ test.describe("Watchlist (#1554)", () => {
       .poll(() => page.evaluate(() => localStorage.getItem("dansal_watchlist")))
       .toBe(JSON.stringify({ v: 1, ids: [id] }));
   });
+  test("a watchlist file from this instance merges into the list; another instance is refused", async ({ page }) => {
+    const id = seed.eventIds[0];
+    await page.goto("/watchlist");
+    const host = await page.evaluate(() => location.host);
+    await page.evaluate(() => localStorage.setItem("dansal_watchlist", JSON.stringify({ v: 1, ids: [] })));
+
+    const file = (instance: string, ids: number[]) => ({
+      name: "dansal-watchlist.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(JSON.stringify({ format: "dansal-watchlist", version: 1, instance, exported_at: "2026-10-20T12:00:00Z", ids })),
+    });
+
+    await page.locator("#wl-import").setInputFiles(file(host, [id]));
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem("dansal_watchlist")))
+      .toBe(JSON.stringify({ v: 1, ids: [id] }));
+
+    await page.locator("#wl-import").setInputFiles(file("elsewhere.example.test", [424242]));
+    await expect(page.locator("#wl-io-msg")).not.toBeEmpty();
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem("dansal_watchlist")))
+      .toBe(JSON.stringify({ v: 1, ids: [id] }));
+  });
 });

@@ -340,7 +340,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 </table>
 </div>
 
-<div id="event-tiles"></div>
+<div id="event-tiles" data-wl-label="{{$.Strings.T "wl_header_title"}}"></div>
 
 <div class="pagination-bar" id="pagination-bar">
   <span id="page-info"></span>
@@ -1104,12 +1104,19 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     var attrHtml=attrCell?attrCell.innerHTML.trim():'';
     var tileCls='event-tile'+(spanPos?' tile-span-'+spanPos:'')+(isPastRow(r)?' tile-past':'');
     var titleStyle='font-size:.95rem;font-weight:bold;margin-bottom:.25rem'+(cancelled?';text-decoration:line-through;color:var(--fg-hint)':'');
-    return '<a href="'+detailUrl+'" class="'+tileCls+'">'+
+    var tileLink='<a href="'+detailUrl+'" class="'+tileCls+'">'+
       '<div style="'+titleStyle+'">'+(timeStr?'<span style="color:var(--fg-muted);font-weight:600">'+escHtml(timeStr)+'</span> ':'')+escHtml(d.title||'')+'</div>'+
       (place?'<div style="font-size:.82rem;margin-bottom:.35rem">'+escHtml(place)+'</div>':'')+
       (badges||feeHtml?'<div>'+badges+(feeHtml?' '+feeHtml:'')+'</div>':'')+
       (attrHtml?'<div style="margin-top:.3rem">'+attrHtml+'</div>':'')+
       '</a>';
+    // #1554: a watchlist star beside the tile. Federated rows carry external
+    // ids, not API event ids, so they get no star.
+    if(r.classList.contains('federated-event')||!d.id) return tileLink;
+    var wlLabel=escHtml((document.getElementById('event-tiles')||{getAttribute:function(){return ''}}).getAttribute('data-wl-label')||'');
+    return '<div class="wl-tile-wrap">'+
+      '<button type="button" class="wl-tile-star" data-wl-star="'+d.id+'" data-fn="watchlistToggle" data-args="['+d.id+']" aria-pressed="false" title="'+wlLabel+'" aria-label="'+wlLabel+'">☆</button>'+
+      tileLink+'</div>';
   }
 
   function renderTiles(){
@@ -1129,6 +1136,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
       html+=buildTile(r);
     });
     container.innerHTML=html;
+    if(window.watchlistUI) window.watchlistUI();
   }
 
   function eventIcon(e){

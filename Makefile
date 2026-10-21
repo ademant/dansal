@@ -72,7 +72,9 @@ bench:
 # k6 is pinned and built into GOPATH/bin, so `make stress` and `make test-deps`
 # need no system package and no network beyond the Go module proxy (#1544).
 K6_VERSION := v1.8.2
-K6_BIN     := $(shell command -v go >/dev/null 2>&1 && go env GOPATH)/bin/k6
+# Derived from the environment, not from `go env`: a parse-time `go env` runs on
+# every make call, and under sudo it can fetch a Go toolchain (go.mod pins one).
+K6_BIN     := $(or $(GOBIN),$(or $(GOPATH),$(HOME)/go)/bin)/k6
 
 $(K6_BIN):
 	go install go.k6.io/k6@$(K6_VERSION)

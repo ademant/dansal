@@ -1001,10 +1001,14 @@ function watchlistRead(){
   return [];
 }
 
+function watchlistHas(id){ return watchlistRead().indexOf(id)>=0; }
+
 function watchlistWrite(ids){
   ids=ids.slice(0,WL_MAX);
   try{ localStorage.setItem(WL_KEY,JSON.stringify({v:1,ids:ids})); }catch(e){}
   watchlistUI();
+  // The calendar and map listen for this to show watched events (#1554).
+  document.dispatchEvent(new CustomEvent('watchlistchange'));
 }
 
 window.watchlistToggle=function(id){
@@ -1222,7 +1226,9 @@ window.watchlistLoadServer=function(){
 document.addEventListener('DOMContentLoaded',function(){
   watchlistUI();
   watchlistRender();
+  // The page may have drawn the calendar and map before this script loaded.
+  document.dispatchEvent(new CustomEvent('watchlistchange'));
 });
 window.addEventListener('storage',function(e){
-  if(e.key===WL_KEY){ watchlistUI(); watchlistRender(); }
+  if(e.key===WL_KEY){ watchlistUI(); watchlistRender(); document.dispatchEvent(new CustomEvent('watchlistchange')); }
 });

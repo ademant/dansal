@@ -102,4 +102,14 @@ test.describe("Watchlist (#1554)", () => {
     ).toBeVisible();
     await other.close();
   });
+  test("starring on the home page fills the row star and raises no page errors", async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    const id = seed.eventIds[0];
+    await page.goto("/");
+    const rowStar = page.locator(`tr.event-row [data-wl-star="${id}"]`).first();
+    await rowStar.click();
+    await expect(rowStar).toHaveText("★");
+    expect(errors).toEqual([]);
+  });
 });

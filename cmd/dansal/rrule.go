@@ -1,7 +1,10 @@
 package main
 
 import (
+	"log"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	ics "github.com/arran4/golang-ical"
@@ -25,6 +28,13 @@ func icalLastModified(vevent *ics.VEvent) int64 {
 	return 0
 }
 
+// icalMaxOccurrences caps the occurrences one recurring VEVENT may expand to
+// on import (#1578). Set from server.ical_max_occurrences at startup.
+var icalMaxOccurrences = defaultIcalMaxOccurrences
+
+// defaultIcalMaxOccurrences is the cap when the config doesn't set one.
+const defaultIcalMaxOccurrences = 500
+
 // expandRRuleOccurrences returns all (start, end) pairs for a recurring VEVENT,
 // starting from and including the base occurrence. EXDATE entries and occurrences
 // beyond UNTIL, COUNT, or 3 years from now are excluded.
@@ -46,7 +56,11 @@ func expandRRuleOccurrences(vevent *ics.VEvent, baseStart, baseEnd time.Time) ([
 	loc := baseStart.Location()
 
 	var result [][2]time.Time
+	capped := false
 	for _, rule := range rules {
+		if capped {
+			break
+		}
 		until := ceiling
 		if !rule.Until.IsZero() && rule.Until.Before(ceiling) {
 			until = rule.Until
@@ -67,10 +81,22 @@ func expandRRuleOccurrences(vevent *ics.VEvent, baseStart, baseEnd time.Time) ([
 		}
 
 		for _, t := range starts {
-			if !excluded[t.Truncate(time.Minute).Unix()] {
-				result = append(result, [2]time.Time{t, t.Add(dur)})
+			if excluded[t.Truncate(time.Minute).Unix()] {
+				continue
 			}
+			if len(result) >= icalMaxOccurrences {
+				capped = true
+				break
+			}
+			result = append(result, [2]time.Time{t, t.Add(dur)})
 		}
+	}
+	if capped {
+		uid := ""
+		if p := vevent.GetProperty(ics.ComponentPropertyUniqueId); p != nil {
+			uid = p.Value
+		}
+		log.Printf("ical import: %s expands to more than %d occurrences; stopped at the cap", uid, icalMaxOccurrences)
 	}
 	return result, nil
 }
@@ -267,4 +293,18 @@ func icsToGoWeekday(wd ics.Weekday) time.Weekday {
 		return time.Saturday
 	}
 	return time.Monday
+}
+
+// icalSequence returns the VEVENT SEQUENCE (RFC 5545 §3.8.7.4), the feed's
+// revision count for the event, or 0 when absent (#1578).
+func icalSequence(vevent *ics.VEvent) int {
+	p := vevent.GetProperty(ics.ComponentPropertySequence)
+	if p == nil {
+		return 0
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(p.Value))
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
 }

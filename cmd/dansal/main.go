@@ -369,6 +369,9 @@ func sweepRetentionData(now int64) {
 	if config != nil && config.Server.DataRetentionDays > 0 {
 		retentionDays = config.Server.DataRetentionDays
 	}
+	if config != nil && config.Server.IcalMaxOccurrences > 0 {
+		icalMaxOccurrences = config.Server.IcalMaxOccurrences
+	}
 	retentionCutoff := now - int64(retentionDays)*24*60*60
 	// #1440 (G3): a pending_fetch_suggestion (email) never expired at all
 	// before — approve/reject only flip status, the row and its email live
@@ -2968,6 +2971,35 @@ func migrateDB() {
 			db.Exec("ALTER TABLE fetch_sources ADD COLUMN " + col + " TEXT NOT NULL DEFAULT ''")
 		}
 	}
+
+	// Migration v50 (#1578): per-source import window. Existing sources get the
+	// defaults (1 day back, 365 days ahead); see fetch_window.go.
+	if !applied(50) {
+		db.Exec("ALTER TABLE fetch_sources ADD COLUMN max_past_days INTEGER NOT NULL DEFAULT 1")
+		db.Exec("ALTER TABLE fetch_sources ADD COLUMN max_future_days INTEGER NOT NULL DEFAULT 365")
+		mark(50)
+	}
+	// Migration v51 (#1578): the feed's VEVENT SEQUENCE on each event, used to
+	// skip re-imports whose revision count hasn't changed.
+	if !applied(51) {
+		db.Exec("ALTER TABLE events ADD COLUMN ical_sequence INTEGER NOT NULL DEFAULT 0")
+		mark(51)
+	}
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('events') WHERE name='ical_sequence'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE events ADD COLUMN ical_sequence INTEGER NOT NULL DEFAULT 0")
+		}
+	}
+	// Safety net: ensure the window columns exist even if migration 50 was pre-marked.
+	for col, def := range map[string]string{"max_past_days": "1", "max_future_days": "365"} {
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('fetch_sources') WHERE name=?", col).Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE fetch_sources ADD COLUMN " + col + " INTEGER NOT NULL DEFAULT " + def)
+		}
+	}
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -3872,6 +3904,7 @@ func createTables() error {
 	);
 	CREATE TABLE IF NOT EXISTS events (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		ical_sequence INTEGER NOT NULL DEFAULT 0,
 		uid TEXT UNIQUE,
 		title TEXT NOT NULL,
 		description TEXT,
@@ -4078,7 +4111,9 @@ func createTables() error {
 		robots_ack_at TEXT NOT NULL DEFAULT '',
 		robots_ack_by TEXT NOT NULL DEFAULT '',
 		robots_ack_reason TEXT NOT NULL DEFAULT '',
-		robots_ack_rule TEXT NOT NULL DEFAULT ''
+		robots_ack_rule TEXT NOT NULL DEFAULT '',
+		max_past_days INTEGER NOT NULL DEFAULT 1,
+		max_future_days INTEGER NOT NULL DEFAULT 365
 	);
 	CREATE TABLE IF NOT EXISTS location_organizations (
 		location_id INTEGER NOT NULL,

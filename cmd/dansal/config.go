@@ -121,6 +121,10 @@ type ServerConfig struct {
 	// verify time (see bookingLongExpiry) — the age at which a confirmed
 	// booking becomes eligible for the sweep is the same number. Default 90.
 	DataRetentionDays int `yaml:"data_retention_days"`
+	// IcalMaxOccurrences (#1578) caps how many occurrences one recurring iCal
+	// VEVENT may expand to on import; a malformed feed can otherwise create a
+	// huge number of events. 0 means the default (500).
+	IcalMaxOccurrences int `yaml:"ical_max_occurrences"`
 
 	// InviteSigningKeyPath is where the ECDSA P-256 key pair used to sign
 	// invite-link JWTs (see invite_jwt.go) is persisted. Generated on first
@@ -383,6 +387,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.DataRetentionDays == 0 {
 		cfg.Server.DataRetentionDays = 90
+	}
+	if cfg.Server.IcalMaxOccurrences <= 0 {
+		cfg.Server.IcalMaxOccurrences = defaultIcalMaxOccurrences
 	}
 	// #1493 (compliance G13): unset/0 now means "use the default" (14)
 	// rather than "keep forever" -- an instance that wants unlimited

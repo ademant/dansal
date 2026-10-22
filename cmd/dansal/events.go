@@ -232,8 +232,11 @@ type EventCreateRequest struct {
 	Date               []EventDate `json:"date"`
 	Source             string      `json:"source,omitempty"`
 	SourceLastModified int64       `json:"source_last_modified,omitempty"`
-	FetchSourceID      int         `json:"fetch_source_id,omitempty"`
-	DuplicateStatus    string      `json:"duplicate_status,omitempty"`
+	// ICalSequence (#1578): the feed's VEVENT SEQUENCE for this event; an
+	// unchanged sequence on re-import skips the update. Set by the iCal importer.
+	ICalSequence    int    `json:"-"`
+	FetchSourceID   int    `json:"fetch_source_id,omitempty"`
+	DuplicateStatus string `json:"duplicate_status,omitempty"`
 	// DuplicateHintID (#1424) is preview-response only: the existing event a
 	// row would be flagged against (tier-3 review / tier 5) — reported as
 	// "new", with this as the "possible duplicate of #N" hint.
@@ -1108,6 +1111,7 @@ type EventInput struct {
 	OrganizationID                    *int
 	UID, URL, Source                  string
 	SourceLastModified                int64
+	ICalSequence                      int
 	Pricing                           *Pricing
 	TimetableTracks                   []TimetableTrack
 	FetchSourceID                     int
@@ -1123,7 +1127,18 @@ type EventInput struct {
 // outcome is one of outcomeNew/outcomeUpdated/outcomeUnchanged.
 // Deduplication runs findExistingEvent's shared 5-tier hierarchy (#1005),
 // also used by previewDuplicateStatus so the two paths can't drift.
+// insertEvent stores an event or updates the matched one. It also records the
+// feed's VEVENT SEQUENCE on the row (#1578), so the next import can skip an
+// update when the sequence hasn't moved.
 func insertEvent(q querier, in EventInput) (int, string, string, error) {
+	id, shortCode, outcome, err := insertEventCore(q, in)
+	if err == nil && id > 0 && in.ICalSequence > 0 && outcome != outcomeUnchanged {
+		q.Exec("UPDATE events SET ical_sequence = ? WHERE id = ?", in.ICalSequence, id)
+	}
+	return id, shortCode, outcome, err
+}
+
+func insertEventCore(q querier, in EventInput) (int, string, string, error) {
 	title := decodeHTMLEntities(in.Title)
 	description := decodeHTMLEntities(sanitizeFeedHTML(in.Description))
 	startTime, endTime := in.StartTime, in.EndTime
@@ -1198,6 +1213,15 @@ func insertEvent(q querier, in EventInput) (int, string, string, error) {
 	}
 
 	if lookupErr == nil {
+		// Feed SEQUENCE (#1578): an unchanged revision count, with no newer
+		// LAST-MODIFIED, means nothing changed. Skip the update.
+		var storedSequence int
+		q.QueryRow("SELECT COALESCE(ical_sequence, 0) FROM events WHERE id = ?", existingID).Scan(&storedSequence)
+		if in.ICalSequence > 0 && in.ICalSequence == storedSequence &&
+			(sourceLastModified == 0 || sourceLastModified <= existingSourceLastModified) {
+			return existingID, existingShortCode, outcomeUnchanged, nil
+		}
+
 		// Skip update when the source tells us nothing has changed since last import.
 		if sourceLastModified > 0 && sourceLastModified <= existingSourceLastModified {
 			return existingID, existingShortCode, outcomeUnchanged, nil
@@ -1408,6 +1432,7 @@ func createEventFromRequest(q querier, req EventCreateRequest, locationID int64,
 			URL:                req.URL,
 			Source:             req.Source,
 			SourceLastModified: req.SourceLastModified,
+			ICalSequence:       req.ICalSequence,
 			Pricing:            req.Pricing,
 			TimetableTracks:    req.TimetableTracks,
 			FetchSourceID:      req.FetchSourceID,

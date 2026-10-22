@@ -31,7 +31,8 @@ func TestConcurrentImportsDoNotHitLockContention(t *testing.T) {
 		wg.Add(1)
 		go func(s int) {
 			defer wg.Done()
-			src := FetchSource{ID: s + 1, URL: fmt.Sprintf("https://feed%d.example.test/", s)}
+			// The events are dated 2030; give the source a window that covers them.
+			src := FetchSource{ID: s + 1, URL: fmt.Sprintf("https://feed%d.example.test/", s), MaxPastDays: 0, MaxFutureDays: 3650}
 			reqs := make([]EventCreateRequest, perSource)
 			for i := range reqs {
 				start := base + int64(s*perSource+i)*7200

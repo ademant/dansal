@@ -1,4 +1,5 @@
 {{define "content"}}
+<style>.wl-offline-note{margin:.5rem 0;padding:.4rem .6rem;border-radius:4px;background:#fff3cd;color:#856404;font-size:.9rem}</style>
 {{/* #1554: the watchlist page is a shell. base.js reads the ids from
      localStorage and fills #wl-list through POST /watchlist/events. */}}
 <h1>{{.Title}}</h1>
@@ -25,5 +26,6 @@
   {{/* Honeypot (#1554): humans never see or fill this; bots that do get a fake success. */}}
   <input type="text" name="dansal_phone2" class="wl-hp" tabindex="-1" autocomplete="off" aria-hidden="true">
 </section>
-<ul id="wl-list" class="wl-list" data-endpoint="/watchlist/events" data-remove-label="{{.Strings.T "wl_remove_btn"}}" data-cancelled-label="{{.Strings.T "wl_cancelled"}}" data-msg-ok="{{.Strings.T "wl_msg_ok"}}" data-msg-bad="{{.Strings.T "wl_msg_bad"}}" data-msg-instance="{{.Strings.T "wl_msg_instance"}}" data-msg-capped="{{.Strings.T "wl_msg_capped"}}" data-msg-saved="{{.Strings.T "wl_msg_saved"}}" data-msg-loaded="{{.Strings.T "wl_msg_loaded"}}" data-msg-rate="{{.Strings.T "wl_msg_rate"}}" data-msg-key-unknown="{{.Strings.T "wl_msg_key_unknown"}}" data-msg-server-bad="{{.Strings.T "wl_msg_server_bad"}}"></ul>
+<p id="wl-offline-note" class="wl-offline-note" role="status" hidden data-offline-snapshot="{{.Strings.T "wl_offline_snapshot"}}"></p>
+<ul id="wl-list" class="wl-list" data-endpoint="/watchlist/events" data-navigate-label="{{.Strings.T "loc_navigate"}}" data-navigate-hint="{{.Strings.T "loc_navigate_hint"}}" data-copy-label="{{.Strings.T "wl_copy_coords"}}" data-copied-label="{{.Strings.T "wl_copied"}}" data-offline-unavailable="{{.Strings.T "wl_offline_unavailable"}}"data-remove-label="{{.Strings.T "wl_remove_btn"}}" data-cancelled-label="{{.Strings.T "wl_cancelled"}}" data-msg-ok="{{.Strings.T "wl_msg_ok"}}" data-msg-bad="{{.Strings.T "wl_msg_bad"}}" data-msg-instance="{{.Strings.T "wl_msg_instance"}}" data-msg-capped="{{.Strings.T "wl_msg_capped"}}" data-msg-saved="{{.Strings.T "wl_msg_saved"}}" data-msg-loaded="{{.Strings.T "wl_msg_loaded"}}" data-msg-rate="{{.Strings.T "wl_msg_rate"}}" data-msg-key-unknown="{{.Strings.T "wl_msg_key_unknown"}}" data-msg-server-bad="{{.Strings.T "wl_msg_server_bad"}}"></ul>
 {{end}}

@@ -67,13 +67,14 @@ func TestCheckPasswordMigratesAcrossKDFs(t *testing.T) {
 	}
 }
 
-func TestCheckPasswordMigratesLegacyFormats(t *testing.T) {
+func TestCheckPasswordRejectsRawSHA256AndMigratesBcrypt(t *testing.T) {
 	setPasswordKDF(t, "argon2id")
 
-	// Legacy raw SHA-256 hex digest (pre-bcrypt format).
-	legacySHA256 := "fed1f6d8730f52eb51db1c2f7d6a58efad19e7dcae7dcb60d5a1f4f28a6dc07"
-	if ok, _ := checkPassword("anything", legacySHA256); ok {
-		t.Fatal("sanity check: this fixture shouldn't accidentally match")
+	// Unsalted SHA-256 hex digest of "password" is no longer accepted, even
+	// with the right password (code-scanning alert #88).
+	legacySHA256 := "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8"
+	if ok, _ := checkPassword("password", legacySHA256); ok {
+		t.Fatal("unsalted SHA-256 hash must not verify")
 	}
 
 	// bcrypt hash should still verify and be flagged for migration.

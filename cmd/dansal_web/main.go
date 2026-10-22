@@ -407,6 +407,7 @@ func main() {
 		r.HandleFunc("GET /privacy", legalPageHandler(cfg, tmpls, i18n, "privacy", "nav_privacy"))
 		r.HandleFunc("GET /terms", legalPageHandler(cfg, tmpls, i18n, "terms", "nav_terms"))
 		r.HandleFunc("GET /help", helpHandler(cfg, tmpls, i18n, help))
+		r.HandleFunc("GET /agenda", agendaHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /watchlist", watchlistPageHandler(cfg, tmpls, i18n))
 		r.HandleFunc("POST /watchlist/events", watchlistLookupHandler(client))
 		r.HandleFunc("GET /watchlist/form-token", watchlistFormTokenHandler())

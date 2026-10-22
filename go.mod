@@ -25,7 +25,7 @@ require (
 	golang.org/x/term v0.47.0
 	golang.org/x/text v0.42.0
 	gopkg.in/yaml.v2 v2.4.0
-	software.sslmate.com/src/go-pkcs12 v0.7.3
+	software.sslmate.com/src/go-pkcs12 v0.7.4
 )
 
 require (

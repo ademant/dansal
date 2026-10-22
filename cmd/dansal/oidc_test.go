@@ -626,6 +626,7 @@ func (f *fakeMastodonInstance) Close() { f.srv.Close() }
 // oidcCallback's kind branch produces the same (issuer, subject) contract
 // downstream regardless of which protocol produced it.
 func TestMastodonOAuth2LoginAndLink(t *testing.T) {
+	withPlainSafeClient(t)
 	inviteToken := setupOIDCTestDB(t)
 
 	const clientID = "dansal-mastodon-client"
@@ -727,6 +728,7 @@ func TestMastodonOAuth2LoginAndLink(t *testing.T) {
 // the instance accepts both redirect_uris in one call: the provider is
 // created with real credentials and link_enabled stays true.
 func TestMastodonAutoRegisterSuccess(t *testing.T) {
+	withPlainSafeClient(t)
 	setupOIDCTestDB(t)
 	instance := newFakeMastodonInstance(t, "")
 	defer instance.Close()
@@ -770,6 +772,7 @@ func TestMastodonAutoRegisterSuccess(t *testing.T) {
 // instance rejects multiple redirect_uris: dansal retries with just the
 // login/invite URL and marks the provider link_enabled=false.
 func TestMastodonAutoRegisterSingleURIFallback(t *testing.T) {
+	withPlainSafeClient(t)
 	setupOIDCTestDB(t)
 	instance := newFakeMastodonInstance(t, "")
 	instance.appsMode = "single"

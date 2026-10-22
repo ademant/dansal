@@ -70,10 +70,16 @@
   </div>
 
   <div class="feed-links">
-    <strong>{{$.Strings.T "feed_subscribe"}}:</strong>
-    <a href="/feed/instructor/{{.Instructor.ID}}/events.ical" class="feed-link">iCal</a>
-    <a href="/feed/instructor/{{.Instructor.ID}}/events.rss"  class="feed-link">RSS</a>
-    <a href="/feed/instructor/{{.Instructor.ID}}/events.json" class="feed-link">JSON</a>
+    <div class="cal-dd">
+      <button type="button" class="btn-icon" data-fn="toggleInfoPopup" data-args='["@this"]' title="{{$.Strings.T "cal_subscribe"}}" aria-label="{{$.Strings.T "cal_subscribe"}}">📅</button>
+      <div class="cal-menu" hidden>
+        <a href="webcal://{{$.Domain}}/feed/instructor/{{.Instructor.ID}}/events.ics">{{$.Strings.T "cal_subscribe"}}</a>
+        <a href="/feed/instructor/{{.Instructor.ID}}/events.ics">{{$.Strings.T "cal_download"}}</a>
+        <hr>
+        <a href="/feed/instructor/{{.Instructor.ID}}/events.rss">RSS</a>
+        <a href="/feed/instructor/{{.Instructor.ID}}/events.json">JSON</a>
+      </div>
+    </div>
   </div>
 
   {{/* Follow-up to #1161/#1167: rolling monthly calendar, same shared component as /org/{slug}.

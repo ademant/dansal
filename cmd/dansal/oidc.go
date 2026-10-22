@@ -137,7 +137,7 @@ func mastodonCheckReachable(ctx context.Context, issuerURL string) error {
 	if err != nil {
 		return err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := safeClient.Do(req) // admin-entered instance URL: block private addresses (CodeQL go/request-forgery)
 	if err != nil {
 		return err
 	}
@@ -166,7 +166,7 @@ func mastodonExchangeAndIdentify(ctx context.Context, p OIDCProvider, secret, re
 		return "", "", err
 	}
 	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := safeClient.Do(req) // admin-entered instance URL: block private addresses (CodeQL go/request-forgery)
 	if err != nil {
 		return "", "", err
 	}
@@ -425,7 +425,7 @@ func mastodonRegisterApp(ctx context.Context, issuerURL, clientName string, redi
 		return "", "", err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := safeClient.Do(req) // admin-entered instance URL: block private addresses (CodeQL go/request-forgery)
 	if err != nil {
 		return "", "", err
 	}

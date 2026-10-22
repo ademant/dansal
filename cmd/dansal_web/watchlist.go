@@ -44,6 +44,12 @@ type WatchlistItem struct {
 	Location  string `json:"location"`
 	Cancelled bool   `json:"cancelled"`
 	Path      string `json:"path"`
+	// Venue details for navigation and for the offline snapshot (#1605). Lat and
+	// Lon are set only when the venue is geo-tagged.
+	Address string   `json:"address,omitempty"`
+	Town    string   `json:"town,omitempty"`
+	Lat     *float64 `json:"lat,omitempty"`
+	Lon     *float64 `json:"lon,omitempty"`
 }
 
 // WatchlistLookupResponse is the lookup's reply. Missing lists the ids the
@@ -138,6 +144,10 @@ func watchlistItemFrom(ev Event) WatchlistItem {
 	}
 	if ev.Location != nil {
 		item.Location = ev.Location.Location
+		item.Address = ev.Location.Address
+		item.Town = ev.Location.Town
+		item.Lat = ev.Location.Latitude
+		item.Lon = ev.Location.Longitude
 	}
 	return item
 }

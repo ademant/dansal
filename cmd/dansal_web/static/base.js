@@ -1048,6 +1048,21 @@ function mediaMoveRow(btn,dir){
 // resolves the ids through POST /watchlist/events and drops ids it reports missing.
 var WL_KEY='dansal_watchlist', WL_MAX=200;
 
+// #1605: the offline snapshot. The watchlist page saves the entries of each
+// successful lookup here. When a lookup fails (no connection), the page shows
+// them from the snapshot. Removing an entry also removes it from the snapshot.
+var WL_SNAP_KEY='dansal_watchlist_snapshot';
+function watchlistSnapshotRead(){
+  try{
+    var o=JSON.parse(localStorage.getItem(WL_SNAP_KEY)||'null');
+    if(o&&o.v===1&&Array.isArray(o.items)) return o;
+  }catch(e){}
+  return null;
+}
+function watchlistSnapshotWrite(snap){
+  try{ localStorage.setItem(WL_SNAP_KEY,JSON.stringify(snap)); }catch(e){}
+}
+
 function watchlistRead(){
   try{
     var o=JSON.parse(localStorage.getItem(WL_KEY)||'null');
@@ -1063,6 +1078,11 @@ function watchlistHas(id){ return watchlistRead().indexOf(id)>=0; }
 function watchlistWrite(ids){
   ids=ids.slice(0,WL_MAX);
   try{ localStorage.setItem(WL_KEY,JSON.stringify({v:1,ids:ids})); }catch(e){}
+  var snap=watchlistSnapshotRead();
+  if(snap){
+    snap.items=snap.items.filter(function(it){return ids.indexOf(it.id)>=0;});
+    watchlistSnapshotWrite(snap);
+  }
   watchlistUI();
   // The calendar and map listen for this to show watched events (#1554).
   document.dispatchEvent(new CustomEvent('watchlistchange'));
@@ -1112,12 +1132,39 @@ function watchlistRender(){
       watchlistWrite(watchlistRead().filter(function(id){return missing.indexOf(id)<0;}));
     }
     list.textContent='';
-    (data.items||[]).forEach(function(it){ list.appendChild(watchlistRow(it,list)); });
+    var items=data.items||[];
+    // #1605: an online visit refreshes the offline snapshot.
+    watchlistSnapshotWrite({v:1,saved_at:new Date().toISOString(),items:items});
+    var note=document.getElementById('wl-offline-note');
+    if(note) note.hidden=true;
+    items.forEach(function(it){ list.appendChild(watchlistRow(it,list)); });
     if(!watchlistRead().length && empty) empty.hidden=false;
   }).catch(function(){
-    // Keep the stored list on any failure; a network or API error must not
-    // drop entries.
+    // A failed lookup keeps the stored ids. Without a connection the page shows
+    // the last snapshot instead (#1605); a network or API error never drops entries.
+    watchlistRenderSnapshot(list);
   });
+}
+
+// watchlistRenderSnapshot shows the stored ids from the offline snapshot (#1605).
+// Ids the snapshot has no entry for were never loaded online; they are listed
+// as not available offline.
+function watchlistRenderSnapshot(list){
+  var note=document.getElementById('wl-offline-note');
+  var snap=watchlistSnapshotRead();
+  var byId={};
+  if(snap) snap.items.forEach(function(it){ byId[it.id]=it; });
+  list.textContent='';
+  watchlistRead().forEach(function(id){
+    var it=byId[id]||{id:id,title:'#'+id,path:'/events/'+id,unavailable:true};
+    list.appendChild(watchlistRow(it,list));
+  });
+  if(note){
+    note.hidden=!snap;
+    if(snap){
+      note.textContent=(note.getAttribute('data-offline-snapshot')||'').replace('%s',new Date(snap.saved_at).toLocaleString());
+    }
+  }
 }
 
 function watchlistRow(it,list){
@@ -1129,13 +1176,40 @@ function watchlistRow(it,list){
   li.appendChild(a);
   var meta=document.createElement('span');
   meta.className='wl-meta';
-  meta.textContent=[it.start_time?it.start_time.slice(0,16).replace('T',' '):'',it.location||''].filter(Boolean).join(' · ');
+  if(it.unavailable){
+    meta.textContent=list.getAttribute('data-offline-unavailable')||'';
+  } else {
+    meta.textContent=[it.start_time?it.start_time.slice(0,16).replace('T',' '):'',it.location||'',it.address||''].filter(Boolean).join(' · ');
+  }
   li.appendChild(meta);
   if(it.cancelled){
     var c=document.createElement('span');
     c.className='wl-cancelled';
     c.textContent=list.getAttribute('data-cancelled-label')||'';
     li.appendChild(c);
+  }
+  // #1605: the same navigate link as the event and location pages, plus a
+  // copy-coordinates fallback for apps that do not open geo: links.
+  if(typeof it.lat==='number' && typeof it.lon==='number'){
+    var pos=it.lat+','+it.lon;
+    var nav=document.createElement('a');
+    nav.className='loc-map-link loc-map-link-nav';
+    nav.href='geo:'+pos+'?q='+pos;
+    nav.rel='nofollow';
+    nav.title=list.getAttribute('data-navigate-hint')||'';
+    nav.textContent='🧭 '+(list.getAttribute('data-navigate-label')||'');
+    li.appendChild(nav);
+    var cp=document.createElement('button');
+    cp.type='button';
+    cp.className='btn-sm-secondary wl-copy';
+    cp.textContent=list.getAttribute('data-copy-label')||'';
+    cp.addEventListener('click',function(){
+      if(!navigator.clipboard) return;
+      navigator.clipboard.writeText(pos).then(function(){
+        cp.textContent=list.getAttribute('data-copied-label')||cp.textContent;
+      }).catch(function(){});
+    });
+    li.appendChild(cp);
   }
   var btn=document.createElement('button');
   btn.type='button';

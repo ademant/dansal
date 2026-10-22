@@ -52,6 +52,22 @@ self.addEventListener("fetch", function (event) {
   }
 
   if (req.mode === "navigate") {
+    // #1605: the watchlist page is the one HTML page kept for offline use. Its
+    // HTML is a shell with no personal data; the entries come from localStorage.
+    if (url.pathname === "/watchlist") {
+      event.respondWith(fetch(req).then(function (res) {
+        if (res.ok) {
+          var copy = res.clone();
+          caches.open(CACHE).then(function (cache) { cache.put("/watchlist", copy); });
+        }
+        return res;
+      }).catch(function () {
+        return caches.match("/watchlist").then(function (hit) {
+          return hit || caches.match("/offline");
+        });
+      }));
+      return;
+    }
     event.respondWith(fetch(req).catch(function () {
       return caches.match("/offline");
     }));

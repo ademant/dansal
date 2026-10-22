@@ -2971,6 +2971,22 @@ func migrateDB() {
 			db.Exec("ALTER TABLE fetch_sources ADD COLUMN " + col + " TEXT NOT NULL DEFAULT ''")
 		}
 	}
+
+	// Migration v50 (#1578): per-source import window. Existing sources get the
+	// defaults (1 day back, 365 days ahead); see fetch_window.go.
+	if !applied(50) {
+		db.Exec("ALTER TABLE fetch_sources ADD COLUMN max_past_days INTEGER NOT NULL DEFAULT 1")
+		db.Exec("ALTER TABLE fetch_sources ADD COLUMN max_future_days INTEGER NOT NULL DEFAULT 365")
+		mark(50)
+	}
+	// Safety net: ensure the window columns exist even if migration 50 was pre-marked.
+	for col, def := range map[string]string{"max_past_days": "1", "max_future_days": "365"} {
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('fetch_sources') WHERE name=?", col).Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE fetch_sources ADD COLUMN " + col + " INTEGER NOT NULL DEFAULT " + def)
+		}
+	}
 }
 
 // migrateEventTagsFK adds FOREIGN KEY (tag) REFERENCES tags(slug) ON DELETE CASCADE
@@ -4081,7 +4097,9 @@ func createTables() error {
 		robots_ack_at TEXT NOT NULL DEFAULT '',
 		robots_ack_by TEXT NOT NULL DEFAULT '',
 		robots_ack_reason TEXT NOT NULL DEFAULT '',
-		robots_ack_rule TEXT NOT NULL DEFAULT ''
+		robots_ack_rule TEXT NOT NULL DEFAULT '',
+		max_past_days INTEGER NOT NULL DEFAULT 1,
+		max_future_days INTEGER NOT NULL DEFAULT 365
 	);
 	CREATE TABLE IF NOT EXISTS location_organizations (
 		location_id INTEGER NOT NULL,

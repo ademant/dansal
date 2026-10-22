@@ -39,6 +39,9 @@ type FetchURLRequest struct {
 	// fetched on manual action only, never by fetch-all.
 	RobotsAck       bool   `json:"robots_ack"`
 	RobotsAckReason string `json:"robots_ack_reason"`
+	// MaxPastDays / MaxFutureDays (#1578): optional; default 1 and 365.
+	MaxPastDays   *int `json:"max_past_days,omitempty"`
+	MaxFutureDays *int `json:"max_future_days,omitempty"`
 }
 
 // FetchSourcePatchRequest is the body accepted by PATCH /api/v1/fetchurl/{id}.
@@ -56,6 +59,9 @@ type FetchSourcePatchRequest struct {
 	Attribution    string   `json:"attribution"`
 	TermsURL       string   `json:"terms_url"`
 	OptOut         bool     `json:"opt_out"`
+	// MaxPastDays / MaxFutureDays (#1578): nil leaves the setting as it is.
+	MaxPastDays   *int `json:"max_past_days"`
+	MaxFutureDays *int `json:"max_future_days"`
 }
 
 type FetchSource struct {
@@ -102,6 +108,9 @@ type FetchSource struct {
 	RobotsAckBy     string `json:"robots_ack_by,omitempty"`
 	RobotsAckReason string `json:"robots_ack_reason,omitempty"`
 	RobotsAckRule   string `json:"robots_ack_rule,omitempty"`
+	// MaxPastDays / MaxFutureDays (#1578): the import window; see fetch_window.go.
+	MaxPastDays   int `json:"max_past_days"`
+	MaxFutureDays int `json:"max_future_days"`
 	// RobotsRule is the robots.txt rule that disallows this URL right now.
 	// Not stored: set only on the single-source GET (see getFetchSource).
 	RobotsRule string `json:"robots_rule,omitempty"`
@@ -122,7 +131,7 @@ type KuferConfig struct {
 }
 
 // fetchSourceCols is the SELECT column list for fetch_sources rows.
-const fetchSourceCols = "id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, last_result, created_at, template_id, template_mode, COALESCE(template_data,''), COALESCE(kufer_config,''), COALESCE(category_filter,''), imported_once, licence, attribution, terms_url, opt_out, robots_ack_at, robots_ack_by, robots_ack_reason, robots_ack_rule"
+const fetchSourceCols = "id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, last_result, created_at, template_id, template_mode, COALESCE(template_data,''), COALESCE(kufer_config,''), COALESCE(category_filter,''), imported_once, licence, attribution, terms_url, opt_out, robots_ack_at, robots_ack_by, robots_ack_reason, robots_ack_rule, max_past_days, max_future_days"
 
 // templateImportData mirrors the JSON stored in event_templates.data.
 // Timetable uses the same TimetableEntryRequest as the direct API and event
@@ -632,7 +641,7 @@ func scanFetchSource(s scanner) (FetchSource, error) {
 	var lastFetched, lastResult sql.NullString
 	var orgID, templateID sql.NullInt64
 	var templateMode sql.NullString
-	if err := s.Scan(&src.ID, &src.URL, &src.Type, &tagsJSON, &danceIDsCSV, &orgID, &lastFetched, &lastResult, &src.CreatedAt, &templateID, &templateMode, &src.TemplateData, &src.KuferConfig, &categoryFilterJSON, &src.ImportedOnce, &src.Licence, &src.Attribution, &src.TermsURL, &src.OptOut, &src.RobotsAckAt, &src.RobotsAckBy, &src.RobotsAckReason, &src.RobotsAckRule); err != nil {
+	if err := s.Scan(&src.ID, &src.URL, &src.Type, &tagsJSON, &danceIDsCSV, &orgID, &lastFetched, &lastResult, &src.CreatedAt, &templateID, &templateMode, &src.TemplateData, &src.KuferConfig, &categoryFilterJSON, &src.ImportedOnce, &src.Licence, &src.Attribution, &src.TermsURL, &src.OptOut, &src.RobotsAckAt, &src.RobotsAckBy, &src.RobotsAckReason, &src.RobotsAckRule, &src.MaxPastDays, &src.MaxFutureDays); err != nil {
 		return FetchSource{}, err
 	}
 	if tagsJSON != "" {
@@ -835,6 +844,10 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &req) {
 		return
 	}
+	if err := validateFetchWindow(req.MaxPastDays, req.MaxFutureDays); err != nil {
+		writeError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	if req.Type != "" {
 		src.Type = req.Type
@@ -887,6 +900,16 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 	if err := setFetchSourceDances(src.ID, src.DanceIDs); err != nil {
 		writeInternalError(w, err)
 		return
+	}
+	if err := setFetchSourceWindow(src.ID, req.MaxPastDays, req.MaxFutureDays); err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	if req.MaxPastDays != nil {
+		src.MaxPastDays = *req.MaxPastDays
+	}
+	if req.MaxFutureDays != nil {
+		src.MaxFutureDays = *req.MaxFutureDays
 	}
 
 	writeJSON(w, src)
@@ -1194,6 +1217,7 @@ func isDBBusy(err error) bool {
 }
 
 func importEntries[T any](ctx context.Context, src FetchSource, entries []T, reqOf func(T) EventCreateRequest, finalize func(tx querier, entry T, td *templateImportData, counts *ImportCounts, allEvents *[]Event) error) ([]Event, ImportCounts, error) {
+	entries = filterEntriesToWindow(src, entries, reqOf, time.Now())
 	importWriteMu.Lock()
 	db.Exec("UPDATE fetch_sources SET last_fetched_at = ? WHERE id = ?", time.Now().UTC().Unix(), src.ID)
 	importWriteMu.Unlock()
@@ -1681,6 +1705,10 @@ func fetchURL(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &req) {
 		return
 	}
+	if err := validateFetchWindow(req.MaxPastDays, req.MaxFutureDays); err != nil {
+		writeError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	if !strings.Contains(req.URL, "://") {
 		req.URL = "https://" + req.URL
@@ -1750,6 +1778,10 @@ func fetchURL(w http.ResponseWriter, r *http.Request) {
 	if req.CategoryFilter != nil {
 		categoryFilterJSON, _ := json.Marshal(req.CategoryFilter)
 		db.Exec("UPDATE fetch_sources SET category_filter = ? WHERE id = ?", string(categoryFilterJSON), sourceID)
+	}
+	if err := setFetchSourceWindow(int(sourceID), req.MaxPastDays, req.MaxFutureDays); err != nil {
+		writeInternalError(w, err)
+		return
 	}
 
 	src := FetchSource{ID: int(sourceID), URL: req.URL, Type: req.Type, Tags: req.Tags, OrganizationID: req.OrganizationID, TemplateID: req.TemplateID, TemplateMode: req.TemplateMode, TemplateData: req.TemplateData, KuferConfig: req.KuferConfig, CategoryFilter: req.CategoryFilter}

@@ -3,6 +3,8 @@ package main
 import (
 	"log"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	ics "github.com/arran4/golang-ical"
@@ -291,4 +293,18 @@ func icsToGoWeekday(wd ics.Weekday) time.Weekday {
 		return time.Saturday
 	}
 	return time.Monday
+}
+
+// icalSequence returns the VEVENT SEQUENCE (RFC 5545 §3.8.7.4), the feed's
+// revision count for the event, or 0 when absent (#1578).
+func icalSequence(vevent *ics.VEvent) int {
+	p := vevent.GetProperty(ics.ComponentPropertySequence)
+	if p == nil {
+		return 0
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(p.Value))
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
 }

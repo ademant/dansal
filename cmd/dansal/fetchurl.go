@@ -1410,6 +1410,7 @@ func parseICalToRequests(cal *ics.Calendar, src FetchSource, rep *icalParseRepor
 				UID:                uid,
 				Source:             src.URL,
 				SourceLastModified: d.sourceLastModified,
+				ICalSequence:       d.icalSequence,
 				FetchSourceID:      src.ID,
 				// A preview-only per-event display flag (events.go); the
 				// import path (parseICalBody) deliberately never sets this —
@@ -1443,6 +1444,7 @@ type icalEventDerived struct {
 	tags               []string
 	baseUID            string
 	sourceLastModified int64
+	icalSequence       int
 	url                string
 	loc                EventLocationRequest
 	isCancelled        bool
@@ -1514,6 +1516,7 @@ func deriveICalEvent(vevent *ics.VEvent, vtLocs map[string]*time.Location, src F
 	tags := mergeTags(eventCategories, src.Tags)
 	baseUID := prop(ics.ComponentPropertyUniqueId)
 	sourceLastModified := icalLastModified(vevent)
+	icalSequence := icalSequence(vevent)
 
 	// Expand RRULE if present; fall back to the single base occurrence.
 	occs, _ := expandRRuleOccurrences(vevent, startT, endT)
@@ -1527,6 +1530,7 @@ func deriveICalEvent(vevent *ics.VEvent, vtLocs map[string]*time.Location, src F
 		tags:               tags,
 		baseUID:            baseUID,
 		sourceLastModified: sourceLastModified,
+		icalSequence:       icalSequence,
 		url:                attachURL(vevent),
 		loc:                parseICalLocation(vevent),
 		isCancelled:        prop(ics.ComponentPropertyStatus) == "CANCELLED",
@@ -1607,6 +1611,7 @@ func parseICalBody(body []byte, src FetchSource, rep *icalParseReport) ([]icalIm
 					UID:                uid,
 					Source:             src.URL,
 					SourceLastModified: d.sourceLastModified,
+					ICalSequence:       d.icalSequence,
 					FetchSourceID:      src.ID,
 					// d.usedFallback deliberately not set here: it's a
 					// preview-only display flag (see parseICalToRequests);

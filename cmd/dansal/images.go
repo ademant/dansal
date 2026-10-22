@@ -272,9 +272,19 @@ func saveImageFromReader(eventID int, r io.Reader) error {
 
 // attachImagesFromICalEvent downloads and stores the first image ATTACH from a vevent.
 // Skips silently if an image already exists for the event.
+// icalImageMaxBytes caps a feed image (#1578). A larger file is refused.
+const icalImageMaxBytes = 10 << 20
+
+// attachImagesFromICalEvent stores the first usable image of a VEVENT. The
+// common non-standard IMAGE property is tried first, then ATTACH (#1578).
 func attachImagesFromICalEvent(eventID int, vevent *ics.VEvent) {
 	if hasImage(eventID) {
 		return
+	}
+	for _, prop := range vevent.GetProperties(ics.ComponentProperty("IMAGE")) {
+		if len(prop.Value) > 0 && tryAttachImageURL(eventID, prop.Value) {
+			return
+		}
 	}
 	for _, prop := range vevent.GetProperties(ics.ComponentPropertyAttach) {
 		fmttype := prop.ICalParameters["FMTTYPE"]
@@ -313,22 +323,46 @@ func tryAttachImage(eventID int, prop *ics.IANAProperty) bool {
 		return true
 	}
 
-	// URI attachment — use safeClient to block SSRF to private/internal addresses.
-	if u, err2 := url.Parse(prop.Value); err2 != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+	return tryAttachImageURL(eventID, prop.Value)
+}
+
+// tryAttachImageURL fetches a feed image by URL and stores it. It uses
+// safeClient (no private addresses), checks the type and size with a HEAD
+// first where the server answers it, and caps the download at
+// icalImageMaxBytes (#1578). A refusal is logged and reports false.
+func tryAttachImageURL(eventID int, rawURL string) bool {
+	if u, err := url.Parse(rawURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return false
 	}
-	resp, err := safeClient.Get(prop.Value)
+	if head, err := safeClient.Head(rawURL); err == nil {
+		head.Body.Close()
+		if head.StatusCode >= 200 && head.StatusCode < 300 {
+			if ct := head.Header.Get("Content-Type"); ct != "" && !strings.HasPrefix(ct, "image/") {
+				log.Printf("iCal image for event %d refused: content type %q", eventID, ct)
+				return false
+			}
+			if head.ContentLength > icalImageMaxBytes {
+				log.Printf("iCal image for event %d refused: %d bytes is over the limit", eventID, head.ContentLength)
+				return false
+			}
+		}
+	}
+	resp, err := safeClient.Get(rawURL)
 	if err != nil {
-		log.Printf("iCal ATTACH fetch for event %d: %v", eventID, err)
+		log.Printf("iCal image fetch for event %d: %v", eventID, err)
 		return false
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		log.Printf("iCal ATTACH HTTP %d for event %d", resp.StatusCode, eventID)
+		log.Printf("iCal image HTTP %d for event %d", resp.StatusCode, eventID)
 		return false
 	}
-	if err := saveImageFromReader(eventID, resp.Body); err != nil {
-		log.Printf("iCal ATTACH save for event %d: %v", eventID, err)
+	if ct := resp.Header.Get("Content-Type"); ct != "" && !strings.HasPrefix(ct, "image/") {
+		log.Printf("iCal image for event %d refused: content type %q", eventID, ct)
+		return false
+	}
+	if err := saveImageFromReader(eventID, io.LimitReader(resp.Body, icalImageMaxBytes)); err != nil {
+		log.Printf("iCal image save for event %d: %v", eventID, err)
 		return false
 	}
 	return true

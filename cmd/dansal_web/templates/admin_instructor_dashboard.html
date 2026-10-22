@@ -5,6 +5,7 @@
   <h1>{{.Instructor.Name}}</h1>
   <a href="/instructors/{{.Instructor.ID}}" class="btn-icon" title="Public page" aria-label="Public page">🌐</a>
   <a href="/admin/instructors/{{.Instructor.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
+  <a href="/admin/events/maintenance?instructor_id={{.Instructor.ID}}" class="btn-icon" title="{{$.Strings.T "admin_event_maintenance_title"}}" aria-label="{{$.Strings.T "admin_event_maintenance_title"}}">📅</a>
 </div>
 
 <details class="dash-orgs">

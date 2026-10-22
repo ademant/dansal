@@ -491,6 +491,7 @@ func main() {
 		r.HandleFunc("POST /admin/organizations/{id}/avatar/delete", adminRateLimit(adminOrgAvatarDeleteHandler(cfg, client)))
 		r.HandleFunc("POST /admin/instructors/{id}/avatar/delete", adminRateLimit(adminInstructorAvatarDeleteHandler(cfg, client)))
 		r.HandleFunc("GET /admin/events/maintenance", adminEventsMaintenanceHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("GET /admin/events/export.csv", adminEventsExportHandler(cfg, client))
 		r.HandleFunc("GET /admin/events", adminEventsHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /admin/events/import", adminImportEventsPageHandler(cfg, tmpls, i18n))
 		r.HandleFunc("POST /admin/events/import", adminRateLimit(adminImportEventsHandler(cfg, tmpls, db, client, i18n)))

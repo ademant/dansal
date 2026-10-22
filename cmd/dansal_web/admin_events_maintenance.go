@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -29,6 +31,11 @@ type AdminEventsMaintenanceData struct {
 	FilterDateTo       string
 	FilterUnpublished  bool
 	FilterHasSource    bool
+	// #1584: multi-select musician and instructor filters, and the CSV export
+	// link that carries the same filters.
+	MusicianSelected   map[int]bool
+	InstructorSelected map[int]bool
+	ExportURL          string
 	ReturnURL          string
 	// paging
 	TotalCount   int
@@ -36,6 +43,142 @@ type AdminEventsMaintenanceData struct {
 	TotalPages   int
 	HasFilter    bool
 	PagerBaseURL string
+}
+
+// maintenanceFilter is the maintenance view's filter set (#1584). The page and
+// the CSV export both build their API query from it, so an export always holds
+// exactly the events the page shows.
+type maintenanceFilter struct {
+	IncludePast   bool
+	Unpublished   bool
+	OrgID         int
+	LocationID    int
+	City          string
+	DateFrom      string
+	DateTo        string
+	HasSource     bool
+	MusicianIDs   []int
+	InstructorIDs []int
+}
+
+func parseMaintenanceFilter(q url.Values) maintenanceFilter {
+	f := maintenanceFilter{
+		IncludePast:   q.Get("include_past") == "1",
+		Unpublished:   q.Get("unpublished") == "1",
+		City:          q.Get("city"),
+		DateFrom:      q.Get("date_from"),
+		DateTo:        q.Get("date_to"),
+		HasSource:     q.Get("has_source") == "1",
+		MusicianIDs:   positiveIDs(q["musician_id"]),
+		InstructorIDs: positiveIDs(q["instructor_id"]),
+	}
+	f.OrgID, _ = strconv.Atoi(q.Get("org_id"))
+	f.LocationID, _ = strconv.Atoi(q.Get("location_id"))
+	return f
+}
+
+// active reports whether any filter narrows the list.
+func (f maintenanceFilter) active() bool {
+	return f.IncludePast || f.Unpublished || f.OrgID != 0 || f.LocationID != 0 || f.City != "" ||
+		f.DateFrom != "" || f.DateTo != "" || f.HasSource || len(f.MusicianIDs) > 0 || len(f.InstructorIDs) > 0
+}
+
+// apiParams is the event-list query for the filter, without paging. The
+// unpublished view's second query (email_verified, #982) is added by
+// fetchMaintenanceEvents.
+func (f maintenanceFilter) apiParams() url.Values {
+	p := url.Values{}
+	if f.IncludePast {
+		p.Set("include_past", "true")
+	}
+	if f.Unpublished {
+		p.Set("is_published", "false")
+		if !f.IncludePast {
+			p.Set("include_past", "true")
+		}
+	}
+	if f.HasSource && !f.IncludePast {
+		p.Set("include_past", "true")
+	}
+	if t, ok := parseISODate(f.DateFrom); ok {
+		p.Set("start_time_after", strconv.FormatInt(t.Unix()-1, 10))
+	}
+	if t, ok := parseISODate(f.DateTo); ok {
+		p.Set("start_time_before", strconv.FormatInt(t.Add(24*time.Hour).Unix(), 10))
+	}
+	if f.LocationID != 0 {
+		p.Set("location_id", strconv.Itoa(f.LocationID))
+	}
+	if f.OrgID != 0 {
+		p.Set("organization_id", strconv.Itoa(f.OrgID))
+	}
+	if f.City != "" {
+		p.Set("town", f.City)
+	}
+	if f.HasSource {
+		p.Set("has_source", "1")
+	}
+	for _, id := range f.MusicianIDs {
+		p.Add("event_musician_id", strconv.Itoa(id))
+	}
+	for _, id := range f.InstructorIDs {
+		p.Add("event_instructor_id", strconv.Itoa(id))
+	}
+	return p
+}
+
+// fetchMaintenanceEvents returns every event the filter selects, following the
+// API's pages to the end. The unpublished view also includes events stuck at
+// email_verified=0 (#982), which the is_published query alone misses.
+func fetchMaintenanceEvents(ctx context.Context, client *DansalClient, token string, f maintenanceFilter) ([]Event, error) {
+	queries := []url.Values{f.apiParams()}
+	if f.Unpublished {
+		ev := f.apiParams()
+		ev.Del("is_published")
+		ev.Set("email_verified", "false")
+		queries = append(queries, ev)
+	}
+	seen := map[int]bool{}
+	var out []Event
+	for _, base := range queries {
+		for offset := 0; ; {
+			p := url.Values{}
+			for k, v := range base {
+				p[k] = v
+			}
+			p.Set("limit", strconv.Itoa(apiListLimit))
+			p.Set("offset", strconv.Itoa(offset))
+			page, total, err := client.GetAdminEventsWithTotal(ctx, token, p)
+			if err != nil {
+				return nil, err
+			}
+			for _, e := range page {
+				if !seen[e.ID] {
+					seen[e.ID] = true
+					out = append(out, e)
+				}
+			}
+			offset += len(page)
+			if len(page) == 0 || offset >= total {
+				break
+			}
+		}
+	}
+	return out, nil
+}
+
+// positiveIDs reads ids from repeated and/or comma-separated query values,
+// dropping anything that is not a positive integer.
+func positiveIDs(raw []string) []int {
+	var out []int
+	for _, v := range raw {
+		for _, p := range strings.Split(v, ",") {
+			if n, err := strconv.Atoi(strings.TrimSpace(p)); err == nil && n > 0 {
+				out = append(out, n)
+			}
+		}
+	}
+	return out
 }
 
 func adminEventsMaintenanceHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -46,16 +189,7 @@ func adminEventsMaintenanceHandler(cfg *Config, tmpls *Templates, client *Dansal
 		}
 
 		q := r.URL.Query()
-		includePast := q.Get("include_past") == "1"
-		filterUnpublished := q.Get("unpublished") == "1"
-		orgID, _ := strconv.Atoi(q.Get("org_id"))
-		locationID, _ := strconv.Atoi(q.Get("location_id"))
-		filterCity := q.Get("city")
-		dateFrom := q.Get("date_from")
-		dateTo := q.Get("date_to")
-		filterHasSource := q.Get("has_source") == "1"
-
-		hasFilter := includePast || filterUnpublished || orgID != 0 || locationID != 0 || filterCity != "" || dateFrom != "" || dateTo != "" || filterHasSource
+		f := parseMaintenanceFilter(q)
 
 		page := 1
 		if p, _ := strconv.Atoi(q.Get("page")); p > 1 {
@@ -63,76 +197,33 @@ func adminEventsMaintenanceHandler(cfg *Config, tmpls *Templates, client *Dansal
 		}
 		const pageSize = adminListPageSize
 
-		params := url.Values{}
-		if includePast {
-			params.Set("include_past", "true")
-		}
-		if filterUnpublished {
-			params.Set("is_published", "false")
-			if !includePast {
-				params.Set("include_past", "true")
+		token := getSessionToken(r)
+		var events []Event
+		var total, totalPages int
+		if f.Unpublished {
+			// The unpublished view merges two queries (#982), so it is listed
+			// whole rather than paged.
+			ev, err := fetchMaintenanceEvents(r.Context(), client, token, f)
+			if err != nil {
+				http.Error(w, "could not load events", http.StatusBadGateway)
+				return
 			}
-		}
-		if filterHasSource && !includePast {
-			params.Set("include_past", "true")
-		}
-		if dateFrom != "" {
-			if t, ok := parseISODate(dateFrom); ok {
-				params.Set("start_time_after", strconv.FormatInt(t.Unix()-1, 10))
-			}
-		}
-		if dateTo != "" {
-			if t, ok := parseISODate(dateTo); ok {
-				params.Set("start_time_before", strconv.FormatInt(t.Add(24*time.Hour).Unix(), 10))
-			}
-		}
-		if locationID != 0 {
-			params.Set("location_id", strconv.Itoa(locationID))
-		}
-		if hasFilter {
-			params.Set("limit", strconv.Itoa(apiListLimit))
+			events, total, totalPages = ev, len(ev), 1
 		} else {
+			params := f.apiParams()
 			params.Set("limit", strconv.Itoa(pageSize))
 			params.Set("offset", strconv.Itoa((page-1)*pageSize))
-		}
-
-		token := getSessionToken(r)
-		events, total, err := client.GetAdminEventsWithTotal(r.Context(), token, params)
-		if err != nil {
-			http.Error(w, "could not load events", http.StatusBadGateway)
-			return
-		}
-
-		if filterUnpublished {
-			// #982: is_published=false alone misses events stuck at
-			// email_verified=0 — those are invisible to the API's base guard
-			// regardless of published status. Merge in a second request so the
-			// "unpublished" shortcut doesn't silently skip them.
-			evParams := url.Values{}
-			for k, v := range params {
-				evParams[k] = v
+			ev, t, err := client.GetAdminEventsWithTotal(r.Context(), token, params)
+			if err != nil {
+				http.Error(w, "could not load events", http.StatusBadGateway)
+				return
 			}
-			evParams.Del("is_published")
-			evParams.Set("email_verified", "false")
-			if evEvents, _, evErr := client.GetAdminEventsWithTotal(r.Context(), token, evParams); evErr == nil {
-				seen := make(map[int]bool, len(events))
-				for _, e := range events {
-					seen[e.ID] = true
-				}
-				for _, e := range evEvents {
-					if !seen[e.ID] {
-						events = append(events, e)
-						seen[e.ID] = true
-						total++
-					}
-				}
+			events, total, totalPages = ev, t, 1
+			if total > pageSize {
+				totalPages = (total + pageSize - 1) / pageSize
 			}
 		}
 
-		totalPages := 1
-		if !hasFilter && total > pageSize {
-			totalPages = (total + pageSize - 1) / pageSize
-		}
 		// Build pager base URL (all current filter params except page)
 		pagerQ := url.Values{}
 		for k, vs := range q {
@@ -141,34 +232,7 @@ func adminEventsMaintenanceHandler(cfg *Config, tmpls *Templates, client *Dansal
 			}
 		}
 		pagerBaseURL := "/admin/events/maintenance?" + pagerQ.Encode() + "&page="
-
-		if orgID != 0 {
-			filtered := events[:0]
-			for _, e := range events {
-				if e.OrganizationID != nil && *e.OrganizationID == orgID {
-					filtered = append(filtered, e)
-				}
-			}
-			events = filtered
-		}
-		if filterCity != "" {
-			filtered := events[:0]
-			for _, e := range events {
-				if e.Location != nil && e.Location.Town == filterCity {
-					filtered = append(filtered, e)
-				}
-			}
-			events = filtered
-		}
-		if filterHasSource {
-			filtered := events[:0]
-			for _, e := range events {
-				if e.Source != "" {
-					filtered = append(filtered, e)
-				}
-			}
-			events = filtered
-		}
+		exportURL := "/admin/events/export.csv?" + pagerQ.Encode()
 
 		orgs, _ := client.GetOrganizations(r.Context())
 		locs, _ := client.GetLocations(r.Context())
@@ -210,17 +274,25 @@ func adminEventsMaintenanceHandler(cfg *Config, tmpls *Templates, client *Dansal
 		}
 
 		var filterOrgName string
-		if orgID != 0 {
-			filterOrgName = orgMap[orgID]
+		if f.OrgID != 0 {
+			filterOrgName = orgMap[f.OrgID]
 		}
 		var filterLocationName string
-		if locationID != 0 {
+		if f.LocationID != 0 {
 			for _, l := range locs {
-				if l.ID == locationID {
+				if l.ID == f.LocationID {
 					filterLocationName = locationDisplayName(l)
 					break
 				}
 			}
+		}
+		musicianSelected := make(map[int]bool, len(f.MusicianIDs))
+		for _, id := range f.MusicianIDs {
+			musicianSelected[id] = true
+		}
+		instructorSelected := make(map[int]bool, len(f.InstructorIDs))
+		for _, id := range f.InstructorIDs {
+			instructorSelected[id] = true
 		}
 
 		title := i18n.T(r, "admin_event_maintenance_title")
@@ -235,21 +307,24 @@ func adminEventsMaintenanceHandler(cfg *Config, tmpls *Templates, client *Dansal
 			Dances:             dances,
 			FormatTags:         formatTags,
 			Series:             series,
-			FilterIncludePast:  includePast,
-			FilterOrgID:        orgID,
+			FilterIncludePast:  f.IncludePast,
+			FilterOrgID:        f.OrgID,
 			FilterOrgName:      filterOrgName,
-			FilterLocationID:   locationID,
+			FilterLocationID:   f.LocationID,
 			FilterLocationName: filterLocationName,
-			FilterCity:         filterCity,
-			FilterDateFrom:     dateFrom,
-			FilterDateTo:       dateTo,
-			FilterUnpublished:  filterUnpublished,
-			FilterHasSource:    filterHasSource,
+			FilterCity:         f.City,
+			FilterDateFrom:     f.DateFrom,
+			FilterDateTo:       f.DateTo,
+			FilterUnpublished:  f.Unpublished,
+			FilterHasSource:    f.HasSource,
+			MusicianSelected:   musicianSelected,
+			InstructorSelected: instructorSelected,
+			ExportURL:          exportURL,
 			ReturnURL:          r.URL.RequestURI(),
 			TotalCount:         total,
 			Page:               page,
 			TotalPages:         totalPages,
-			HasFilter:          hasFilter,
+			HasFilter:          f.active(),
 			PagerBaseURL:       pagerBaseURL,
 		}))
 	}

@@ -1009,6 +1009,9 @@ Content filters:
 - `is_cancelled=1` — only cancelled events
 - `musician_id=N` — events featuring this musician
 - `instructor_id=N` — events featuring this instructor
+- `event_musician_id=N` — events whose own musician list contains N; timetable-only performers do not match. Repeat or comma-separate to match any of several (OR), up to 10. Used by the admin maintenance view (#1584)
+- `event_instructor_id=N` — as `event_musician_id`, for instructors
+- `has_source=1` — events with any feed source recorded (`source` is non-empty); `source=` remains an exact match
 - `country=` — comma-separated ISO 3166-1 alpha-2 codes
 
 Location filters:

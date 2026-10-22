@@ -14,6 +14,7 @@
   <h1>{{.Org.Name}}</h1>
   <a href="/org/{{.Slug}}" class="btn-icon" title="Public page" aria-label="Public page">🌐</a>
   <a href="/admin/organizations/{{.Org.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
+  <a href="/admin/events/maintenance?org_id={{.Org.ID}}" class="btn-icon" title="{{$.Strings.T "admin_event_maintenance_title"}}" aria-label="{{$.Strings.T "admin_event_maintenance_title"}}">📅</a>
 </div>
 
 {{with .Org.Description}}<div class="org-desc">{{markdownHTML .}}</div>{{end}}

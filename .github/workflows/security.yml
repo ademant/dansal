@@ -8,6 +8,11 @@ on:
   schedule:
     - cron: "0 6 * * 1" # weekly on Monday
 
+# Least privilege (CodeQL actions/missing-workflow-permissions): jobs that need
+# more declare it themselves.
+permissions:
+  contents: read
+
 jobs:
   govulncheck:
     name: govulncheck

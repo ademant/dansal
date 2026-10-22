@@ -27,6 +27,11 @@ on:
   pull_request:
     branches: [main]
 
+# Least privilege (CodeQL actions/missing-workflow-permissions): jobs that need
+# more declare it themselves.
+permissions:
+  contents: read
+
 jobs:
   # Picks the suite for this run. Pushes and PRs get smoke; schedule, manual
   # runs and release calls get full, unless the caller passes suite explicitly.

@@ -42,7 +42,7 @@
   <div class="sf-field">
     <label>&nbsp;</label>
     <div class="sf-geo-row">
-      <button type="button" id="sf-geo-btn" class="sf-geo-btn">📍 {{$.Strings.T "map_locate"}}</button>
+      <button type="button" id="sf-geo-btn" class="sf-geo-btn" data-pin-label="{{$.Strings.T "map_you_are_here"}}">📍 {{$.Strings.T "map_locate"}}</button>
       <select id="sf-radius" aria-label="{{$.Strings.T "filter_radius"}}">
         <option value="10" selected>10 km</option>
         <option value="50">50 km</option>
@@ -146,6 +146,8 @@
 .sf-geo-row{display:flex;gap:.4rem}
 .sf-geo-btn{padding:.35rem .6rem;border:1px solid var(--link);border-radius:4px;background:var(--bg-card);color:var(--link);cursor:pointer;font-size:.85rem;white-space:nowrap}
 .sf-geo-btn:hover{background:var(--link);color:#fff}
+/* #1607: "you are here" marker placed by the locate button. */
+.own-position-pin span{display:block;width:16px;height:16px;border-radius:50%;background:var(--link);border:3px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.35)}
 .sf-type-group{display:flex;gap:.6rem;flex-wrap:wrap;border:none;padding:0;margin:0;font-size:.85rem}
 .sf-type-group label{display:flex;align-items:center;gap:.3rem;font-weight:normal}
 .sf-too-many{background:var(--badge-warn-bg);color:var(--badge-warn-fg);border-radius:6px;padding:.6rem 1rem;margin-bottom:1rem}
@@ -344,7 +346,26 @@
       document.getElementById('sf-radius').value = initRadius;
       if (initLabel) document.getElementById('sf-town').value = initLabel;
     }
+    // #1607: one "you are here" marker at the browser position. It moves on
+    // each press of the locate button and stays until the next press. The
+    // position is never sent to the server.
+    var ownMarker = null;
+    function placeOwnPosition(pos){
+      var ll = [pos.coords.latitude, pos.coords.longitude];
+      if(!ownMarker){
+        var label = document.getElementById('sf-geo-btn').getAttribute('data-pin-label') || '';
+        ownMarker = L.marker(ll, {
+          title: label,
+          alt: label,
+          keyboard: false,
+          icon: L.divIcon({className: 'own-position-pin', html: '<span></span>', iconSize: [16, 16], iconAnchor: [8, 8]})
+        }).addTo(map);
+      } else {
+        ownMarker.setLatLng(ll);
+      }
+    }
     setupGeoButton(document.getElementById('sf-geo-btn'), document.getElementById('sf-geo-hint'), function(pos){
+      placeOwnPosition(pos);
       geoFilter = {lat:pos.coords.latitude, lng:pos.coords.longitude, radiusKm:parseInt(document.getElementById('sf-radius').value,10)};
       townFilter = '';
       document.getElementById('sf-town').value = '';

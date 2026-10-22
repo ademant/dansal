@@ -110,25 +110,8 @@ func embedEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		orgFilter := resolveOrgSlugs(allOrgs, orgSlugs)
 		locFilter := resolveLocationIDs(locIDs)
 
-		events := upcomingEvents(allEvents)
-		if orgFilter != nil {
-			var filtered []Event
-			for _, e := range events {
-				if e.OrganizationID != nil && orgFilter[*e.OrganizationID] {
-					filtered = append(filtered, e)
-				}
-			}
-			events = filtered
-		}
-		if locFilter != nil {
-			var filtered []Event
-			for _, e := range events {
-				if e.LocationID != nil && locFilter[*e.LocationID] {
-					filtered = append(filtered, e)
-				}
-			}
-			events = filtered
-		}
+		// Shared with the /agenda page (#1580).
+		events := filterEventsByOrgLoc(upcomingEvents(allEvents), orgFilter, locFilter)
 
 		// Build org name lookup for display.
 		orgNames := make(map[int]string, len(allOrgs))

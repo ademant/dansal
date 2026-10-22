@@ -1,0 +1,40 @@
+{{define "content"}}
+{{/* #1580: the agenda, a printable day-grouped view of the next seven days.
+     The filters (org, location, tag) come from the query string, so a filtered
+     agenda can be shared as a link. */}}
+<style nonce="{{$.Nonce}}">
+.agenda-day{margin:1.2rem 0}
+.agenda-day h2{font-size:1.1rem;border-bottom:1px solid var(--border);padding-bottom:.2rem}
+.agenda-list{list-style:none;padding:0;margin:0}
+.agenda-item{display:flex;flex-wrap:wrap;gap:.2rem .8rem;padding:.35rem 0;border-bottom:1px dotted var(--border)}
+.agenda-time{font-variant-numeric:tabular-nums;min-width:3.5rem;font-weight:600}
+.agenda-where,.agenda-org{color:var(--fg-muted);font-size:.9rem}
+.agenda-item.is-cancelled a{text-decoration:line-through}
+@media print{
+  nav,.nav-menu-wrap,.site-footer,footer,.agenda-toolbar{display:none!important}
+  body{color:#000;background:#fff}
+  .agenda-day{break-inside:avoid}
+  a{color:#000;text-decoration:none}
+}
+</style>
+<h1>{{.Title}}</h1>
+{{if .Data.Days}}
+{{range .Data.Days}}
+<section class="agenda-day">
+  <h2>{{.Label}}</h2>
+  <ul class="agenda-list">
+  {{range .Entries}}
+    <li class="agenda-item">
+      <span class="agenda-time">{{.TimeLabel}}</span>
+      <a href="/events/{{.ID}}">{{.Title}}</a>
+      <span class="agenda-where">{{.Where}}</span>
+      {{if .Organizer}}<span class="agenda-org">{{.Organizer}}</span>{{end}}
+    </li>
+  {{end}}
+  </ul>
+</section>
+{{end}}
+{{else}}
+<p class="agenda-empty">{{$.Strings.T "agenda_empty"}}</p>
+{{end}}
+{{end}}

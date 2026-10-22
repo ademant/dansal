@@ -355,6 +355,7 @@ function renderMiniCalendar(containerId, calEvents, months, opts){
   function dayKey(d){return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();}
   // Map every day covered by an event (start..end) to the event shown there.
   var dayMap={};
+  var titleById={};
   calEvents.forEach(function(ev){
     var start=new Date(ev.s);
     var end=ev.e?new Date(ev.e):start;
@@ -379,7 +380,10 @@ function renderMiniCalendar(containerId, calEvents, months, opts){
         var inMonth=cur.getMonth()===month;
         var ev=dayMap[dayKey(cur)];
         if(ev){
-          html+='<td class="fest-day" data-href="/events/'+ev.id+'" title="'+ev.t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')+'">'+cur.getDate()+'</td>';
+          // The title is set through the DOM after the markup is inserted (below),
+          // so event text never goes into innerHTML (CodeQL js/xss-through-dom).
+          titleById[ev.id]=ev.t;
+          html+='<td class="fest-day" data-id="'+ev.id+'" data-href="/events/'+ev.id+'">'+cur.getDate()+'</td>';
         } else {
           html+='<td class="'+(inMonth?'':'fest-other')+'">'+cur.getDate()+'</td>';
         }
@@ -392,6 +396,9 @@ function renderMiniCalendar(containerId, calEvents, months, opts){
   });
   cal.innerHTML=html;
   cal.hidden=false;
+  cal.querySelectorAll('td.fest-day').forEach(function(td){
+    td.title=titleById[td.getAttribute('data-id')]||'';
+  });
   cal.querySelectorAll('td.fest-day').forEach(function(td){
     td.addEventListener('click',function(){window.location.href=this.dataset.href;});
   });

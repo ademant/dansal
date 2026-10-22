@@ -92,6 +92,8 @@
 .week-nav button:hover{background:var(--btn-bg-h)}
 .week-label{font-weight:600;font-size:.95rem;flex:1;text-align:center}
 .week-table-wrap{overflow-x:auto}
+.home-mapweek{position:relative}
+.map-locate-overlay{position:absolute;top:.5rem;right:.5rem;z-index:1000;width:2.2rem;height:2.2rem;border-radius:50%;border:1px solid var(--border);background:var(--bg);color:var(--fg);font-size:1.2rem;line-height:1;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.25)}
 a.cal-evt.cal-watched{background:#fff3b0;color:#1f2937}
 html.dark a.cal-evt.cal-watched{background:#5c4a00;color:#fff7d6}
 .week-table{width:100%;border-collapse:collapse;table-layout:fixed}
@@ -244,6 +246,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
      again, accepting that LCP tradeoff back for order consistency. */}}
 <div class="home-mapweek">
 <div id="map-container" aria-hidden="true"></div>
+  <button type="button" id="map-locate-overlay" class="map-locate-overlay" title="{{$.Strings.T "map_locate"}}" aria-label="{{$.Strings.T "map_locate"}}">&#9678;</button>
 <div class="map-toolbar">
   <button type="button" id="map-locate-btn">{{$.Strings.T "map_locate"}}</button>
   <span id="map-geo-hint" class="geo-hint" hidden aria-live="polite">{{$.Strings.T "js_geo_denied"}}</span>
@@ -1202,7 +1205,12 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     // accessibility tree entirely. detabifyHiddenMap (base.js) mops up the
     // rest — attribution links and marker-cluster icons, neither of which
     // either option above covers.
-    map = L.map('map-container',{zoomControl:false,keyboard:false}).setView([50,10],5);
+    // #1435: start where the visitor left the map, if we remember it.
+    var savedView=readMapView();
+    map = L.map('map-container',{zoomControl:false,keyboard:false})
+      .setView(savedView?[savedView.lat,savedView.lng]:[50,10], savedView?savedView.z:5);
+    if(savedView) mapFitted=true;
+    map.on('moveend',function(){ writeMapView(map.getCenter(), map.getZoom()); });
     attachTileLayer(map);
     detabifyHiddenMap(map);
     clusterGroup = L.markerClusterGroup({maxClusterRadius:40});
@@ -1219,9 +1227,22 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
       m.bindPopup(buildPopup(e),{maxWidth:300});
       allMarkers[e.id] = m;
     });
-    setupGeoButton(document.getElementById('map-locate-btn'), document.getElementById('map-geo-hint'), function(pos){
-      map.setView([pos.coords.latitude, pos.coords.longitude], 10);
-    });
+    var locateToView=function(pos){ map.setView([pos.coords.latitude, pos.coords.longitude], 10); };
+    setupGeoButton(document.getElementById('map-locate-btn'), document.getElementById('map-geo-hint'), locateToView);
+    // #1435: the same locate action on the map itself (outside the aria-hidden map).
+    setupGeoButton(document.getElementById('map-locate-overlay'), document.getElementById('map-geo-hint'), locateToView);
+  }
+
+  // #1435: the last map view, kept in this browser only (localStorage, try/catch).
+  function readMapView(){
+    try{
+      var v=JSON.parse(localStorage.getItem('dansal_map_view')||'null');
+      if(v && isFinite(v.lat) && isFinite(v.lng) && v.z>=3 && v.z<=14) return v;
+    }catch(e){}
+    return null;
+  }
+  function writeMapView(c, z){
+    try{ localStorage.setItem('dansal_map_view', JSON.stringify({lat:+c.lat.toFixed(4), lng:+c.lng.toFixed(4), z:z})); }catch(e){}
   }
 
   function updateMapMarkers(refit){

@@ -379,7 +379,7 @@ function renderMiniCalendar(containerId, calEvents, months, opts){
         var inMonth=cur.getMonth()===month;
         var ev=dayMap[dayKey(cur)];
         if(ev){
-          html+='<td class="fest-day" data-href="/events/'+ev.id+'" title="'+ev.t.replace(/"/g,'&quot;')+'">'+cur.getDate()+'</td>';
+          html+='<td class="fest-day" data-href="/events/'+ev.id+'" title="'+ev.t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')+'">'+cur.getDate()+'</td>';
         } else {
           html+='<td class="'+(inMonth?'':'fest-other')+'">'+cur.getDate()+'</td>';
         }

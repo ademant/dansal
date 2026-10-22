@@ -190,6 +190,35 @@ function toggleInfoPopup(btn){
   p.hidden=open;
   if(!open){document.addEventListener('click',function h(e){if(!btn.parentElement.contains(e.target)){p.hidden=true;document.removeEventListener('click',h);}},{once:false,capture:false});}
 }
+// #1582: print. printPage backs the user-menu item and the agenda button. On
+// pages with a [data-print-qr] marker (org, location) a QR code of the page URL
+// is added for the print only, right after the marker. The URL is also printed
+// as text, but only on pages without a query string; filtered views get the QR
+// alone. If the QR library is missing (Save-Data stub) the page still prints.
+function printPage(){window.print();}
+function addPrintQR(){
+  var marker=document.querySelector('[data-print-qr]');
+  if(!marker||typeof QRCode==='undefined'||document.getElementById('print-qr'))return;
+  try{
+    var box=document.createElement('div');
+    box.className='print-qr';
+    box.id='print-qr';
+    var base=location.origin+location.pathname;
+    if(!location.search){
+      var txt=document.createElement('p');
+      txt.className='print-qr-url';
+      txt.textContent=base;
+      box.appendChild(txt);
+    }
+    var code=document.createElement('div');
+    new QRCode(code,{text:base+location.search,width:110,height:110,correctLevel:QRCode.CorrectLevel.M});
+    box.appendChild(code);
+    marker.parentNode.insertBefore(box,marker.nextSibling);
+  }catch(e){}
+}
+function removePrintQR(){var b=document.getElementById('print-qr');if(b)b.remove();}
+window.addEventListener('beforeprint',addPrintQR);
+window.addEventListener('afterprint',removePrintQR);
 function cycleTheme(){
   var h=document.documentElement;
   var cur=localStorage.getItem('colorScheme')||'auto';

@@ -10,6 +10,7 @@
 .agenda-time{font-variant-numeric:tabular-nums;min-width:3.5rem;font-weight:600}
 .agenda-where,.agenda-org{color:var(--fg-muted);font-size:.9rem}
 .agenda-item.is-cancelled a{text-decoration:line-through}
+.agenda-print-btn{float:right;margin:.25rem 0 .5rem .5rem}
 @media print{
   nav,.nav-menu-wrap,.site-footer,footer,.agenda-toolbar{display:none!important}
   body{color:#000;background:#fff}
@@ -18,6 +19,7 @@
 }
 </style>
 <h1>{{.Title}}</h1>
+<button type="button" class="print-btn agenda-print-btn" data-fn="printPage" data-args="[]">{{.Strings.T "nav_print"}}</button>
 {{if .Data.Days}}
 {{range .Data.Days}}
 <section class="agenda-day">

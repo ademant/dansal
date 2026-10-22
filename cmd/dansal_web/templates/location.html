@@ -46,6 +46,7 @@
 {{define "content"}}
 {{with .Data}}
 {{with .Location}}
+<span data-print-qr hidden></span>
 <div class="loc-page-header">
   <h1>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</h1>
   {{if $.User}}
@@ -228,6 +229,7 @@
 .loc-parent-link a:hover{text-decoration:underline}
 </style>
 
+<script nonce="{{$.Nonce}}" defer src="/static/qrcode.min.js"></script>
 <script nonce="{{$.Nonce}}" defer src="/static/leaflet/leaflet.js"></script>
 <script nonce="{{$.Nonce}}">
 // #1283: leaflet.js loads with `defer`, so L isn't defined yet when a

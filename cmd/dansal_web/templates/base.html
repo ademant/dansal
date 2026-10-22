@@ -135,6 +135,24 @@ nav{background:#1a1a2e;color:#fff;padding:.5rem 1rem;margin:0 -1rem 0;display:fl
 .wl-key-lbl input{margin-left:.4rem}
 .site-banner{max-width:960px;margin:0 auto 1.5rem;background:var(--site-banner-bg)}
 .site-banner img{width:100%;height:auto;display:block;border-radius:0}
+/* #1582: print styling. Scoped to the event-list containers (homepage and
+   search tables, agenda) so timetables and other pages keep their layout. */
+.print-btn{background:var(--bg-card);color:var(--fg);border:1px solid var(--border-mid);border-radius:4px;padding:.3rem .7rem;cursor:pointer;font-size:.9rem}
+.print-qr{display:none}
+@media print{
+  nav,footer,.user-menu-wrap,#wl-header-star,.wl-tile-star,dialog,.wp-dialog,
+  .map-wrap,#map-container,.map-toolbar,#map-locate-overlay,.search-filters,
+  #pagination-bar,#load-more,.print-btn{display:none!important}
+  .site-banner,.org-banner{display:block!important;max-width:none;margin:0 0 .5rem}
+  body{color:#000!important;background:#fff!important}
+  a[href]:after{content:none!important}
+  #event-tbody .date-sep td,#sf-event-tbody .date-sep td{break-after:avoid}
+  #event-tbody tr,#sf-event-tbody tr,.agenda-item{break-inside:avoid}
+  #event-tbody .badge,#sf-event-tbody .badge,.agenda-item .badge{background:none!important;border:0!important;color:#000!important}
+  .print-qr{display:flex!important;justify-content:flex-end;align-items:flex-start;gap:.5rem;margin:.5rem 0;color:#000}
+  .print-qr canvas{width:110px!important;height:110px!important}
+  .print-qr img{display:none!important}
+}
 .nav-menu-wrap,.user-menu-wrap{position:relative}
 .nav-hamburger{background:#2a2a4a;border:1px solid #4a4a7a;border-radius:4px;color:#fff;font-size:1.4rem;cursor:pointer;padding:.2rem .5rem;line-height:1;min-width:40px}
 .nav-hamburger:hover{background:#3a3a5a;border-color:#c0c8ff}
@@ -408,6 +426,7 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
       </select>
     </div>
     <div class="user-section">
+      <button data-fn="printPage" data-args="[]" class="user-menu-btn">{{.Strings.T "nav_print"}}</button>
       <button data-fn="cycleTheme" data-args="[]" class="user-menu-btn" title="{{.Strings.T "nav_theme_title"}}">{{.Strings.T "nav_theme"}}</button>
       <button data-fn="openHelpModal" data-args="[]" class="user-menu-btn" title="Help">Help</button>
       <button data-fn="toggleInfoPopup" data-args='["@this"]' class="user-menu-btn" title="About dansal">About</button>

@@ -41,6 +41,7 @@
 {{define "content"}}
 {{with .Data}}
 {{with .Org.ImageURL}}<div style="position:relative;display:block"><img src="{{.}}" fetchpriority="high" alt="{{$.Data.Org.Name}}{{if $.Data.Org.ImageAIGenerated}}; {{$.Strings.T "evt_image_ai_label"}}{{end}}" class="org-banner">{{if $.Data.Org.ImageAIGenerated}}<img src="/ai-badge" alt="{{$.Strings.T "evt_image_ai_label"}}" style="position:absolute;bottom:8px;right:8px;max-width:64px;max-height:64px;pointer-events:none">{{end}}</div>{{end}}
+<span data-print-qr hidden></span>
 <div class="org-page-header">
   <h1>{{.Org.Name}}</h1>
   {{if $.User}}
@@ -100,6 +101,7 @@
 {{$geo := eventsGeoJSON .AllEvents}}
 {{if ne (printf "%s" $geo) "[]"}}
 <div id="org-map" style="height:280px;border-radius:6px;margin:1.25rem 0;border:1px solid #ddd"></div>
+<script nonce="{{$.Nonce}}" defer src="/static/qrcode.min.js"></script>
 <script nonce="{{$.Nonce}}" defer src="/static/leaflet/leaflet.js"></script>
 <script nonce="{{$.Nonce}}">
 // #1283: leaflet.js loads with `defer`, so L isn't defined yet when a

@@ -1734,6 +1734,10 @@ type CityInfo struct {
 	NextEventID    int      `json:"next_event_id,omitempty"`
 	NextEventTitle string   `json:"next_event_title,omitempty"`
 	NextEventStart string   `json:"next_event_start,omitempty"` // RFC3339
+	// OrgCount is the number of organisations with a geo-tagged location in
+	// the town (#1588). SingleOrgID is set only when there is exactly one.
+	OrgCount    int  `json:"org_count"`
+	SingleOrgID *int `json:"single_org_id,omitempty"`
 }
 
 // townSlug converts a city name to a URL-safe slug, shared with the web
@@ -1798,6 +1802,44 @@ func getCities(w http.ResponseWriter, r *http.Request) {
 	}
 	for i := range cities {
 		cityByTown[cities[i].Town] = &cities[i]
+	}
+
+	// Organisations with a geo-tagged location in each town (#1588): the count
+	// feeds the city page description, and a single organisation gives the city
+	// page its banner. A separate query keeps the lat/lng averages above from
+	// being weighted by the number of organisations.
+	if len(cities) > 0 {
+		orgRows, err := db.Query(`
+			SELECT l.town, COUNT(DISTINCT lo.organization_id), MIN(lo.organization_id)
+			FROM locations l
+			JOIN location_organizations lo ON lo.location_id = l.id
+			WHERE l.town IS NOT NULL AND l.town != ''
+			  AND l.latitude IS NOT NULL AND l.longitude IS NOT NULL
+			GROUP BY l.town`)
+		if err != nil {
+			writeInternalError(w, err)
+			return
+		}
+		defer orgRows.Close()
+		for orgRows.Next() {
+			var town string
+			var n, only int
+			if err := orgRows.Scan(&town, &n, &only); err != nil {
+				writeInternalError(w, err)
+				return
+			}
+			if c, ok := cityByTown[town]; ok {
+				c.OrgCount = n
+				if n == 1 {
+					id := only
+					c.SingleOrgID = &id
+				}
+			}
+		}
+		if err := orgRows.Err(); err != nil {
+			writeInternalError(w, err)
+			return
+		}
 	}
 
 	// Soonest upcoming published event per town, one extra query rather than

@@ -4,11 +4,16 @@ package main
 // map + event list, "show past events" on demand).
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
+	"math"
 	"net/http"
+	"sort"
+	"strings"
+	"time"
 
 	"github.com/ademant/dansal/internal/strutil"
 )
@@ -23,9 +28,100 @@ func townSlug(town string) string {
 
 // ── Template data ─────────────────────────────────────────────────────────────
 
+// cityTile is one card on /cities (#1588).
+type cityTile struct {
+	Town       string
+	Slug       string
+	EventCount int
+	HasNext    bool      // false when the city has no future event
+	NextDays   int       // whole calendar days from today to the next event (0 = today)
+	next       time.Time // start of the next event, for ordering only
+}
+
 type CitiesData struct {
-	Cities  []City
-	MapJSON template.JS // compact JSON for map markers, colored by event count client-side (#981)
+	Tiles        []cityTile
+	MapJSON      template.JS // compact JSON for map markers, colored by event count client-side (#981)
+	ItemListJSON template.JS // schema.org ItemList of the cities with future events (#1588)
+}
+
+// cityTiles builds the /cities cards in default order (#1588): cities with a
+// future event first, soonest next event first, then the rest by name. The
+// browser re-sorts alphabetically when the toggle is set.
+func cityTiles(cities []City, now time.Time) []cityTile {
+	tiles := make([]cityTile, 0, len(cities))
+	for _, c := range cities {
+		t := cityTile{Town: c.Town, Slug: c.Slug, EventCount: c.EventCount}
+		if at, ok := parseEventStart(c.NextEventStart); ok {
+			t.HasNext = true
+			t.next = at
+			t.NextDays = calendarDaysBetween(now, at)
+		}
+		tiles = append(tiles, t)
+	}
+	sort.SliceStable(tiles, func(i, j int) bool {
+		a, b := tiles[i], tiles[j]
+		if a.HasNext != b.HasNext {
+			return a.HasNext
+		}
+		if a.HasNext && !a.next.Equal(b.next) {
+			return a.next.Before(b.next)
+		}
+		return a.Town < b.Town
+	})
+	return tiles
+}
+
+// parseEventStart reads an RFC3339 event start. ok is false when it is empty
+// or malformed.
+func parseEventStart(s string) (time.Time, bool) {
+	if s == "" {
+		return time.Time{}, false
+	}
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t, true
+}
+
+// calendarDaysBetween returns the whole calendar days from the day of now to
+// the day of at, in the server's time zone.
+func calendarDaysBetween(now, at time.Time) int {
+	loc := now.Location()
+	y, m, d := now.Date()
+	today := time.Date(y, m, d, 0, 0, 0, 0, loc)
+	ay, am, ad := at.In(loc).Date()
+	day := time.Date(ay, am, ad, 0, 0, 0, 0, loc)
+	return int(math.Round(day.Sub(today).Hours() / 24))
+}
+
+// listItem is one entry of a schema.org ItemList.
+type listItem struct {
+	Name string
+	URL  string
+}
+
+// itemListJSON renders a schema.org ItemList in the order given. It returns
+// the empty string when there are no items, so the template emits nothing.
+func itemListJSON(items []listItem) template.JS {
+	if len(items) == 0 {
+		return ""
+	}
+	elements := make([]map[string]any, 0, len(items))
+	for i, it := range items {
+		elements = append(elements, map[string]any{
+			"@type":    "ListItem",
+			"position": i + 1,
+			"name":     it.Name,
+			"url":      it.URL,
+		})
+	}
+	b, _ := json.Marshal(map[string]any{
+		"@context":        "https://schema.org",
+		"@type":           "ItemList",
+		"itemListElement": elements,
+	})
+	return template.JS(b)
 }
 
 // cityMapPin is the trimmed shape sent to the browser for the /cities map —
@@ -63,6 +159,7 @@ type CityData struct {
 	PastEvents      []Event     // #1506: most recent past events, shown directly when there's nothing upcoming
 	PastEventsTotal int         // #1506: total past events ever held in this town (X-Total-Count)
 	NearbyHint      *NearbyHint // #1506: "no upcoming events here, but N within X km" fallback
+	Banner          string      // #1588: the single organisation's banner, else the site banner
 }
 
 type cityGeoEvent struct {
@@ -100,17 +197,58 @@ func cityEventsGeoJSON(events []Event) template.JS {
 	return template.JS(b)
 }
 
+// cityBanner returns the banner for a city page (#1588): the organisation's
+// banner when exactly one organisation is in the city and it has one,
+// otherwise the site banner.
+func cityBanner(ctx context.Context, client *DansalClient, city City) string {
+	const siteBanner = "/banner.avif"
+	if city.OrgCount != 1 || city.SingleOrgID == nil {
+		return siteBanner
+	}
+	orgs, err := client.GetOrganizations(ctx)
+	if err != nil {
+		return siteBanner
+	}
+	for _, o := range orgs {
+		if o.ID == *city.SingleOrgID && o.ImageURL != "" {
+			return o.ImageURL
+		}
+	}
+	return siteBanner
+}
+
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
 func citiesHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		cities, err := client.GetCities(r.Context(), false)
+		// All cities with a geo-tagged location, including those without a future
+		// event: the alphabetical view lists them greyed out (#1588).
+		cities, err := client.GetCities(r.Context(), true)
 		if err != nil {
 			http.Error(w, "could not load cities", http.StatusBadGateway)
 			return
 		}
+		tiles := cityTiles(cities, time.Now())
+
+		var upcoming []City
+		for _, c := range cities {
+			if c.EventCount > 0 {
+				upcoming = append(upcoming, c)
+			}
+		}
+		var items []listItem
+		for _, t := range tiles {
+			if t.HasNext {
+				items = append(items, listItem{Name: t.Town, URL: "https://" + cfg.Domain + "/city/" + t.Slug})
+			}
+		}
+
 		title := i18n.T(r, "cities_title")
-		td := tmplData(r, cfg, i18n, title, CitiesData{Cities: cities, MapJSON: citiesMapJSON(cities)})
+		td := tmplData(r, cfg, i18n, title, CitiesData{
+			Tiles:        tiles,
+			MapJSON:      citiesMapJSON(upcoming),
+			ItemListJSON: itemListJSON(items),
+		})
 		td.MetaDescription = metaDesc(title, metaDescMaxLen)
 		renderTemplate(w, tmpls.cities, td)
 	}
@@ -169,6 +307,7 @@ func cityHubHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I
 			}
 		}
 
+		banner := cityBanner(r.Context(), client, city)
 		title := i18n.T(r, "city_title_prefix") + city.Town
 		td := tmplData(r, cfg, i18n, title, CityData{
 			City:            city,
@@ -178,8 +317,16 @@ func cityHubHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I
 			PastEvents:      pastEvents,
 			PastEventsTotal: pastTotal,
 			NearbyHint:      hint,
+			Banner:          banner,
 		})
-		td.MetaDescription = metaDesc(title, metaDescMaxLen)
+		// #1588: the description counts the city's organisations and locations.
+		strs := i18n.Strings(i18n.detectLang(r))
+		td.MetaDescription = metaDesc(strs.TF("city_meta_desc", city.Town, city.OrgCount, city.LocationCount), metaDescMaxLen)
+		if strings.HasPrefix(banner, "/") {
+			td.OGImage = "https://" + cfg.Domain + banner
+		} else {
+			td.OGImage = banner
+		}
 		renderTemplate(w, tmpls.city, td)
 	}
 }

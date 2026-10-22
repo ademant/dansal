@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"strings"
@@ -15,7 +16,8 @@ type TagCatalogGroup struct {
 
 // TagsIndexData is the template data for GET /tags (HTML view).
 type TagsIndexData struct {
-	Groups []TagCatalogGroup
+	Groups       []TagCatalogGroup
+	ItemListJSON template.JS // schema.org ItemList of tags with future events (#1588)
 }
 
 // tagsIndexHandler serves GET /tags — content-negotiated:
@@ -54,7 +56,15 @@ func tagsIndexHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 			groups[len(groups)-1].Tags = append(groups[len(groups)-1].Tags, t)
 		}
 
-		td := tmplData(r, cfg, i18n, i18n.Strings(i18n.detectLang(r)).T("tags_title"), TagsIndexData{Groups: groups})
+		// #1588: the ItemList lists the tags with future events only.
+		strs := i18n.Strings(i18n.detectLang(r))
+		var items []listItem
+		for _, t := range tags {
+			if t.EventCount > 0 {
+				items = append(items, listItem{Name: tagLabel(strs, t.Slug, t.Name), URL: "https://" + cfg.Domain + "/tags/" + t.Slug})
+			}
+		}
+		td := tmplData(r, cfg, i18n, strs.T("tags_title"), TagsIndexData{Groups: groups, ItemListJSON: itemListJSON(items)})
 		renderTemplate(w, tmpls.tagsIndex, td)
 	}
 }
@@ -111,7 +121,8 @@ func tagHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n)
 		strs := i18n.Strings(i18n.detectLang(r))
 		title := tagLabel(strs, slug, tag.Name)
 		td := tmplData(r, cfg, i18n, title, TagPageData{Tag: tag, Events: events, TagMap: tagMap})
-		td.MetaDescription = metaDesc(title, metaDescMaxLen)
+		// #1588: the description states how many events are coming up for the tag.
+		td.MetaDescription = metaDesc(strs.TF("tag_meta_desc", title, tag.EventCount), metaDescMaxLen)
 		renderTemplate(w, tmpls.tag, td)
 	}
 }

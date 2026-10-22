@@ -33,6 +33,9 @@
 {{end}}
 {{define "content"}}
 {{with .Data}}
+{{/* #1588: the single organisation's banner when the city has exactly one, else the site banner. */}}
+<style>.city-banner{display:block;width:100%;max-height:240px;object-fit:cover;border-radius:6px;margin-bottom:1rem}</style>
+<img class="city-banner" src="{{.Banner}}" alt="" loading="eager">
 <h1>{{$.Strings.T "city_title_prefix"}}{{.City.Town}}</h1>
 
 <script nonce="{{$.Nonce}}" defer src="/static/leaflet/leaflet.js"></script>

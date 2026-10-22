@@ -248,6 +248,8 @@ func main() {
 		r.HandleFunc("GET /favicon.svg", dynamicSVGHandler(cfg.ImagesDir, "favicon", faviconSVG))
 		r.HandleFunc("GET /favicon.ico", faviconICOHandler(cfg.ImagesDir, faviconSVG))
 		r.HandleFunc("GET /apple-touch-icon.png", appleTouchIconHandler(cfg.ImagesDir, faviconSVG))
+		r.HandleFunc("GET /icon-192.png", pwaIconHandler(cfg.ImagesDir, faviconSVG, 192))
+		r.HandleFunc("GET /icon-512.png", pwaIconHandler(cfg.ImagesDir, faviconSVG, 512))
 		r.HandleFunc("GET /logo.avif", dynamicSVGHandler(cfg.ImagesDir, "logo", logoAVIF))
 		r.HandleFunc("GET /banner.avif", bannerHandler(cfg.ImagesDir, bannerAVIF))
 		r.HandleFunc("GET /relay-icon", func(w http.ResponseWriter, r *http.Request) {
@@ -409,6 +411,8 @@ func main() {
 		r.HandleFunc("GET /help", helpHandler(cfg, tmpls, i18n, help))
 		r.HandleFunc("GET /agenda", agendaHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /watchlist", watchlistPageHandler(cfg, tmpls, i18n))
+		r.HandleFunc("GET /sw.js", swHandler())
+		r.HandleFunc("GET /offline", offlineHandler(cfg, tmpls, i18n))
 		r.HandleFunc("POST /watchlist/events", watchlistLookupHandler(client))
 		r.HandleFunc("GET /watchlist/form-token", watchlistFormTokenHandler())
 		r.HandleFunc("POST /watchlist/save", watchlistSaveHandler(cfg, db))
@@ -748,6 +752,9 @@ func baselineCSP(nonce string) string {
 		"font-src 'self' data:; " +
 		"style-src 'self' 'unsafe-inline'; " +
 		"script-src 'self' 'nonce-" + nonce + "' 'strict-dynamic'; " +
+		// #1589: the service worker script is same-origin. worker-src is set
+		// explicitly, since strict-dynamic does not cover worker scripts.
+		"worker-src 'self'; " +
 		// #1313: Nominatim/MusicBrainz/Discogs/Wikidata are no longer called
 		// from the browser — all four are proxied server-side now (geocode.go,
 		// enrichment_proxy.go), so the browser only ever needs 'self' here.

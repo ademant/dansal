@@ -39,6 +39,10 @@
 <link rel="icon" href="/favicon.svg">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="{{.SiteName}}">
 <link rel="search" type="application/opensearchdescription+xml" href="/opensearch.xml" title="{{.SiteName}}">
 {{- if .GoogleSiteVerification}}<meta name="google-site-verification" content="{{.GoogleSiteVerification}}">{{end}}
 {{- if .BingSiteVerification}}<meta name="msvalidate.01" content="{{.BingSiteVerification}}">{{end}}
@@ -137,6 +141,11 @@ nav{background:#1a1a2e;color:#fff;padding:.5rem 1rem;margin:0 -1rem 0;display:fl
 .site-banner img{width:100%;height:auto;display:block;border-radius:0}
 /* #1583: add-to-calendar dropdown. The menu is opened with toggleInfoPopup
    (base.js), which closes it on an outside click. */
+/* #1589: offline state. base.js sets the offline class on <html> while the
+   device has no connection; the page is greyed slightly and the banner shows. */
+#offline-banner{display:none;padding:.35rem .8rem;background:#fff3cd;color:#856404;text-align:center;font-size:.9rem;border-bottom:1px solid #ffc107}
+html.offline #offline-banner{display:block}
+html.offline body{filter:grayscale(.35)}
 .cal-dd{position:relative;display:inline-block}
 .cal-menu{position:absolute;left:0;top:100%;z-index:1500;min-width:210px;margin-top:.25rem;background:var(--bg-card);border:1px solid var(--border-mid);border-radius:6px;padding:.4rem;box-shadow:0 4px 16px rgba(0,0,0,.2)}
 .cal-menu a{display:block;padding:.3rem .5rem;color:var(--link);text-decoration:none;border-radius:4px;font-size:.9rem;white-space:nowrap}
@@ -352,6 +361,7 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
      from view-source without shell access. */}}
 </head>
 <body>
+<div id="offline-banner" role="status">{{.Strings.T "pwa_offline_banner"}}</div>
 <nav>
   <div class="nav-menu-wrap">
     <button class="nav-hamburger" data-fn="toggleNavMenu" data-args="[]" aria-label="Menu" title="Menu">☰</button>
@@ -433,6 +443,7 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
       </select>
     </div>
     <div class="user-section">
+      <button id="install-app-item" data-fn="installApp" data-args="[]" class="user-menu-btn" hidden>{{.Strings.T "pwa_install_app"}}</button>
       <button data-fn="printPage" data-args="[]" class="user-menu-btn">{{.Strings.T "nav_print"}}</button>
       <button data-fn="cycleTheme" data-args="[]" class="user-menu-btn" title="{{.Strings.T "nav_theme_title"}}">{{.Strings.T "nav_theme"}}</button>
       <button data-fn="openHelpModal" data-args="[]" class="user-menu-btn" title="Help">Help</button>

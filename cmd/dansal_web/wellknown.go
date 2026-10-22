@@ -191,11 +191,18 @@ func manifestHandler(cfg *Config) http.HandlerFunc {
 		}
 		w.Header().Set("Content-Type", "application/manifest+json")
 		w.Header().Set("Cache-Control", "public, max-age=86400")
+		// #1589: scope, display override, lang, PNG icons and shortcuts. The
+		// shortcut names are English, as the manifest is not localised.
 		fmt.Fprintf(w, `{
   "name": %q,
   "short_name": %q,
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "lang": "de",
   "theme_color": "#1a6eb5",
   "background_color": "#fafafa",
   "icons": [
@@ -204,7 +211,24 @@ func manifestHandler(cfg *Config) http.HandlerFunc {
       "type": "image/svg+xml",
       "sizes": "any",
       "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
     }
+  ],
+  "shortcuts": [
+    {"name": "Agenda", "url": "/agenda"},
+    {"name": "Search", "url": "/search"},
+    {"name": "Watchlist", "url": "/watchlist"}
   ]
 }
 `, siteName, siteName)

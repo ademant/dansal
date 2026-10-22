@@ -219,6 +219,27 @@ function addPrintQR(){
 function removePrintQR(){var b=document.getElementById('print-qr');if(b)b.remove();}
 window.addEventListener('beforeprint',addPrintQR);
 window.addEventListener('afterprint',removePrintQR);
+// #1589: PWA. The service worker (sw.js) lets the site open offline. The
+// offline class greys the page and shows the banner while there is no
+// connection. The install item shows only when the browser offers to install.
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){});});
+}
+function setOfflineState(){document.documentElement.classList.toggle('offline',!navigator.onLine);}
+window.addEventListener('online',setOfflineState);
+window.addEventListener('offline',setOfflineState);
+setOfflineState();
+var deferredInstall=null;
+function showInstallItem(show){var b=document.getElementById('install-app-item');if(b)b.hidden=!show;}
+window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();deferredInstall=e;showInstallItem(true);});
+window.addEventListener('appinstalled',function(){deferredInstall=null;showInstallItem(false);});
+function installApp(){
+  if(!deferredInstall)return;
+  var p=deferredInstall;
+  deferredInstall=null;
+  showInstallItem(false);
+  p.prompt();
+}
 function cycleTheme(){
   var h=document.documentElement;
   var cur=localStorage.getItem('colorScheme')||'auto';

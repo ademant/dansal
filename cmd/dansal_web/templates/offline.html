@@ -1,0 +1,6 @@
+{{template "base" .}}
+{{define "content"}}
+{{/* #1589: shown when a page is requested without a connection. */}}
+<h1>{{.Strings.T "pwa_offline_title"}}</h1>
+<p>{{.Strings.T "pwa_offline_text"}}</p>
+{{end}}

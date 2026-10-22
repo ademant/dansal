@@ -94,10 +94,11 @@ func hashPassword(password string) (string, error) {
 
 // checkPassword verifies password against stored hash, which may be in any
 // format ever produced by hashPassword (argon2id, pbkdf2) or the legacy
-// bcrypt/raw-SHA-256 formats it replaced. migrate reports whether stored
-// should be replaced with hashPassword(password) — either because it's in
-// a deprecated format (bcrypt, legacy SHA-256) or because it doesn't match
-// the currently configured KDF.
+// bcrypt format it replaced. migrate reports whether stored should be
+// replaced with hashPassword(password) — either because it's in a deprecated
+// format (bcrypt) or because it doesn't match the currently configured KDF.
+// Unsalted SHA-256 hashes are no longer accepted: none remained on any
+// instance when the branch was removed (code-scanning alert #88).
 func checkPassword(password, stored string) (ok, migrate bool) {
 	if stored == "" {
 		return false, false
@@ -122,10 +123,6 @@ func checkPassword(password, stored string) (ok, migrate bool) {
 		}
 		return false, false
 	default:
-		sum := sha256.Sum256([]byte(password)) //nolint:gosec
-		if fmt.Sprintf("%x", sum) == stored {
-			return true, true
-		}
 		return false, false
 	}
 }

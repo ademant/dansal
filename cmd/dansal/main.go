@@ -369,6 +369,9 @@ func sweepRetentionData(now int64) {
 	if config != nil && config.Server.DataRetentionDays > 0 {
 		retentionDays = config.Server.DataRetentionDays
 	}
+	if config != nil && config.Server.IcalMaxOccurrences > 0 {
+		icalMaxOccurrences = config.Server.IcalMaxOccurrences
+	}
 	retentionCutoff := now - int64(retentionDays)*24*60*60
 	// #1440 (G3): a pending_fetch_suggestion (email) never expired at all
 	// before — approve/reject only flip status, the row and its email live

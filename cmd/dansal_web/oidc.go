@@ -60,7 +60,7 @@ func oidcCallbackHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		state := r.URL.Query().Get("state")
 		cookie, cookieErr := r.Cookie(oidcFlowCookie)
 		// Clear the flow cookie unconditionally — it's one-shot either way.
-		http.SetCookie(w, &http.Cookie{Name: oidcFlowCookie, Value: "", Path: "/oidc", MaxAge: -1})
+		http.SetCookie(w, &http.Cookie{Name: oidcFlowCookie, Value: "", Path: "/oidc", MaxAge: -1, Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
 
 		if cookieErr != nil || code == "" || state == "" {
 			flashRedirect(w, r, "/login", flashToken(nil), FlashMsg{OIDCLoginError: true})
@@ -149,7 +149,7 @@ func oidcLinkCallbackHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 		code := r.URL.Query().Get("code")
 		state := r.URL.Query().Get("state")
 		cookie, cookieErr := r.Cookie(oidcLinkFlowCookie)
-		http.SetCookie(w, &http.Cookie{Name: oidcLinkFlowCookie, Value: "", Path: "/settings/oidc", MaxAge: -1})
+		http.SetCookie(w, &http.Cookie{Name: oidcLinkFlowCookie, Value: "", Path: "/settings/oidc", MaxAge: -1, Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
 
 		if cookieErr != nil || code == "" || state == "" {
 			flashRedirect(w, r, "/settings", flashToken(nil), FlashMsg{SettingsLinkError: true})

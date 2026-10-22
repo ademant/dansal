@@ -114,6 +114,8 @@
     document.getElementById('dash-preset-add-form').addEventListener('submit', function(e){
       e.preventDefault();
       var id = document.getElementById('dash-preset-select').value;
+      // Template ids are numeric; refuse anything else before it reaches the URL.
+      if(!/^\d+$/.test(id)) return;
       this.action = '/admin/templates/' + id + '/pin?from=dashboard';
       HTMLFormElement.prototype.submit.call(this);
     });

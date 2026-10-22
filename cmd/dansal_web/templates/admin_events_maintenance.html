@@ -50,7 +50,21 @@
     <div id="em-loc-filter-suggest" class="af-suggest" hidden></div>
   </div>
 
+  {{/* #1584: musicians and instructors match the event lists only (OR). */}}
+  <div class="af-field">
+    <select name="musician_id" multiple size="3" class="af-input" title="{{$.Strings.T "nav_musicians"}}" aria-label="{{$.Strings.T "nav_musicians"}}" data-on="change" data-fn="submitParentForm" data-args='["@this"]'>
+      {{range .Musicians}}<option value="{{.ID}}"{{if index $.Data.MusicianSelected .ID}} selected{{end}}>{{.Bandname}}</option>{{end}}
+    </select>
+  </div>
+
+  <div class="af-field">
+    <select name="instructor_id" multiple size="3" class="af-input" title="{{$.Strings.T "nav_instructors"}}" aria-label="{{$.Strings.T "nav_instructors"}}" data-on="change" data-fn="submitParentForm" data-args='["@this"]'>
+      {{range .Instructors}}<option value="{{.ID}}"{{if index $.Data.InstructorSelected .ID}} selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+  </div>
+
   <a href="/admin/events/maintenance?unpublished=1" class="btn-reset{{if .FilterUnpublished}} btn-active{{end}}">{{$.Strings.T "admin_filter_unpublished"}}</a>
+  <a href="{{.ExportURL}}" class="btn-reset">{{$.Strings.T "admin_events_export_csv"}}</a>
   <a href="/admin/events/maintenance" class="btn-reset">{{$.Strings.T "filter_clear"}}</a>
 </form>
 

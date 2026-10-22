@@ -668,6 +668,24 @@ func haversineKm(lat1, lon1, lat2, lon2 float64) float64 {
 }
 
 // parseCountryCodes splits a comma-separated country param and validates each code.
+// parseIDList reads positive-looking integers from repeated and/or
+// comma-separated query values and keeps at most max of them. Parts that are
+// not integers are skipped.
+func parseIDList(raw []string, max int) []int {
+	ids := make([]int, 0, len(raw))
+	for _, v := range raw {
+		for _, p := range strings.Split(v, ",") {
+			if n, err := strconv.Atoi(strings.TrimSpace(p)); err == nil {
+				ids = append(ids, n)
+				if len(ids) == max {
+					return ids
+				}
+			}
+		}
+	}
+	return ids
+}
+
 // maxOrgIDFilter bounds how many organization_id values a single GET
 // /api/v1/events call accepts (#1365), protecting the query budget the same
 // way wp-dansal's own MAX_ORG_FILTER already bounds its shortcode input.
@@ -749,6 +767,27 @@ func applyEventFilters(r *http.Request, query *string, args *[]any) error {
 	if v := q.Get("instructor_id"); v != "" {
 		*query += " AND (EXISTS (SELECT 1 FROM event_instructors ei WHERE ei.event_id = e.id AND ei.instructor_id = ?) OR EXISTS (SELECT 1 FROM timetable_entries t WHERE t.event_id = e.id AND t.instructor_id = ?))"
 		*args = append(*args, v, v)
+	}
+	// #1584 (maintenance view): event-level performers only, any of the
+	// given ids (OR). Repeated or comma-separated, like organization_id.
+	// Unlike musician_id, performers listed only in timetable entries don't
+	// match.
+	if ids := parseIDList(q["event_musician_id"], maxOrgIDFilter); len(ids) > 0 {
+		*query += " AND EXISTS (SELECT 1 FROM event_musicians em WHERE em.event_id = e.id AND em.musician_id IN (" + sqlPlaceholders(len(ids)) + "))"
+		for _, n := range ids {
+			*args = append(*args, n)
+		}
+	}
+	if ids := parseIDList(q["event_instructor_id"], maxOrgIDFilter); len(ids) > 0 {
+		*query += " AND EXISTS (SELECT 1 FROM event_instructors ei WHERE ei.event_id = e.id AND ei.instructor_id IN (" + sqlPlaceholders(len(ids)) + "))"
+		for _, n := range ids {
+			*args = append(*args, n)
+		}
+	}
+	// #1584: "has source" = any feed source recorded (the maintenance view's
+	// checkbox). The exact-match source= filter is unchanged.
+	if v := q.Get("has_source"); v == "1" || v == "true" {
+		*query += " AND COALESCE(e.source, '') <> ''"
 	}
 	if dance := q.Get("dance"); dance != "" {
 		*query += " AND EXISTS (SELECT 1 FROM event_dances ed JOIN dances d ON d.id=ed.dance_id WHERE ed.event_id=e.id AND d.name=?)"
@@ -837,20 +876,7 @@ func applyEventFilters(r *http.Request, query *string, args *[]any) error {
 	// events from up to MAX_ORG_FILTER orgs) fetch them in one request
 	// instead of fanning out one request per org.
 	if raw := q["organization_id"]; len(raw) > 0 {
-		ids := make([]int, 0, len(raw))
-		for _, v := range raw {
-			for _, p := range strings.Split(v, ",") {
-				if n, err := strconv.Atoi(strings.TrimSpace(p)); err == nil {
-					ids = append(ids, n)
-					if len(ids) == maxOrgIDFilter {
-						break
-					}
-				}
-			}
-			if len(ids) == maxOrgIDFilter {
-				break
-			}
-		}
+		ids := parseIDList(raw, maxOrgIDFilter)
 		if len(ids) > 0 {
 			*query += " AND e.organization_id IN (" + sqlPlaceholders(len(ids)) + ")"
 			for _, n := range ids {

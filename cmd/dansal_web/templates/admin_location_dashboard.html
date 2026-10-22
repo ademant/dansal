@@ -13,6 +13,7 @@
   <h1>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</h1>
   <a href="/location/{{.ID}}" class="btn-icon" title="Public page" aria-label="Public page">🌐</a>
   <a href="/admin/locations/{{.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
+  <a href="/admin/events/maintenance?location_id={{.ID}}" class="btn-icon" title="{{$.Strings.T "admin_event_maintenance_title"}}" aria-label="{{$.Strings.T "admin_event_maintenance_title"}}">📅</a>
 </div>
 
 {{with .NotesMd}}<div class="loc-notes md-content">{{markdownHTML .}}</div>{{end}}

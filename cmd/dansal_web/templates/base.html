@@ -135,6 +135,13 @@ nav{background:#1a1a2e;color:#fff;padding:.5rem 1rem;margin:0 -1rem 0;display:fl
 .wl-key-lbl input{margin-left:.4rem}
 .site-banner{max-width:960px;margin:0 auto 1.5rem;background:var(--site-banner-bg)}
 .site-banner img{width:100%;height:auto;display:block;border-radius:0}
+/* #1583: add-to-calendar dropdown. The menu is opened with toggleInfoPopup
+   (base.js), which closes it on an outside click. */
+.cal-dd{position:relative;display:inline-block}
+.cal-menu{position:absolute;left:0;top:100%;z-index:1500;min-width:210px;margin-top:.25rem;background:var(--bg-card);border:1px solid var(--border-mid);border-radius:6px;padding:.4rem;box-shadow:0 4px 16px rgba(0,0,0,.2)}
+.cal-menu a{display:block;padding:.3rem .5rem;color:var(--link);text-decoration:none;border-radius:4px;font-size:.9rem;white-space:nowrap}
+.cal-menu a:hover{background:var(--bg-hover)}
+.cal-menu hr{border:0;border-top:1px solid var(--border);margin:.3rem 0}
 /* #1582: print styling. Scoped to the event-list containers (homepage and
    search tables, agenda) so timetables and other pages keep their layout. */
 .print-btn{background:var(--bg-card);color:var(--fg);border:1px solid var(--border-mid);border-radius:4px;padding:.3rem .7rem;cursor:pointer;font-size:.9rem}
@@ -142,7 +149,7 @@ nav{background:#1a1a2e;color:#fff;padding:.5rem 1rem;margin:0 -1rem 0;display:fl
 @media print{
   nav,footer,.user-menu-wrap,#wl-header-star,.wl-tile-star,dialog,.wp-dialog,
   .map-wrap,#map-container,.map-toolbar,#map-locate-overlay,.search-filters,
-  #pagination-bar,#load-more,.print-btn{display:none!important}
+  #pagination-bar,#load-more,.print-btn,.cal-dd{display:none!important}
   .site-banner,.org-banner{display:block!important;max-width:none;margin:0 0 .5rem}
   body{color:#000!important;background:#fff!important}
   a[href]:after{content:none!important}
@@ -569,7 +576,7 @@ var DANSAL_TILE_TOKEN="{{$.TileToken}}";
     {{else}}
     <ul class="hm-list">
       <li><span class="hm-sym">&#8776;</span><span>Browse and filter events by type, tag or date range on the <a href="/">event list</a></span></li>
-      <li><span class="hm-sym">&#8635;</span><span>Subscribe to <a href="/feed/events.ical">iCal</a> or <a href="/feed/events.rss">RSS</a> to get events in your calendar app</span></li>
+      <li><span class="hm-sym">&#8635;</span><span>Subscribe to <a href="/feed/events.ics">iCal</a> or <a href="/feed/events.rss">RSS</a> to get events in your calendar app</span></li>
       <li><span class="hm-sym">&#9835;</span><span>Follow organizations from Mastodon or any ActivityPub-compatible app</span></li>
       {{if .SuggestAvailable}}<li><span class="hm-sym">&#8594;</span><span><a href="/events/suggest">Suggest an event</a> — tip us off about a balfolk event we may have missed</span></li>{{end}}
     </ul>

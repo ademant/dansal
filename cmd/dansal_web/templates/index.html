@@ -363,15 +363,20 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 <script type="application/json" id="events-geo-external">{{.ExternalOverlayJSON}}</script>
 
 <div class="feed-section">
-  <strong>{{$.Strings.T "feed_subscribe"}}:</strong>
-  <a href="/feed/events.ical" class="feed-link">iCal</a>
-  <a href="/feed/events.rss"  class="feed-link">RSS</a>
-  <a href="/feed/events.json" class="feed-link">JSON</a>
-  <span class="feed-hint"> &mdash; {{$.Strings.T "feed_hint_types"}}:
-    <a href="/feed/ball/events.ical"     class="feed-link">{{$.Strings.T "filter_type_ball"}} iCal</a>
-    <a href="/feed/workshop/events.ical" class="feed-link">{{$.Strings.T "filter_type_workshop"}} iCal</a>
-    <a href="/feed/festival/events.ical" class="feed-link">Festival iCal</a>
-  </span>
+  <div class="cal-dd">
+    <button type="button" class="btn-icon" data-fn="toggleInfoPopup" data-args='["@this"]' title="{{$.Strings.T "cal_subscribe"}}" aria-label="{{$.Strings.T "cal_subscribe"}}">📅</button>
+    <div class="cal-menu" hidden>
+      <a href="webcal://{{$.Domain}}/feed/events.ics">{{$.Strings.T "cal_subscribe"}}</a>
+      <a href="/feed/events.ics">{{$.Strings.T "cal_download"}}</a>
+      <hr>
+      <a href="/feed/events.rss">RSS</a>
+      <a href="/feed/events.json">JSON</a>
+      <hr>
+      <a href="webcal://{{$.Domain}}/feed/ball/events.ics">{{$.Strings.TF "cal_subscribe_only" ($.Strings.T "filter_type_ball")}}</a>
+      <a href="webcal://{{$.Domain}}/feed/workshop/events.ics">{{$.Strings.TF "cal_subscribe_only" ($.Strings.T "filter_type_workshop")}}</a>
+      <a href="webcal://{{$.Domain}}/feed/festival/events.ics">{{$.Strings.TF "cal_subscribe_only" ($.Strings.T "filter_type_festival")}}</a>
+    </div>
+  </div>
 </div>
 
 {{end}}

@@ -10,6 +10,7 @@
   ]
 }
 </script>
+{{with .Data.ItemListJSON}}<script type="application/ld+json">{{.}}</script>{{end}}
 {{end}}
 {{define "breadcrumb"}}
 <nav class="breadcrumb" aria-label="Breadcrumb">

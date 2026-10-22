@@ -929,7 +929,22 @@ func patchSeriesEventDescription(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err)
 		return
 	}
+	touchEventFromSeriesToken(eventID)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// seriesTokenActor is recorded in changed_by for an edit made through a series
+// magic link. Such a request has no logged-in caller, so it can't be named
+// like one (#1599).
+const seriesTokenActor = "series-token"
+
+// touchEventFromSeriesToken stamps changed_at/changed_by and emits the update
+// webhook for an edit made through a series magic link (#1599). It is the
+// token-path counterpart of touchEvent, which needs a caller ID.
+func touchEventFromSeriesToken(eventID int) {
+	db.Exec("UPDATE events SET changed_at=?, changed_by=? WHERE id=?",
+		time.Now().UTC().Unix(), seriesTokenActor, eventID)
+	go emitEventWebhook(eventID, "update", 0)
 }
 
 // optionalInt returns nil if p is nil, otherwise the dereferenced value as interface{}.

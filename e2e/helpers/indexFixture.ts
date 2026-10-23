@@ -185,8 +185,8 @@ async function fetchWeekEvents(page: Page, weekDates: string[]): Promise<any[]> 
 // inserting a fixed batch every run:
 //   1. every *visible* day has >=1 event (fills the week view)
 //   2. one visible day is strictly the busiest (mini-cal heatmap: highest
-//      rank) — Friday when it hasn't passed yet, else the last remaining
-//      visible day
+//      rank) — Friday when it is still ahead, else the last visible day
+//      after today
 //   3. >=2 events share NEARBY_LOCATION (map: should cluster)
 //      and >=1 event sits at FAR_LOCATION (map: should not cluster)
 //   4. every home-group filter button has >=1 representative event
@@ -213,7 +213,13 @@ export async function ensureIndexWeekFixture(
   const friday = weekDates[4];
   const todayIso = isoDateOnly(new Date());
   const visibleDates = weekDates.filter((d) => d >= todayIso);
-  const busiestDate = visibleDates.includes(friday) ? friday : visibleDates[visibleDates.length - 1];
+  // Never today: the mobile day strip is opened on today and does not heat-
+  // colour the active day (index.html's day strip skips it), so a busiest day
+  // of today has no rank there. Prefer Friday, else the last later day.
+  const laterDates = visibleDates.filter((d) => d !== todayIso);
+  const busiestDate = laterDates.includes(friday)
+    ? friday
+    : (laterDates[laterDates.length - 1] ?? visibleDates[visibleDates.length - 1]);
   // Map fixtures prefer a *future* (non-today) day, distinct from
   // busiestDate when one's available: today is wall-clock-constrained
   // (only hours after "now" are actually upcoming), while any other

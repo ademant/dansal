@@ -44,7 +44,7 @@ Organisationen sind das Herzstück von dansal. Jede Veranstaltung ist genau eine
    - **Beschreibung**: Öffentliche Beschreibung der Organisation
    - **Webseite**: Link zur eigenen Homepage
    - **Kontakt-E-Mail**: Öffentliche E-Mail-Adresse
-   - **Social Media**: Mastodon, Instagram, Facebook, Telegram, Matrix
+   - **Social Media**: Mastodon, Instagram, Facebook
 
 ### Organisation bearbeiten
 
@@ -192,6 +192,16 @@ Das **Niveau** wird nur angezeigt, wenn ein Workshop-Typ (Tanz- oder Musikerwork
 
 ---
 
+## 🎧 Keine Live-Musik
+
+Veranstaltungen ohne Live-Musik (Aufnahme, DJ oder Übungsabend) lassen sich im Veranstaltungsformular mit der Option **Keine Live-Musik (Aufnahme, DJ oder Üben)** kennzeichnen. Besucher sehen dann den Hinweis „🎧 Aufnahme-Musik (keine Live-Musik)“ statt einer Musikerangabe.
+
+Eine Veranstaltung ist entweder *mit Musikern* oder *keine Live-Musik*, nicht beides:
+- Setzt du die Option, werden eingetragene Musiker entfernt und das Musiker-Feld ist gesperrt.
+- Trägst du einen Musiker ein, wird die Option abgewählt und gesperrt.
+
+Bei der **Mehrfachauswahl** (siehe [Multi-Select](Benutzer-Multi-Select)) fragt dansal nach, wenn Veranstaltungen mit Musikern auf „keine Live-Musik“ gesetzt werden sollen oder umgekehrt. Standard ist **Überspringen**; mit **Überschreiben** werden die Musiker entfernt bzw. die Markierung entfernt.
+
 ## 🕐 Zeitplan für Mehrtagesveranstaltungen
 
 Falls eine Veranstaltung aus mehreren zeitlich getrennten Abschnitten besteht (z. B. Workshop am Nachmittag, Ball am Abend):
@@ -263,9 +273,8 @@ Jede Veranstaltung lässt sich jederzeit bearbeiten:
 
 ### Zu Terminserie hinzufügen
 
-1. Veranstaltung öffnen
-2. Button **"Zur Serie hinzufügen"** klicken
-3. Bestehende Serie auswählen oder neue erstellen
+1. Veranstaltung bearbeiten und im Abschnitt **Terminserie** die Serie auswählen (**Serie auswählen**) oder über **Neue Terminserie** eine neue anlegen
+2. Mit **Zuweisen** übernehmen; mit **Aus Serie entfernen** wieder lösen
 
 **Vorteile von Serien:**
 - Gemeinsame Grunddaten (Ort, Beschreibung, Uhrzeit)
@@ -288,8 +297,10 @@ Für Organisationen, die bereits ein anderes Kalendersystem nutzen.
 3. Feed-Typ wählen: `iCal` oder `JSON`
 4. Bei nicht-Admin-Rolle: **Organisation** auswählen
 5. **Vorschau laden** – dansal zeigt alle gefundenen Termine an mit Status:
-   - ✅ bereits vorhanden (abgewählt, um Duplikate zu vermeiden)
-   - ⭐ neu (zum Import vorgeschlagen)
+   - **Vorhanden**: bereits in dansal; standardmäßig abgewählt, um Duplikate zu vermeiden
+   - **Neu**: zum Import vorgeschlagen
+   - **Aktualisiert**: bereits vorhanden und durch den Import aktualisiert
+   - **⚠ mögliches Duplikat von #N**: ein ähnlicher Termin existiert bereits; Link zur Bearbeitung
 6. **Orte zuordnen:**
    - Automatisch erkannt: Ort übernehmen
    - Manuell zuordnen: anderen bestehenden Ort wählen

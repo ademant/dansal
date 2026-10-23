@@ -46,7 +46,7 @@ Unter **Feeds → Hinzufügen** (`/admin/fetchurls/new`) richtest du einen dauer
 
 **Einrichtung:**
 1. **URL** der Quelle eingeben (lässt sich nach dem Anlegen nicht mehr ändern)
-2. **Typ** wählen: `iCal`, `RSS` oder `JSON (Auto-Erkennung)` – gängige Varianten wie Gancio- oder Folkdance-JSON werden automatisch erkannt – sowie `Kufer (VHS)`, `jCal` und `Event-Seite (JSON-LD)`
+2. **Typ** wählen: standardmäßig **Automatisch erkennen**, oder gezielt `iCal`, `RSS / Atom`, `JSON (auto-detect)`, `Kufer (VHS)`, `jCal` oder `Event-Seite (JSON-LD)`. Bei „Automatisch erkennen“ werden gängige Varianten wie Gancio- oder Folkdance-JSON ebenfalls erkannt
 3. **Organisation** auswählen, der importierte Veranstaltungen zugeordnet werden (als Nicht-Administrator nur eigene Organisationen)
 4. **Tags** eingeben, die automatisch auf alle aus diesem Feed importierten Veranstaltungen angewendet werden
 5. Optional eine **Vorlage** auswählen und den **Vorlage-Modus** festlegen:

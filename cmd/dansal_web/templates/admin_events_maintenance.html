@@ -144,6 +144,17 @@
     </div>
   </div>
 
+  {{/* #1612: "no live music" for the selection; a clash with musicians asks in a popup. */}}
+  <div class="em-bulk-group">
+    <label class="em-bulk-label" for="em-bulk-nlm">{{$.Strings.T "evt_no_live_music"}}</label>
+    <select name="no_live_music" id="em-bulk-nlm" class="em-bq-select">
+      <option value="">—</option>
+      <option value="1">{{$.Strings.T "evt_no_live_music_display"}}</option>
+      <option value="0">{{$.Strings.T "evt_live_music"}}</option>
+    </select>
+    <input type="hidden" name="conflict_mode" id="em-bulk-conflict-mode" value="skip">
+  </div>
+
   <div class="em-bulk-actions">
     <button type="submit" class="btn-sm btn-assign" id="em-btn-assign">{{$.Strings.T "loc_bulk_assign_btn"}}</button>
     <button type="submit" formaction="/admin/events/merge" class="btn-sm btn-merge" id="em-btn-merge"
@@ -157,6 +168,54 @@
   </div>
 </div>
 {{/* end em-bulk-bar */}}
+<dialog id="em-conflict-dialog" class="em-conflict-dialog" data-text="{{$.Strings.T "em_conflict_text"}}">
+  <p id="em-conflict-msg"></p>
+  <div class="em-conflict-actions">
+    <button type="button" class="btn-sm" id="em-conflict-skip">{{$.Strings.T "em_conflict_skip"}}</button>
+    <button type="button" class="btn-sm btn-cancel-bulk" id="em-conflict-overwrite">{{$.Strings.T "em_conflict_overwrite"}}</button>
+    <button type="button" class="btn-sm" id="em-conflict-cancel">{{$.Strings.T "em_conflict_cancel"}}</button>
+  </div>
+</dialog>
+<script nonce="{{$.Nonce}}">
+// #1612: before a bulk change that sets "no live music" or adds a musician, ask
+// the server how many selected events would clash. A clash opens the popup:
+// skip (default) leaves those events alone; overwrite removes the musicians
+// (flagging) or clears the flag (adding a musician).
+(function(){
+  var form = document.getElementById('em-bulk-form');
+  var btn = document.getElementById('em-btn-assign');
+  var nlm = document.getElementById('em-bulk-nlm');
+  var mode = document.getElementById('em-bulk-conflict-mode');
+  var dlg = document.getElementById('em-conflict-dialog');
+  if (!form || !btn || !nlm || !mode || !dlg) return;
+  var bypass = false;
+  function needsCheck(){
+    var m = document.getElementById('em-bq-musician-id');
+    return nlm.value !== '' || (m && m.value !== '');
+  }
+  function submitNow(conflictMode){
+    mode.value = conflictMode;
+    bypass = true;
+    btn.click();
+  }
+  btn.addEventListener('click', function(e){
+    if (bypass) { bypass = false; return; }
+    if (!needsCheck()) return;
+    e.preventDefault();
+    fetch('/admin/events/bulk-conflicts', {method: 'POST', body: new FormData(form), credentials: 'same-origin'})
+      .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(function(d){
+        if (!d.count) { submitNow('skip'); return; }
+        document.getElementById('em-conflict-msg').textContent = dlg.getAttribute('data-text').replace('%d', d.count);
+        if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
+      })
+      .catch(function(){ submitNow('skip'); });
+  });
+  document.getElementById('em-conflict-skip').addEventListener('click', function(){ dlg.close(); submitNow('skip'); });
+  document.getElementById('em-conflict-overwrite').addEventListener('click', function(){ dlg.close(); submitNow('overwrite'); });
+  document.getElementById('em-conflict-cancel').addEventListener('click', function(){ dlg.close(); });
+})();
+</script>
 
 </div>{{/* end .maint-sticky */}}
 

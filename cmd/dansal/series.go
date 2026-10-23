@@ -623,10 +623,37 @@ func applySeriesEventsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// #1612: a series musician conflicts with events marked "no live music".
+	// ?dry_run=true reports them without writing. Otherwise a conflicting event
+	// is skipped, unless ?conflict=overwrite, which clears its flag.
+	conflicts := map[int]bool{}
+	var conflictList []int
+	if series.MusicianID != nil {
+		for _, evID := range eventIDs {
+			var flagged int
+			db.QueryRow("SELECT no_live_music FROM events WHERE id=?", evID).Scan(&flagged)
+			if flagged == 1 {
+				conflicts[evID] = true
+				conflictList = append(conflictList, evID)
+			}
+		}
+	}
+	if r.URL.Query().Get("dry_run") == "true" {
+		writeJSON(w, map[string]any{"conflicts": conflictList})
+		return
+	}
+	overwrite := r.URL.Query().Get("conflict") == "overwrite"
+
 	td := parseSeriesTemplateData(series.TemplateData)
 	td.Timetable = nil // do not add timetable entries to already-existing events
 
 	for _, evID := range eventIDs {
+		if conflicts[evID] {
+			if !overwrite {
+				continue
+			}
+			db.Exec("UPDATE events SET no_live_music=0 WHERE id=?", evID)
+		}
 		if _, err := db.Exec(
 			`UPDATE events SET organization_id=?, location_id=? WHERE id=?`,
 			optionalInt(series.OrganizationID),

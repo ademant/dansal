@@ -1164,6 +1164,27 @@ func (c *DansalClient) BulkSetEventAttributes(ctx context.Context, payload map[s
 	return c.bulkSetEvents(ctx, "/api/v1/events/bulk-set-attributes", payload, token)
 }
 
+// BulkEventConflicts asks which events a bulk attribute change would clash on
+// ("no live music" together with musicians). The API writes nothing (#1612).
+func (c *DansalClient) BulkEventConflicts(ctx context.Context, payload map[string]any, token string) ([]int, error) {
+	p := make(map[string]any, len(payload)+1)
+	for k, v := range payload {
+		p[k] = v
+	}
+	p["dry_run"] = true
+	var out struct {
+		Conflicts []int `json:"conflicts"`
+	}
+	body, err := json.Marshal(p)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.do(ctx, http.MethodPost, "/api/v1/events/bulk-set-attributes", token, body, &out); err != nil {
+		return nil, err
+	}
+	return out.Conflicts, nil
+}
+
 // GetAllEvents fetches all published events including past ones; used by the sitemap.
 func (c *DansalClient) GetAllEvents(ctx context.Context) ([]Event, error) {
 	var events []Event
@@ -4354,6 +4375,24 @@ func (c *DansalClient) RemoveEventFromSeries(ctx context.Context, eventID int, t
 
 func (c *DansalClient) ApplySeriesToEvents(ctx context.Context, seriesID int, token string) error {
 	return c.do(ctx, http.MethodPost, fmt.Sprintf("/api/v1/series/%d/apply-to-events", seriesID), token, nil, nil, http.StatusNoContent)
+}
+
+// ApplySeriesToEventsMode applies the series to its events. conflict is "skip"
+// (default) or "overwrite" (#1612).
+func (c *DansalClient) ApplySeriesToEventsMode(ctx context.Context, seriesID int, conflict, token string) error {
+	return c.do(ctx, http.MethodPost, fmt.Sprintf("/api/v1/series/%d/apply-to-events?conflict=%s", seriesID, url.QueryEscape(conflict)), token, nil, nil, http.StatusNoContent)
+}
+
+// SeriesApplyConflicts lists the series events that a series musician would
+// clash with (flagged "no live music"), without writing anything (#1612).
+func (c *DansalClient) SeriesApplyConflicts(ctx context.Context, seriesID int, token string) ([]int, error) {
+	var out struct {
+		Conflicts []int `json:"conflicts"`
+	}
+	if err := c.do(ctx, http.MethodPost, fmt.Sprintf("/api/v1/series/%d/apply-to-events?dry_run=true", seriesID), token, nil, &out); err != nil {
+		return nil, err
+	}
+	return out.Conflicts, nil
 }
 
 func (c *DansalClient) AssignEventsToSeries(ctx context.Context, seriesID int, eventIDs []int, token string) error {

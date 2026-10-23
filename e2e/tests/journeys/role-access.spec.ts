@@ -1,10 +1,12 @@
 import { test, expect } from "../../helpers/fixtures";
-import { Page } from "@playwright/test";
+import { BrowserContext, Page } from "@playwright/test";
 import {
   fullSeed,
   SeedResult,
   getTokenFromCookie,
   apiPost,
+  createUser,
+  deleteUser,
   loginViaApi,
 } from "../../helpers/seed";
 import { AUTH_FILE } from "../../helpers/auth";
@@ -31,6 +33,11 @@ async function authedGet(page: Page, token: string, path: string) {
 }
 async function authedJSON(page: Page, token: string, path: string): Promise<any> {
   return (await authedGet(page, token, path)).json();
+}
+async function apiDelete(page: Page, token: string, path: string): Promise<void> {
+  await page.request
+    .fetch(`${API_BASE}${path}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } })
+    .catch(() => {});
 }
 async function patchEvent(page: Page, token: string, id: number, fields: object) {
   return page.request.fetch(`${API_BASE}/api/v1/events/${id}`, {
@@ -93,95 +100,110 @@ test.describe("Role-based access boundaries", () => {
   }) => {
     const adminToken = await getTokenFromCookie(page);
 
-    // The editor (publisher) becomes a member of the seeded org — their
-    // "own" org for this test. INSERT OR IGNORE server-side (#1273's
-    // addOrganizationMember) makes this safe to repeat across runs.
-    await apiPost(page, `/api/v1/organizations/${seed.orgId}/members`, adminToken, {
-      user_id: seed.editorId,
-    });
+    // A publisher per run, not the shared EDITOR fixture: a publisher may
+    // belong to one organization only (organizations.go), so a fixed account
+    // stays bound to whichever org an earlier run gave it and the membership
+    // POST below fails with 409. delete-user drops its organization_members
+    // row, so the finally block only removes the events and the foreign org.
+    const publisherEmail = `e2e-publisher-${Date.now()}@dansal.test`;
+    const publisherId = createUser(publisherEmail, EDITOR.password, "publisher");
+    let foreignOrgId: number | undefined;
+    let foreignEventId: number | undefined;
+    let ownEventId: number | undefined;
+    let editorContext: BrowserContext | undefined;
+    try {
+      // The publisher becomes a member of the seeded org — their "own" org
+      // for this test.
+      await apiPost(page, `/api/v1/organizations/${seed.orgId}/members`, adminToken, {
+        user_id: publisherId,
+      });
 
-    // A second org + event the editor is *not* a member of.
-    const foreignOrgId = await createOrg(page, unique("E2E Role Foreign Org"));
-    const foreignEventId = await createOrgEvent(
-      page,
-      adminToken,
-      unique("E2E Role Foreign Event"),
-      foreignOrgId
-    );
+      // A second org + event the publisher is *not* a member of.
+      foreignOrgId = await createOrg(page, unique("E2E Role Foreign Org"));
+      foreignEventId = await createOrgEvent(
+        page,
+        adminToken,
+        unique("E2E Role Foreign Event"),
+        foreignOrgId
+      );
 
-    // An event already in the editor's own org.
-    const ownEventId = await createOrgEvent(
-      page,
-      adminToken,
-      unique("E2E Role Own Event"),
-      seed.orgId
-    );
+      // An event already in the publisher's own org.
+      ownEventId = await createOrgEvent(
+        page,
+        adminToken,
+        unique("E2E Role Own Event"),
+        seed.orgId
+      );
 
-    const { context: editorContext, page: editorPage, token: editorToken } = await loginViaApi(
-      browser,
-      EDITOR.email,
-      EDITOR.password
-    );
+      const login = await loginViaApi(browser, publisherEmail, EDITOR.password);
+      editorContext = login.context;
+      const editorPage = login.page;
+      const editorToken = login.token;
 
-    // -- Can edit their own org's event via the web save. --
-    const descViaWeb = unique("Edited by publisher via web");
-    await editorPage.goto(`/admin/events/${ownEventId}/edit`);
-    await editorPage.fill('textarea[name="description"]', descViaWeb);
-    await editorPage.locator("#save-btn").click();
-    await editorPage.waitForURL(`**/admin/events/${ownEventId}/edit`);
-    const afterWebSave = await authedJSON(page, adminToken, `/api/v1/events/${ownEventId}`);
-    expect(afterWebSave.description).toBe(descViaWeb);
+      // -- Can edit their own org's event via the web save. --
+      const descViaWeb = unique("Edited by publisher via web");
+      await editorPage.goto(`/admin/events/${ownEventId}/edit`);
+      await editorPage.fill('textarea[name="description"]', descViaWeb);
+      await editorPage.locator("#save-btn").click();
+      await editorPage.waitForURL(`**/admin/events/${ownEventId}/edit`);
+      const afterWebSave = await authedJSON(page, adminToken, `/api/v1/events/${ownEventId}`);
+      expect(afterWebSave.description).toBe(descViaWeb);
 
-    // -- Can edit their own org's event via the API (PATCH). --
-    const descViaAPI = unique("Edited by publisher via API");
-    const ownPatchResp = await patchEvent(editorPage, editorToken, ownEventId, {
-      description: descViaAPI,
-    });
-    expect(ownPatchResp.status()).toBe(200);
-    const afterApiPatch = await authedJSON(page, adminToken, `/api/v1/events/${ownEventId}`);
-    expect(afterApiPatch.description).toBe(descViaAPI);
+      // -- Can edit their own org's event via the API (PATCH). --
+      const descViaAPI = unique("Edited by publisher via API");
+      const ownPatchResp = await patchEvent(editorPage, editorToken, ownEventId, {
+        description: descViaAPI,
+      });
+      expect(ownPatchResp.status()).toBe(200);
+      const afterApiPatch = await authedJSON(page, adminToken, `/api/v1/events/${ownEventId}`);
+      expect(afterApiPatch.description).toBe(descViaAPI);
 
-    // -- 403 editing the foreign org's event. --
-    const foreignPatchResp = await patchEvent(editorPage, editorToken, foreignEventId, {
-      description: unique("Should not apply"),
-    });
-    expect(foreignPatchResp.status()).toBe(403);
-    const foreignUnchanged = await authedJSON(page, adminToken, `/api/v1/events/${foreignEventId}`);
-    expect(foreignUnchanged.description ?? "").not.toContain("Should not apply");
+      // -- 403 editing the foreign org's event. --
+      const foreignPatchResp = await patchEvent(editorPage, editorToken, foreignEventId, {
+        description: unique("Should not apply"),
+      });
+      expect(foreignPatchResp.status()).toBe(403);
+      const foreignUnchanged = await authedJSON(page, adminToken, `/api/v1/events/${foreignEventId}`);
+      expect(foreignUnchanged.description ?? "").not.toContain("Should not apply");
 
-    // -- Cannot move their own event into the foreign org. --
-    const moveResp = await patchEvent(editorPage, editorToken, ownEventId, {
-      organization_id: foreignOrgId,
-    });
-    expect(moveResp.status()).toBe(403);
-    const stillOwnOrg = await authedJSON(page, adminToken, `/api/v1/events/${ownEventId}`);
-    expect(stillOwnOrg.organization_id).toBe(seed.orgId);
+      // -- Cannot move their own event into the foreign org. --
+      const moveResp = await patchEvent(editorPage, editorToken, ownEventId, {
+        organization_id: foreignOrgId,
+      });
+      expect(moveResp.status()).toBe(403);
+      const stillOwnOrg = await authedJSON(page, adminToken, `/api/v1/events/${ownEventId}`);
+      expect(stillOwnOrg.organization_id).toBe(seed.orgId);
 
-    // -- Denied publisher-forbidden admin surfaces (category mappings,
-    //    fetch sources) — both explicitly allow role=user but forbid
-    //    role=publisher (cmd/dansal/events.go's categoryAliasWriteAllowed,
-    //    cmd/dansal/fetchurl.go's fetchURL). --
-    const categoryResp = await editorPage.request.fetch(`${API_BASE}/api/v1/category-aliases`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${editorToken}`,
-      },
-      data: JSON.stringify({ category: "format", tag_slug: "bal-folk" }),
-    });
-    expect(categoryResp.status()).toBe(403);
+      // -- Denied publisher-forbidden admin surfaces (category mappings,
+      //    fetch sources) — both explicitly allow role=user but forbid
+      //    role=publisher (cmd/dansal/events.go's categoryAliasWriteAllowed,
+      //    cmd/dansal/fetchurl.go's fetchURL). --
+      const categoryResp = await editorPage.request.fetch(`${API_BASE}/api/v1/category-aliases`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${editorToken}`,
+        },
+        data: JSON.stringify({ category: "format", tag_slug: "bal-folk" }),
+      });
+      expect(categoryResp.status()).toBe(403);
 
-    const fetchSourceResp = await editorPage.request.fetch(`${API_BASE}/api/v1/feeds`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${editorToken}`,
-      },
-      data: JSON.stringify({ url: "https://example.com/feed.ics", type: "ical" }),
-    });
-    expect(fetchSourceResp.status()).toBe(403);
-
-    await editorContext.close();
+      const fetchSourceResp = await editorPage.request.fetch(`${API_BASE}/api/v1/feeds`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${editorToken}`,
+        },
+        data: JSON.stringify({ url: "https://example.com/feed.ics", type: "ical" }),
+      });
+      expect(fetchSourceResp.status()).toBe(403);
+    } finally {
+      await editorContext?.close();
+      if (ownEventId !== undefined) await apiDelete(page, adminToken, `/api/v1/events/${ownEventId}`);
+      if (foreignEventId !== undefined) await apiDelete(page, adminToken, `/api/v1/events/${foreignEventId}`);
+      if (foreignOrgId !== undefined) await apiDelete(page, adminToken, `/api/v1/organizations/${foreignOrgId}`);
+      deleteUser(publisherEmail);
+    }
   });
 
   test("viewer (plain user) is denied admin-only actions and sees a scoped /admin/users view", { tag: "@smoke" }, async ({

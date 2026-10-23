@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -155,7 +156,7 @@ func feedOrgHandler(cfg *Config, db *sql.DB, client *DansalClient, i18n *I18n) h
 			http.NotFound(w, r)
 			return
 		}
-		events, err := client.GetEventsByOrg(r.Context(), actor.OrgID)
+		events, err := client.feedEventsQuery(r.Context(), fmt.Sprintf("is_published=true&organization_id=%d", actor.OrgID))
 		if err != nil {
 			http.Error(w, "could not load events", http.StatusBadGateway)
 			return
@@ -184,7 +185,7 @@ func feedMusicianHandler(cfg *Config, client *DansalClient, i18n *I18n) http.Han
 			http.NotFound(w, r)
 			return
 		}
-		events, err := client.GetPublicEventsByMusician(r.Context(), found.ID)
+		events, err := client.feedEventsQuery(r.Context(), fmt.Sprintf("is_published=true&musician_id=%d", found.ID))
 		if err != nil {
 			http.Error(w, "could not load events", http.StatusBadGateway)
 			return
@@ -205,7 +206,7 @@ func feedInstructorHandler(cfg *Config, client *DansalClient, i18n *I18n) http.H
 			http.NotFound(w, r)
 			return
 		}
-		events, err := client.GetPublicEventsByInstructor(r.Context(), id)
+		events, err := client.feedEventsQuery(r.Context(), fmt.Sprintf("is_published=true&instructor_id=%d", id))
 		if err != nil {
 			http.Error(w, "could not load events", http.StatusBadGateway)
 			return
@@ -234,16 +235,12 @@ func feedLocationHandler(cfg *Config, client *DansalClient, i18n *I18n) http.Han
 			http.NotFound(w, r)
 			return
 		}
-		all, err := client.GetEvents(r.Context(), "")
+		// #1590: the location's events from the API, all pages. The old code
+		// filtered the first 100 events of the whole list by venue name.
+		events, err := client.feedEventsQuery(r.Context(), fmt.Sprintf("is_published=true&location_id=%d", found.ID))
 		if err != nil {
 			http.Error(w, "could not load events", http.StatusBadGateway)
 			return
-		}
-		var events []Event
-		for _, e := range all {
-			if e.Location != nil && e.Location.Location == found.Location {
-				events = append(events, e)
-			}
 		}
 		label := found.Location
 		if found.Town != "" {
@@ -266,7 +263,7 @@ func feedTypeHandler(cfg *Config, client *DansalClient, feedType string, i18n *I
 		// cursor value, not a raw querystring — "?tag="+tag would have been
 		// glued onto start_time_after= instead of becoming its own &tag=
 		// param. GetEventsFiltered builds the query correctly (issue #949).
-		events, err := client.GetEventsFiltered(r.Context(), (EventFilter{IsPublished: true, Tag: tag}).Values())
+		events, err := client.feedEventsQuery(r.Context(), "is_published=true&tag="+url.QueryEscape(tag))
 		if err != nil {
 			logHTTPError(w, r, "could not load feed events", http.StatusBadGateway)
 			return
@@ -282,6 +279,17 @@ func feedTypeHandler(cfg *Config, client *DansalClient, feedType string, i18n *I
 func serveEventFeed(w http.ResponseWriter, r *http.Request, cfg *Config, title string, events []Event, i18n *I18n) {
 	if events == nil {
 		events = []Event{}
+	}
+	// #1590: iCal responses honour ?days= and ?count= and the operator default
+	// window. The window applies before the cache headers, so the ETag covers
+	// exactly the events served.
+	if format := r.PathValue("format"); format == "ical" || format == "ics" {
+		win, err := parseFeedWindow(r.URL.Query(), cfg)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		events = applyFeedWindow(events, win, time.Now())
 	}
 	if feedCacheHeaders(w, r, events) {
 		return
@@ -619,7 +627,7 @@ func tagFeedEvents(ctx context.Context, client *DansalClient, slug string) (tag 
 	if !ok {
 		return Tag{}, nil, false, nil
 	}
-	events, err = client.GetEventsFiltered(ctx, (EventFilter{IsPublished: true, Tag: slug}).Values())
+	events, err = client.feedEventsQuery(ctx, "is_published=true&tag="+url.QueryEscape(slug))
 	if err != nil {
 		return Tag{}, nil, false, err
 	}

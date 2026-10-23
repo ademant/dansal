@@ -4,144 +4,94 @@ nav_order: 13
 
 # Multi-Select: Mehrere Einträge gleichzeitig bearbeiten
 
-Dansal unterstützt **Multi-Select** (Mehrfachauswahl) in vielen Listenansichten. Damit kannst du mehrere Einträge gleichzeitig auswählen und gemeinsam bearbeiten – das spart Zeit bei sich wiederholenden Aufgaben.
+Dansal unterstützt **Mehrfachauswahl** in den Verwaltungsansichten. Damit kannst du mehrere Einträge gleichzeitig auswählen und gemeinsam bearbeiten – das spart Zeit bei sich wiederholenden Aufgaben.
 
 ---
 
-## 🎯 Multi-Select aktivieren
+## 🎯 Einträge auswählen
 
-### Methode 1: Einzelne Einträge auswählen
+Vor jeder Zeile steht ein **Kontrollkästchen**. Klicke darauf, um einen Eintrag auszuwählen. Wiederhole das für weitere Einträge.
 
-1. Bewege den Mauszeiger über einen Eintrag in einer Liste
-2. Ein **Checkbox** (Kontrollkästchen) erscheint am Anfang der Zeile
-3. Klicke auf das Checkbox, um den Eintrag auszuwählen
-4. Wiederhole für weitere Einträge
+Im Kopf der Tabelle steht ein Kontrollkästchen, mit dem du **alle Einträge der Liste** auswählst bzw. die Auswahl wieder aufhebst.
 
-### Methode 2: Bereich auswählen (Shift+Klick)
-
-1. Klicke auf das Checkbox des **ersten** Eintrags
-2. Halte die **Shift-Taste** gedrückt
-3. Klicke auf das Checkbox des **letzten** Eintrags
-4. Alle Einträge dazwischen werden automatisch ausgewählt
-
-### Methode 3: Alle Einträge auswählen
-
-1. Oberhalb der Liste erscheint eine **Symbolleiste** beim ersten Klick auf ein Checkbox
-2. Klicke auf **"Alle auswählen"** (oder "Select All")
-3. Alle sichtbaren Einträge werden markiert
-
-### Methode 4: Auswahl umkehren
-
-1. Wähle einige Einträge manuell aus
-2. Klicke auf **"Auswahl umkehren"** in der Symbolleiste
-3. Alle nicht ausgewählten Einträge werden ausgewählt und umgekehrt
-
-### Symbolleiste (wenn aktiv)
-
-| Button | Funktion | Tastenkürzel |
-|---|---|---|
-| ✅ Alle auswählen | Markiert alle sichtbaren Einträge | Strg/Cmd + A |
-| ❌ Auswahl aufheben | Hebt Auswahl aller Einträge auf | Esc |
-| ↔️ Auswahl umkehren | Kehrt die aktuelle Auswahl um | – |
-| 📋 Ausgewählte: N | Zeigt Anzahl ausgewählter Einträge | – |
+Sobald etwas ausgewählt ist, zeigt die Aktionsleiste über bzw. neben der Tabelle die Anzahl der ausgewählten Einträge an. Erst dann stehen die Aktionen zur Verfügung.
 
 ---
 
-## 📋 Unterstützte Multi-Select-Aktionen
+## 📋 Aktionen je Liste
 
-Multi-Select funktioniert in verschiedenen Bereichen von dansal. Die verfügbaren Aktionen hängen vom aktuellen Kontext ab.
+Welche Aktionen du siehst, hängt von deiner Rolle und vom Bereich ab.
 
-### 📅 Veranstaltungen-Liste
+### 📅 Veranstaltungen: Verwaltungsansicht (`/admin/events/maintenance`)
 
-| Aktion | Beschreibung | Effekt |
-|---|---|---|
-| **Ausgewählte absagen** | Mehrere Veranstaltungen gleichzeitig als abgesagt markieren | Alle ausgewählten Veranstaltungen erhalten den Status "Abgesagt" |
-| **Ausgewählte löschen** | Mehrere Veranstaltungen dauerhaft entfernen | Alle ausgewählten Veranstaltungen werden gelöscht (mit Bestätigung) |
-| **Tags zuweisen** | Ein oder mehrere Tags zu allen ausgewählten Veranstaltungen hinzufügen | Alle ausgewählten Veranstaltungen erhalten die ausgewählten Tags |
-| **Tags entfernen** | Ein oder mehrere Tags von allen ausgewählten Veranstaltungen entfernen | Alle ausgewählten Veranstaltungen verlieren die ausgewählten Tags |
-| **Organisation zuweisen** | Alle ausgewählten Veranstaltungen einer anderen Organisation zuweisen | Alle Veranstaltungen werden der neuen Organisation zugeordnet |
-| **Ort zuweisen** | Alle ausgewählten Veranstaltungen einem anderen Ort zuweisen | Alle Veranstaltungen werden dem neuen Ort zugeordnet |
-| **Exportieren** | Ausgewählte Veranstaltungen als iCal oder JSON exportieren | Download einer Datei mit allen ausgewählten Veranstaltungen |
+| Aktion | Beschreibung |
+|---|---|
+| **Ort zuweisen** | Alle ausgewählten Veranstaltungen einem anderen Ort zuordnen |
+| **Organisation zuweisen** | Alle ausgewählten Veranstaltungen einer Organisation zuordnen |
+| **Musiker / Anleiter hinzufügen** | Eine Person zu allen ausgewählten Veranstaltungen hinzufügen |
+| **Terminserie** | Alle ausgewählten Veranstaltungen einer Terminserie zuordnen |
+| **Tags, Tanzstile** | Pro Tag bzw. Tanzstil: ✓ hinzufügen, □ entfernen, – unverändert lassen |
+| **Keine Live-Musik** | Ja (Aufnahme, DJ, Übungsabend) oder Nein (Live-Musik) setzen – siehe unten |
+| **Zusammenführen** | Duplikate, die z. B. durch einen Import entstanden sind, zu einer Veranstaltung zusammenführen |
+| **Veröffentlichen** | Die ausgewählten Veranstaltungen sichtbar machen |
+| **Absagen** | Die ausgewählten Veranstaltungen als abgesagt markieren |
+| **Quelle erneut prüfen** | Die Herkunftsquelle der ausgewählten Veranstaltungen neu abrufen |
 
-### 👥 Benutzer-Liste (nur Administratoren)
+Die Aktionen **Veröffentlichen**, **Absagen** und **Zusammenführen** fragen vor dem Ausführen nach.
 
-| Aktion | Beschreibung | Effekt |
-|---|---|---|
-| **Rolle ändern** | Rolle für alle ausgewählten Benutzer gleichzeitig ändern | Alle Benutzer erhalten die neue Rolle (Benutzer, Publisher, Administrator) |
-| **Organisation zuweisen** | Alle ausgewählten Benutzer einer Organisation zuweisen | Alle Benutzer werden der neuen Organisation zugeordnet |
-| **Ausgewählte löschen** | Mehrere Benutzerkonten gleichzeitig löschen | Alle ausgewählten Benutzer werden gelöscht (mit Bestätigung) |
-| **Exportieren** | Liste der ausgewählten Benutzer exportieren | Download einer CSV-Datei mit Benutzerdaten |
+### 📅 Veranstaltungen: Liste (nur Administratoren)
 
-### 🏢 Organisationen-Liste (nur Administratoren)
+Auf der Veranstaltungsliste und auf den Dashboards von Organisationen, Orten, Musikern und Anleitern gibt es zusätzlich **Löschen**. Gelöschte Veranstaltungen sind endgültig weg; die Aktion fragt vorher nach.
 
-| Aktion | Beschreibung | Effekt |
-|---|---|---|
-| **Ausgewählte löschen** | Mehrere Organisationen gleichzeitig löschen | Alle ausgewählten Organisationen werden gelöscht (mit Bestätigung) |
-| **Importieren** | Mehrere Organisationen aus einer Datei importieren | – |
+### 🏢 Organisationen, Orte, Benutzer (nur Administratoren)
 
-### 📍 Orte-Liste
+| Liste | Aktionen |
+|---|---|
+| Benutzer | Rolle ändern, Organisation zuweisen, Löschen |
+| Organisationen | Löschen, Importieren |
+| Orte | Löschen, Archivieren |
 
-| Aktion | Beschreibung | Effekt |
-|---|---|---|
-| **Ausgewählte löschen** | Mehrere Orte gleichzeitig löschen | Alle ausgewählten Orte werden gelöscht (mit Bestätigung) |
-| **Ausgewählte archivieren** | Mehrere Orte gleichzeitig archivieren | Alle ausgewählten Orte erhalten den Status "Archiviert" |
-| **Exportieren** | Ausgewählte Orte als CSV exportieren | Download einer CSV-Datei mit Ortdaten |
+---
+
+## 🎧 Keine Live-Musik
+
+Eine Veranstaltung ohne Musiker kann ausdrücklich als **keine Live-Musik** gekennzeichnet werden (Aufnahme, DJ oder Übungsabend). Fehlt beides, bleibt die Musik ungeklärt.
+
+Bei der Mehrfachauswahl gilt:
+- Wenn du **Keine Live-Musik: Ja** setzt, und eine ausgewählte Veranstaltung Musiker hat, oder du **einen Musiker hinzufügst**, und eine ausgewählte Veranstaltung ist als keine Live-Musik gekennzeichnet, erscheint ein Hinweis mit der Anzahl betroffener Veranstaltungen.
+- Du wählst dann:
+  - **Überspringen** (Standard): Diese Veranstaltungen bleiben unverändert. Du kannst sie danach einzeln bearbeiten.
+  - **Überschreiben**: Bei *Keine Live-Musik* werden die Musiker dieser Veranstaltungen entfernt. Beim Hinzufügen eines Musikers wird die Markierung *keine Live-Musik* entfernt.
+  - **Abbrechen**: Es passiert nichts.
+
+---
+
+## 🔍 Filter vor der Auswahl
+
+Die Verwaltungsansicht von Veranstaltungen bietet Filter, die du vor der Auswahl setzt, damit nur passende Einträge in der Liste stehen:
+- **Organisation** und **Ort**
+- **Stadt**
+- **Datum** (von / bis)
+- **Musiker** und **Anleiter** (mehrere möglich; es werden Veranstaltungen gezeigt, bei denen mindestens eine der gewählten Personen eingetragen ist). Zeitplan-Einträge zählen dabei nicht.
+- **Nicht veröffentlicht** bzw. **mit Quelle** (Veranstaltungen aus einem Import)
+
+Die Filter wirken auf der Server-Seite. Die Liste ist damit vollständig, auch bei vielen Veranstaltungen. Mit **CSV exportieren** lädst du genau die gefilterten Veranstaltungen als Tabelle herunter. Die Datei nutzt das Trennzeichen `|` und ein UTF-8-Kodierungszeichen, damit sie in Tabellenkalkulationen (z. B. LibreOffice Calc) richtig geöffnet wird.
 
 ---
 
 ## ⚠️ Sicherheitsmechanismen
 
-Multi-Select-Aktionen, die Daten verändern oder löschen, sind mit mehreren Schutzmechanismen ausgestattet:
-
-### 1. Bestätigungsdialog
-- Jede löschende oder verändernde Aktion erfordert eine **explizite Bestätigung**
-- Der Dialog zeigt:
-  - **Anzahl** der betroffenen Einträge
-  - **Typ** der Aktion (z. B. "3 Veranstaltungen löschen")
-  - **Folgen** der Aktion
-
-### 2. Undo-Funktion
-- Viele Aktionen können **rückgängig gemacht** werden
-- Ein **"Rückgängig"**-Button erscheint nach der Aktion
-- Zeitfenster: Normalerweise **5 Minuten** nach der Aktion
-
-### 3. Berechtigungsprüfung
-- Multi-Select-Aktionen unterliegen den **gleichen Berechtigungen** wie Einzelaktionen
-- Beispiel: Nur Administratoren können Benutzer löschen
-- Beispiel: Nur Besitzer einer Organisation können deren Veranstaltungen bearbeiten
-
-### 4. Rate Limiting
-- Bei sehr großen Auswahlen (z. B. > 100 Einträge) wird eine **Warnung** angezeigt
--che Massenactionen erfordern eine zusätzliche **Sicherheitsabfrage**
+- **Bestätigungsdialog:** Löschende und markierende Aktionen fragen vorher nach.
+- **Berechtigungsprüfung:** Mehrfachauswahl unterliegt denselben Rechten wie Einzelaktionen. Nur Administratoren können Benutzer löschen, und Organisationen können nur ihre eigenen Veranstaltungen bearbeiten.
+- **Keine Rückgängig-Funktion:** Mehrfachaktionen lassen sich nicht rückgängig machen. Prüfe die Auswahl deshalb vorher.
 
 ---
 
-## 💡 Tipps für effizientes Arbeiten
+## 💡 Tipps
 
-### 1. Filter vor der Auswahl
-- Nutze die **Filterfunktion** oben in der Liste, um nur relevante Einträge anzuzeigen
-- Beispiel: Filtere nach Datum, Organisation oder Typ, bevor du Multi-Select verwendest
-- **Vorteil**: Weniger Einträge = weniger Fehlergefahr
-
-### 2. Sortierung nutzen
-- Sortiere die Liste nach dem Kriterium, das für deine Aktion relevant ist
-- Beispiel: Nach Datum sortieren, um alle Veranstaltungen eines Monats auszuwählen
-- **Tipp**: Halte die Shift-Taste gedrückt und klicke auf den ersten und letzten Eintrag
-
-### 3. Auswahl überprüfen
-- Vor dem Ausführen einer Aktion:
-  - Prüfe die **Anzahl ausgewählter Einträge** in der Symbolleiste
-  - Scrolle durch die Liste, um sicherzustellen, dass nur die gewünschten Einträge ausgewählt sind
-  - Nutze **"Auswahl umkehren"**, falls du versehentlich zu viele ausgewähnt hast
-
-### 4. Tastenkürzel
-
-| Tastenkürzel | Funktion |
-|---|---|
-| Strg/Cmd + A | Alle sichtbaren Einträge auswählen |
-| Esc | Auswahl aufheben |
-| Shift + Klick | Bereich auswählen |
-| Strg/Cmd + Klick | Einzelnen Eintrag zur Auswahl hinzufügen/entfernen |
+1. **Filtern, dann auswählen:** Weniger Einträge bedeuten weniger Fehlergefahr.
+2. **Anzahl prüfen:** Kontrolliere vor dem Ausführen die angezeigte Anzahl ausgewählter Einträge.
+3. **Im Zweifel einzeln:** Bei Konflikten wie *keine Live-Musik* ist das Überspringen die sichere Wahl.
 
 ---
 
@@ -149,16 +99,16 @@ Multi-Select-Aktionen, die Daten verändern oder löschen, sind mit mehreren Sch
 
 | Problem | Lösung |
 |---|---|
-| Multi-Select funktioniert nicht | Prüfe, ob du die nötigen Berechtigungen hast |
-| Checkboxes erscheinen nicht | Bewege den Mauszeiger über einen Eintrag oder klicke in die Liste |
-| "Alle auswählen" Button fehlt | Wähle mindestens einen Eintrag aus, dann erscheint die Symbolleiste |
-| Aktion nicht verfügbar | Nicht alle ausgewählten Einträge unterstützen diese Aktion |
-| Zu viele Einträge ausgewählt | Nutze Filter, um die Auswahl einzugrenzen |
+| Kein Kontrollkästchen sichtbar | Du hast für diese Liste keine Bearbeitungsrechte |
+| Aktion fehlt | Nicht alle Aktionen gibt es in jeder Liste (siehe oben); prüfe auch deine Rolle |
+| Zu viele Einträge ausgewählt | Setze Filter, um die Auswahl einzugrenzen |
+| Hinweis zu *keine Live-Musik* | Entscheide, ob du die betroffenen Veranstaltungen überspringst oder überschreibst |
 
 ---
 
 ## 📚 Siehe auch
 
 - [Veranstaltungen erstellen & verwalten](Benutzer-Veranstaltungen) – Einzelne Veranstaltungen bearbeiten
-- [Administration](Benutzer-Administration) – Systemweite Einstellungen für Multi-Select
+- [Daten pflegen](Benutzer-Pflege) – Verwaltungsansichten von Orten und Organisationen
+- [Administration](Benutzer-Administration) – Systemweite Einstellungen
 - [Organisationen verwalten](Benutzer-Organisationen) – Organisationsspezifische Einstellungen

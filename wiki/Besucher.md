@@ -32,6 +32,7 @@ Jede Veranstaltungsseite kann folgende Infos enthalten:
 - **Nach Datum**: Wochenkalender oder die Liste kommender Veranstaltungen nutzen
 - **Nach Ort**: Karte zoomen/verschieben oder nach Stadt filtern. Auf der Suchseite (`/search`) schlägt das Feld **Ort** schon beim Tippen passende Orte vor – auch bei Tippfehlern („Magdeburh“ findet Magdeburg). Orte mit 🌐 haben (noch) keine Veranstaltungen; wählst du einen davon, zeigt die Suche Veranstaltungen im gewählten Umkreis. Findet sich nichts, drücke **Enter**, um den vollständigen Namen online nachschlagen zu lassen.
 - **Nach Typ**: Filter nach Ball, Workshop, Festival usw.
+- **Eigener Standort**: Auf der Suchseite zeigt der Knopf „📍 Meinen Standort verwenden“ die Karte an deiner Position und setzt einen Punkt „Hier bin ich“. Die Position bleibt im Browser und wird nicht an den Server übertragen. Verweigerst du die Standortfreigabe, erscheint ein Hinweis.
 
 ## 🏛️ Organisationen entdecken
 
@@ -90,7 +91,7 @@ Auch ohne Benutzerkonto kannst du eine fehlende Veranstaltung vorschlagen, damit
 5. Ein Administrator prüft den Vorschlag und veröffentlicht ihn – bis dahin ist die Veranstaltung **nicht öffentlich sichtbar**
 
 **📝 Die Formularfelder (Schritt für Schritt)**
-- **Was:** Titel sowie Art/Tags (Ball, Workshop, Festival, Open-Air, Session, Konzert …) und bei Workshops das Niveau (Anfänger/Mittel/Fortgeschritten); dazu Tänze sowie Musikerinnen/Musiker und Kursleiterinnen/Kursleiter – Namen werden beim Tippen aus der Suche vorgeschlagen
+- **Was:** Titel sowie Art/Tags (Ball, Workshop, Festival, Open-Air, Session, Konzert …) und bei Workshops das Niveau (Anfänger/Mittel/Fortgeschritten); dazu Tänze sowie Musikerinnen/Musiker und Kursleiterinnen/Kursleiter – Namen werden beim Tippen aus der Suche vorgeschlagen Ist kein Musiker bekannt, kannst du „Keine Live-Musik“ ankreuzen (Aufnahme, DJ oder Übungsabend). Musiker und dieses Kästchen schließen sich gegenseitig aus.
 - **Wann:** Datum, Start- und Endzeit sowie der Eintrittspreis (frei, Spende, fester Betrag oder gestaffelte Preistabelle). Das **Datum** lässt sich wahlweise direkt ins Textfeld eintippen (z. B. `DD.MM.YYYY`) **oder** per Klick auf den Kalender-Button (Datepicker) auswählen – beides funktioniert
 - **Wo:** Veranstaltungsort. Ein Suchfeld schlägt bereits bekannte Orte und OpenStreetMap-Orte vor; ist der Ort noch nicht erfasst, werden Name, Straße, PLZ, Ort und Land eingegeben
 - **Beschreibung:** Beschreibungstext, Link zur Original-Veranstaltungsseite sowie Speisen/Getränke
@@ -125,6 +126,28 @@ Auf der Bestätigungsseite und per E-Mail wird direkt ein Link angeboten, um ein
 
 **Hinweise:** wie beim Veranstaltungsvorschlag ist die Funktion nur verfügbar, wenn die Instanz E-Mail- oder Telegram-Benachrichtigungen konfiguriert hat, und ebenso mehrschichtig gegen Missbrauch abgesichert (Rate-Limit, Bot-Erkennung).
 
+## 📆 Kalender, Agenda und Städte
+
+- **Zum Kalender hinzufügen:** Auf der Veranstaltungsseite öffnet das 📅-Symbol ein Menü. „Zum Kalender hinzufügen“ lädt die Veranstaltung als `.ics`-Datei herunter, die jedes Kalenderprogramm öffnet. „Kalender abonnieren“ richtet ein Abo ein, das sich automatisch aktualisiert.
+- **Feeds:** Auch auf der Startseite und auf den Organisations-, Orts-, Musiker- und Anleiterseiten gibt es ein 📅-Menü mit Abo-Link, Download und RSS/JSON. Die iCal-Feeds lassen sich mit `?days=N` (nur die nächsten N Tage) oder `?count=N` (nur die nächsten N Veranstaltungen) eingrenzen.
+- **Agenda** (Menü ☰ → Agenda): die Veranstaltungen der nächsten sieben Tage, nach Tagen gruppiert. Mit „Drucken“ erhältst du eine übersichtliche Liste.
+- **Städte** (`/cities`): alle Orte mit einer Veranstaltung. Jede Kachel zeigt die nächste Veranstaltung („in X Tagen“) und die Zahl kommender Veranstaltungen. Standard ist die nächste Veranstaltung zuerst; „A–Z“ sortiert alphabetisch. Orte ohne kommende Veranstaltung sind ausgegraut. Deine Wahl bleibt im Browser gespeichert.
+- **Drucken:** Im Benutzermenü (Symbol oben rechts) findest du „Drucken“. Die Druckansicht blendet Navigation, Karte und Filter aus. Auf Organisations- und Ortsseiten erscheint zusätzlich ein QR-Code zur Seite.
+
+## ⭐ Merkliste
+
+Mit dem ☆ neben einer Veranstaltung legst du sie auf deine Merkliste, z. B. für einen Wochenendausflug. Die Merkliste findest du über den Stern „Merkliste“ in der oberen Leiste bzw. unter `/watchlist`.
+
+- **Im Browser gespeichert:** Die Liste liegt in deinem Browser. Sie kann bis zu 200 Veranstaltungen enthalten. Mit „Als JSON-Datei speichern“ sicherst du sie als Datei, mit „JSON-Datei laden“ holst du sie wieder.
+- **Auf dem Server speichern (optional):** Du kannst die Liste auf dem Server ablegen lassen. Du erhältst dann einen zufälligen Schlüssel, mit dem du die Liste auf einem anderen Gerät wieder lädst. Verlierst du den Schlüssel, ist die Liste nicht wiederherstellbar. Gespeicherte Listen werden nach 12 Monaten gelöscht.
+- **Ohne Verbindung:** Die Merkliste zeigt den Stand vom letzten Besuch mit Verbindung und den Hinweis „Offline – Stand: …“. Veranstaltungen, die du nie mit Verbindung angesehen hast, sind als „nicht offline verfügbar“ markiert.
+- **Zum Ort navigieren:** Bei Einträgen mit Ort gibt es 🧭 „Navigation“, das deine Navigations-App öffnet. Ist keine App verfügbar, kannst du die Koordinaten mit „Koordinaten kopieren“ übernehmen.
+- **Entfernen:** „×“ in der Zeile entfernt die Veranstaltung aus der Liste.
+
+## 📲 Als App nutzen
+
+dansal lässt sich auf dem Startbildschirm deines Telefons ablegen. Ist die Installation möglich, erscheint im Benutzermenü „App installieren“. Die App öffnet sich dann ohne Browserleiste. Ohne Verbindung sind nur die Merkliste mit dem letzten Stand und eine Hinweisseite verfügbar; alle anderen Seiten brauchen eine Verbindung.
+
 ## 🌍 Mehrsprachigkeit
 
 dansal unterstützt 12 Sprachen. Sprache ändern über:
@@ -143,6 +166,9 @@ dansal ist vollständig responsiv:
 Cookies werden nur gesetzt, wenn eine Sprache dauerhaft gespeichert werden soll oder einzelne Funktionen eine temporäre Sitzung benötigen (z. B. eine angefangene Registrierung, eine bestätigte Pinnwand-Sitzung oder ein Anmeldevorgang über einen externen Anbieter). Sie dienen ausschließlich diesen Funktionen – eine Nachverfolgung über Websites hinweg findet nicht statt.
 
 Beim Ändern der Sprache kommt eine Abfrage, ob die Auswahl dauerhaft (per Cookie) gespeichert werden soll. Wird dies verweigert, wird die Auswahl verworfen und die Sprache nicht gespeichert – auch nicht für die laufende Sitzung. Bei der nächsten Sitzung wird dann wieder die Sprache dargestellt, die der Browser anfragt.
+
+### Browser-Speicher
+Die Merkliste, deine Sortierung der Städte und der Offline-Stand der Merkliste werden im Browser abgelegt (lokaler Speicher, localStorage). Diese Daten verlassen den Browser nicht. Nur wenn du die Merkliste bewusst auf dem Server speicherst, werden die Einträge dorthin übertragen, und zwar unter einem zufälligen Schlüssel, nicht mit deinem Namen.
 
 ### E-Mail-Adresse zur Verifizierung
 Für einzelne Aktionen wird eine Verifizierung verlangt. Dazu wird an eine E-Mail-Adresse ein Link geschickt, um die Aktion zu bestätigen. Mit Verifizierung wird die E-Mail-Adresse sofort gelöscht (Ausnahme Pinnwand).

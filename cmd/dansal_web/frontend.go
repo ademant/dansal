@@ -1581,7 +1581,10 @@ func orgsHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient
 
 func actorOrFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	frontendH := orgFrontendHandler(cfg, tmpls, db, client, i18n)
-	apH := requireAPSignature(cfg, apActorHandler(cfg, db, client))
+	// #1614: the actor document is public, so it is served without a signature.
+	// Requiring one made every fediverse fetch in a fan-out burst cost a key
+	// fetch from the sender's instance. Outbox, followers and inbox stay signed.
+	apH := apActorHandler(cfg, db, client)
 	return func(w http.ResponseWriter, r *http.Request) {
 		if isAPRequest(r) {
 			apH(w, r)
@@ -1598,6 +1601,10 @@ func apActorHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerF
 		// HTML org page (issue #1058).
 		w.Header().Set("Cache-Control", "public, max-age=300")
 		slug := r.PathValue("name")
+		if body, ok := getAPActorBody(slug); ok {
+			writeAPActorBody(w, body)
+			return
+		}
 		actor, err := getActorBySlug(db, slug)
 		if err == sql.ErrNoRows {
 			if slug == "relay" {
@@ -1630,7 +1637,7 @@ func apActorHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerF
 
 		// Relay actor: synthetic profile with no backing org.
 		if actor.OrgID == 0 {
-			writeJSON(w, http.StatusOK, relayActorFromRecord(cfg, actor))
+			writeAPActor(w, slug, relayActorFromRecord(cfg, actor))
 			return
 		}
 
@@ -1641,7 +1648,7 @@ func apActorHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerF
 		}
 
 		a := actorFromOrg(cfg, org, actor)
-		writeJSON(w, http.StatusOK, a)
+		writeAPActor(w, slug, a)
 	}
 }
 

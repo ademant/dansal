@@ -531,6 +531,8 @@ func adminOrgLocationsHandler(cfg *Config, client *DansalClient) http.HandlerFun
 
 func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// #1614: an organisation change can alter its actor document.
+		defer invalidateAPActorCache()
 		user, ok := requireRole(w, r, "admin", "user")
 		if !ok {
 			return

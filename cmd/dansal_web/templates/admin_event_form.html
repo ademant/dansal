@@ -588,6 +588,32 @@
       <input id="musician-search" type="text" placeholder="{{$.Strings.T "evt_musician_search"}}" autocomplete="off" data-on="input" data-fn="searchMusicians" data-args='["@value"]'>
       <div id="ac-list" class="ac-list" hidden></div>
     </div>
+    <label class="check-label" id="no-live-music-lbl"><input type="checkbox" name="no_live_music" value="1" id="no-live-music"{{if .Event.NoLiveMusic}} checked{{end}}> {{$.Strings.T "evt_no_live_music"}}</label>
+    <script nonce="{{$.Nonce}}">
+    // #1612: "no live music" and listed musicians exclude each other. Ticking
+    // the box removes the musicians; adding one unticks and disables the box;
+    // removing all re-enables it, unticked.
+    (function(){
+      var box = document.getElementById('no-live-music');
+      var search = document.getElementById('musician-search');
+      var chips = document.getElementById('selected-musicians');
+      if (!box || !search || !chips) return;
+      function sync(){
+        var hasMusicians = chips.querySelectorAll('.musician-chip').length > 0;
+        if (hasMusicians) { box.checked = false; }
+        box.disabled = hasMusicians;
+        search.disabled = box.checked;
+      }
+      box.addEventListener('change', function(){
+        if (box.checked) {
+          chips.querySelectorAll('.musician-chip').forEach(function(n){ n.remove(); });
+        }
+        sync();
+      });
+      new MutationObserver(sync).observe(chips, {childList: true});
+      sync();
+    })();
+    </script>
     <script nonce="{{$.Nonce}}">
     var allMusicians = [{{range .Musicians}}{id:{{.ID}},name:{{jsStr .Bandname}}},{{end}}];
     function _musNorm(s){

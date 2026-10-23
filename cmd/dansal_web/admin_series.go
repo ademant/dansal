@@ -679,12 +679,38 @@ func adminSeriesApplyToEventsHandler(cfg *Config, client *DansalClient) http.Han
 			return
 		}
 		token := getSessionToken(r)
-		if err := client.ApplySeriesToEvents(r.Context(), id, token); err != nil {
+		// #1612: "skip" (default) or "overwrite" for events flagged "no live music".
+		mode := "skip"
+		if r.FormValue("conflict_mode") == "overwrite" {
+			mode = "overwrite"
+		}
+		if err := client.ApplySeriesToEventsMode(r.Context(), id, mode, token); err != nil {
 			log.Printf("apply series %d to events: %v", id, err)
 			http.Error(w, "failed: "+err.Error(), http.StatusBadGateway)
 			return
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/series/%d?applied=1", id), http.StatusSeeOther)
+	}
+}
+
+// adminSeriesApplyConflictsHandler serves POST /admin/series/{id}/apply-conflicts:
+// how many of the series' events a series musician would clash with (#1612).
+// It writes nothing.
+func adminSeriesApplyConflictsHandler(client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := requireLogin(w, r); !ok {
+			return
+		}
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
+			return
+		}
+		conflicts, err := client.SeriesApplyConflicts(r.Context(), id, getSessionToken(r))
+		if err != nil {
+			http.Error(w, "could not check conflicts", http.StatusBadGateway)
+			return
+		}
+		writeJSONResponse(w, http.StatusOK, map[string]any{"count": len(conflicts), "ids": conflicts})
 	}
 }
 

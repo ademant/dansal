@@ -661,6 +661,19 @@ func adminEventBulkSetAttributesHandler(cfg *Config, client *DansalClient) http.
 			}
 		}
 		payload := map[string]any{"ids": ids}
+		// #1612: "no live music" (unchanged, yes or no) and how to resolve a clash
+		// with musicians: skip the event (default) or overwrite.
+		switch r.FormValue("no_live_music") {
+		case "1":
+			payload["no_live_music"] = true
+		case "0":
+			payload["no_live_music"] = false
+		}
+		if r.FormValue("conflict_mode") == "overwrite" {
+			payload["conflict"] = "overwrite"
+		} else {
+			payload["conflict"] = "skip"
+		}
 		if v := r.FormValue("org_id"); v != "" {
 			id, _ := strconv.Atoi(v)
 			payload["org_id"] = id
@@ -2604,6 +2617,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			Pricing:          pricing,
 			Location:         locReq,
 			Musicians:        musicianIDs,
+			NoLiveMusic:      r.FormValue("no_live_music") == "1",
 			Instructors:      instructorIDs,
 			Dances:           danceIDs,
 			LocationID:       createLocationID,
@@ -3101,6 +3115,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			Pricing:              pricing,
 			Location:             locReq,
 			Musicians:            musicianIDs,
+			NoLiveMusic:          r.FormValue("no_live_music") == "1",
 			Instructors:          instructorIDs,
 			Dances:               danceIDs,
 			LocationID:           saveLocationID,

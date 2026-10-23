@@ -9,10 +9,48 @@
 <div class="evt-action-bar">
   <button type="button" id="back-btn" class="btn-secondary" data-fn="safeGoBack" data-args="[]" title="{{$.Strings.T "btn_go_back"}}" aria-label="{{$.Strings.T "btn_go_back"}}">←</button>
   <button type="submit" form="series-header-form" class="btn-primary" style="background:#1a6eb5;color:#fff;border:none;padding:.4rem 1rem;border-radius:4px;cursor:pointer">{{$.Strings.T "admin_save"}}</button>
-  <form method="post" action="/admin/series/{{.Series.ID}}/apply-to-events" style="margin:0"
+  <form method="post" action="/admin/series/{{.Series.ID}}/apply-to-events" style="margin:0" id="series-apply-form"
         data-on="submit" data-confirm="{{$.Strings.T "series_apply_to_events_confirm"}}">
+    <input type="hidden" name="conflict_mode" value="skip" id="series-apply-mode">
     <button class="btn-sm btn-assign">{{$.Strings.T "series_apply_to_events"}}</button>
   </form>
+  <dialog id="series-conflict-dialog" class="em-conflict-dialog" data-text="{{$.Strings.T "em_conflict_text"}}">
+    <p id="series-conflict-msg"></p>
+    <div class="em-conflict-actions">
+      <button type="button" class="btn-sm" id="series-conflict-skip">{{$.Strings.T "em_conflict_skip"}}</button>
+      <button type="button" class="btn-sm btn-cancel-bulk" id="series-conflict-overwrite">{{$.Strings.T "em_conflict_overwrite"}}</button>
+      <button type="button" class="btn-sm" id="series-conflict-cancel">{{$.Strings.T "em_conflict_cancel"}}</button>
+    </div>
+  </dialog>
+  <script nonce="{{$.Nonce}}">
+  // #1612: applying a series musician can clash with events flagged "no live
+  // music". Ask first: skip (default) leaves those events; overwrite clears
+  // their flag. Runs before the confirmation, which still follows.
+  (function(){
+    var form = document.getElementById('series-apply-form');
+    var mode = document.getElementById('series-apply-mode');
+    var dlg = document.getElementById('series-conflict-dialog');
+    if (!form || !mode || !dlg) return;
+    var bypass = false;
+    form.addEventListener('submit', function(e){
+      if (bypass) { bypass = false; return; }
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      fetch('/admin/series/{{.Series.ID}}/apply-conflicts', {method: 'POST', credentials: 'same-origin'})
+        .then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
+        .then(function(d){
+          if (!d.count) { bypass = true; form.requestSubmit(); return; }
+          document.getElementById('series-conflict-msg').textContent = dlg.getAttribute('data-text').replace('%d', d.count);
+          if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
+        })
+        .catch(function(){ bypass = true; form.requestSubmit(); });
+    }, true);
+    function go(m){ dlg.close(); mode.value = m; bypass = true; form.requestSubmit(); }
+    document.getElementById('series-conflict-skip').addEventListener('click', function(){ go('skip'); });
+    document.getElementById('series-conflict-overwrite').addEventListener('click', function(){ go('overwrite'); });
+    document.getElementById('series-conflict-cancel').addEventListener('click', function(){ dlg.close(); });
+  })();
+  </script>
   <form method="post" action="/admin/series/{{.Series.ID}}/delete" style="margin:0 0 0 auto"
         data-on="submit" data-confirm="{{$.Strings.T "admin_delete"}} «{{.Series.Title}}»?">
     <button class="btn-sm btn-del">{{$.Strings.T "admin_delete"}}</button>

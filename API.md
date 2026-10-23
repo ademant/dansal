@@ -1007,6 +1007,7 @@ Content filters:
 - `difficulty=` — workshop difficulty level
 - `pricing=free` — free events only
 - `is_cancelled=1` — only cancelled events
+- `no_live_music` (#1612): a per-event flag on create, PUT, PATCH and suggest. `true` means recorded music (DJ or practice), and is refused with 400 when the event also lists musicians. The event list returns it as `no_live_music`. Events with neither musicians nor the flag have unknown music. The flag is not a list filter.
 - `musician_id=N` — events featuring this musician
 - `instructor_id=N` — events featuring this instructor
 - `event_musician_id=N` — events whose own musician list contains N; timetable-only performers do not match. Repeat or comma-separate to match any of several (OR), up to 10. Used by the admin maintenance view (#1584)

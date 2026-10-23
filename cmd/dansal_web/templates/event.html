@@ -44,7 +44,7 @@
   {{- else if $.Data.DefaultDescription}}, "description": "{{$.Data.DefaultDescription | plainTextDesc}}"
   {{- else}}, "description": "{{.Title}}{{with .Location}} – {{.Location}}{{end}}{{with .StartTime}}, {{formatDate $.LangCode $.DateFormat .}}{{end}}"
   {{- end}}
-  {{- if or .Musicians .Instructors}}, "performer": [
+  {{- if and (not .NoLiveMusic) (or .Musicians .Instructors)}}, "performer": [
     {{- $pfirst := true}}
     {{- range .Musicians}}{{if not $pfirst}}, {{end}}{{$murl := printf "https://%s/musicians/%d" $.Domain .ID}}{"@type": "MusicGroup", "@id": "{{$murl}}", "name": "{{.Bandname}}", "url": "{{$murl}}"{{with .Internetsite}}, "sameAs": ["{{.}}"]{{end}}}{{$pfirst = false}}{{end}}
     {{- range .Instructors}}{{if not $pfirst}}, {{end}}{{$iurl := printf "https://%s/instructors/%d" $.Domain .ID}}{"@type": "Person", "@id": "{{$iurl}}", "name": "{{.Name}}", "url": "{{$iurl}}"{{with .Website}}, "sameAs": ["{{.}}"]{{end}}}{{$pfirst = false}}{{end}}
@@ -292,6 +292,11 @@
         </a>
         {{end}}
       </div>
+    </section>
+    {{else if .NoLiveMusic}}
+    {{/* #1612: flagged as recorded music; no musicians are listed. */}}
+    <section class="evt-section evt-no-live-music">
+      <p>{{$.Strings.T "evt_no_live_music_display"}}</p>
     </section>
     {{end}}
 

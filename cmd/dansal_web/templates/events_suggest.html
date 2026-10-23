@@ -102,7 +102,35 @@
         <input id="sg-musicians" type="text" name="dansal_musicians_text" maxlength="2000" placeholder="{{$.Strings.T "people_list_placeholder"}}" autocomplete="off" aria-describedby="sg-people-hint-m">
         <small id="sg-people-hint-m" class="people-hint">{{$.Strings.T "people_list_hint"}}</small>
         <div id="sg-musician-chips" class="chip-wrap" aria-live="polite"></div>
+        <label class="check-label" id="sg-no-live-music-lbl"><input type="checkbox" name="dansal_no_live_music" value="1" id="sg-no-live-music"> {{$.Strings.T "evt_no_live_music"}}</label>
       </div>
+      <script nonce="{{$.Nonce}}">
+      // #1612: "no live music" and listed musicians exclude each other. Ticking
+      // the box clears the musicians; adding a musician unticks and disables
+      // the box; removing all musicians re-enables it, unticked.
+      (function(){
+        var box = document.getElementById('sg-no-live-music');
+        var input = document.getElementById('sg-musicians');
+        var chips = document.getElementById('sg-musician-chips');
+        if (!box || !input || !chips) return;
+        function sync(){
+          var hasMusicians = chips.children.length > 0 || input.value.trim() !== '';
+          if (hasMusicians) { box.checked = false; }
+          box.disabled = hasMusicians;
+          input.disabled = box.checked;
+        }
+        box.addEventListener('change', function(){
+          if (box.checked) {
+            input.value = '';
+            if (window.sgSetPeople) window.sgSetPeople('musician', []);
+          }
+          sync();
+        });
+        input.addEventListener('input', sync);
+        new MutationObserver(sync).observe(chips, {childList: true});
+        sync();
+      })();
+      </script>
       <div class="form-row">
         <label class="form-label-sm" for="sg-instructors">{{$.Strings.T "evt_instructors"}} {{template "sg-help" (dict "id" "instructors" "S" $.Strings)}}</label>
         <input id="sg-instructors" type="text" name="dansal_instructors_text" maxlength="2000" placeholder="{{$.Strings.T "people_list_placeholder"}}" autocomplete="off" aria-describedby="sg-people-hint-i">
@@ -1468,6 +1496,9 @@ function applyWizardData(data) {
     window.sgSetPeople('musician', data.musicians);
     window.sgSetPeople('instructor', data.instructors);
   }
+  // #1612: restore "no live music" after a rejected submission.
+  var noLive = document.getElementById('sg-no-live-music');
+  if (noLive && data.no_live_music) { noLive.checked = true; noLive.dispatchEvent(new Event('change')); }
   var ttBody = document.getElementById('sg-tt-body');
   if (ttBody && data.timetable && data.timetable.length > 0) {
     ttBody.innerHTML = '';

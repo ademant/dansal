@@ -2992,6 +2992,18 @@ func migrateDB() {
 			db.Exec("ALTER TABLE events ADD COLUMN ical_sequence INTEGER NOT NULL DEFAULT 0")
 		}
 	}
+	// #1612: no_live_music, a per-event flag (tri-state with musicians).
+	if !applied(52) {
+		db.Exec("ALTER TABLE events ADD COLUMN no_live_music INTEGER NOT NULL DEFAULT 0")
+		mark(52)
+	}
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('events') WHERE name='no_live_music'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE events ADD COLUMN no_live_music INTEGER NOT NULL DEFAULT 0")
+		}
+	}
 	// Safety net: ensure the window columns exist even if migration 50 was pre-marked.
 	for col, def := range map[string]string{"max_past_days": "1", "max_future_days": "365"} {
 		var n int
@@ -3905,6 +3917,7 @@ func createTables() error {
 	CREATE TABLE IF NOT EXISTS events (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		ical_sequence INTEGER NOT NULL DEFAULT 0,
+		no_live_music INTEGER NOT NULL DEFAULT 0,
 		uid TEXT UNIQUE,
 		title TEXT NOT NULL,
 		description TEXT,

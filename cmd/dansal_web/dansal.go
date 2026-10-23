@@ -1487,6 +1487,26 @@ func (c *DansalClient) getEvents(ctx context.Context, query, token string, out a
 	return c.get(ctx, path, out)
 }
 
+// feedEventsQuery fetches every published event the API matches for query,
+// following the API's pages of 1000 (#1590). A single request is capped at the
+// API's default limit of 100, which silently truncated the scoped feeds.
+func (c *DansalClient) feedEventsQuery(ctx context.Context, query string) ([]Event, error) {
+	const pageSize = 1000
+	var all []Event
+	for offset := 0; ; offset += pageSize {
+		var page []Event
+		total, err := c.getWithTotal(ctx, fmt.Sprintf("/api/v1/events?%s&limit=%d&offset=%d", query, pageSize, offset), &page)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, page...)
+		if len(page) < pageSize || offset+len(page) >= total {
+			break
+		}
+	}
+	return all, nil
+}
+
 func (c *DansalClient) GetEventsByMusician(ctx context.Context, musicianID int, token string) ([]Event, error) {
 	var events []Event
 	return events, c.getEvents(ctx, fmt.Sprintf("musician_id=%d", musicianID), token, &events)

@@ -126,6 +126,16 @@ location feeds is the same slug used in that entity's page URL
 numeric `{id}` (matching the `/instructors/{id}` page URL) because instructors
 have no unique slug. All feeds are public and contain only published events.
 
+**iCal windowing (#1590).** iCal feeds (`.ical`/`.ics`) accept two optional
+parameters: `?days=N` limits the feed to events starting within the next N
+days, and `?count=N` to its next N events (soonest first). Both may be given;
+the more restrictive applies. `days` and `count` must be single integers from
+1 to the bounds `ical_max_days` (default 3650) and `ical_max_count` (default
+1000). Other values get `400`. Without `?days=`, the operator's
+`ical_feed_window_days` in `web.yaml` applies (unset means no window).
+`webcal://` links take the same parameters. RSS, Atom and JSON Feed are not
+windowed.
+
 Unlike the other feed families, tag feeds aren't limited to the three legacy
 ball/workshop/festival slugs — `/tags/{slug}.atom` and `/tags/{slug}.jsonfeed`
 work for any tag in `GET /api/v1/tags` (an unknown slug 404s). They're

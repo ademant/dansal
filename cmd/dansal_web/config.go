@@ -192,6 +192,13 @@ type Config struct {
 	// deletes them — previously only enforced as a read-time staleness check
 	// (getGeocodeCache), so stale rows never actually left the table. Default 90.
 	DataRetentionDays int `yaml:"data_retention_days"`
+
+	// iCal feed windowing (#1590). ICalFeedWindowDays is the default window for
+	// every .ics feed (0 = no window). ICalMaxDays and ICalMaxCount bound the
+	// ?days= and ?count= request parameters; unset means 3650 and 1000.
+	ICalFeedWindowDays int `yaml:"ical_feed_window_days"`
+	ICalMaxDays        int `yaml:"ical_max_days"`
+	ICalMaxCount       int `yaml:"ical_max_count"`
 }
 
 // dataRetentionDuration is DataRetentionDays as a time.Duration, defaulting
@@ -268,6 +275,8 @@ func loadConfig() *Config {
 		IdleTimeoutSecs:           60,
 		FetchRunTimeoutSecs:       25,
 		DataRetentionDays:         90,
+		ICalMaxDays:               defaultICalMaxDays,
+		ICalMaxCount:              defaultICalMaxCount,
 		AuthorizedFetch:           true,
 		FollowerMaxFailures:       3,
 	}
@@ -291,6 +300,9 @@ func loadConfig() *Config {
 
 	applyWebEnvOverrides(cfg)
 
+	if err := cfg.validateICalWindow(); err != nil {
+		log.Fatalf("iCal feed window: %v", err)
+	}
 	if cfg.Domain == "" {
 		log.Fatal("domain is required (set via config file or DANSAL_WEB_DOMAIN / DANSAL_DOMAIN env var)")
 	}
@@ -381,6 +393,8 @@ func reloadConfig(path string) *Config {
 		IdleTimeoutSecs:           60,
 		FetchRunTimeoutSecs:       25,
 		DataRetentionDays:         90,
+		ICalMaxDays:               defaultICalMaxDays,
+		ICalMaxCount:              defaultICalMaxCount,
 		AuthorizedFetch:           true,
 		FollowerMaxFailures:       3,
 	}

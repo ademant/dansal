@@ -42,6 +42,9 @@ async function openSection(
   page: import("@playwright/test").Page,
   target: string
 ): Promise<void> {
+  // Sections open on load when they hold data, and the nav button toggles
+  // them, so click only when the section is not already visible (#1622).
+  if (await page.locator(`#${target}`).isVisible()) return;
   const btn = page.locator(`.loc-nav-item[data-target="${target}"]`);
   if (!(await btn.isVisible())) {
     await page.locator("#loc-nav-toggle").click();

@@ -105,8 +105,11 @@ test.describe("Admin event clone (#1542)", () => {
     await page.locator("#date").dispatchEvent("change");
     await expect(page.locator("#save-btn")).toBeEnabled();
 
-    // Something to verify survives the failed save below.
-    const keptURL = "https://example.com/e2e-1542-kept";
+    // Something to verify survives the failed save below. The URL is unique
+    // per run: a saved event with the same URL and start time within 3h is
+    // matched by dedup tier 2 and updated in place, so a fixed URL would make
+    // the clone save land on an earlier run's clone (or the desktop run's).
+    const keptURL = `https://example.com/e2e-1542-kept-${Date.now()}`;
     await page.fill("#url", keptURL);
 
     // Force a save error deterministically, without depending on any

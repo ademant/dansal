@@ -50,6 +50,18 @@ let token: string;
 
 // A minimal event created via the API for a single test, avoiding the form
 // overhead when only the image API path matters.
+// On narrow viewports the event form's section nav is collapsed behind a
+// toggle, so the nav item is hidden until the toggle is opened. Click the
+// item only when its section is not already visible (same as musician-gallery).
+async function openEventSection(page: Page, target: string): Promise<void> {
+  const sec = page.locator(`#${target}`);
+  if (await sec.isVisible()) return;
+  const navItem = page.locator(`.evt-nav-item[data-target="${target}"]`);
+  if (!(await navItem.isVisible())) await page.locator("#evt-nav-toggle").click();
+  await navItem.click();
+  await expect(sec).toBeVisible();
+}
+
 async function createMinimalEvent(page: Page, t: string): Promise<number> {
   const d = randomFutureDate(EVENT_DATE_MIN_DAYS, EVENT_DATE_MAX_DAYS);
   // start_time / end_time use the same ISO-string format as the seed fixtures.
@@ -336,7 +348,7 @@ test.describe("Image uploads", () => {
 
     // The event form's optional sections are collapsed by default; open the
     // Image section so the preview is on screen.
-    await page.locator('.evt-nav-item[data-target="sec-image"]').click();
+    await openEventSection(page, "sec-image");
 
     // The file input is hidden; setInputFiles still works on it.
     const buf = await makeImage("png", 300, 200);
@@ -356,7 +368,7 @@ test.describe("Image uploads", () => {
     const eventId = await createEventViaUI(page);
     await page.goto(`/admin/events/${eventId}/edit`);
 
-    await page.locator('.evt-nav-item[data-target="sec-image"]').click();
+    await openEventSection(page, "sec-image");
 
     const buf = await makeImage("jpeg", 300, 200);
     await page.locator('#image').setInputFiles({
@@ -366,9 +378,13 @@ test.describe("Image uploads", () => {
     });
     await expect(page.locator('#image-preview')).toBeVisible({ timeout: 5000 });
 
-    // Save the form.
-    await page.locator('#save-btn').click();
-    await page.waitForURL(/\/admin\/events\/\d+\/edit/);
+    // Save the form and wait for the navigation it causes. The URL already
+    // matches the edit page before the save, so waitForURL alone can return
+    // while the old page is still on screen.
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: "load" }),
+      page.locator('#save-btn').click(),
+    ]);
 
     // After redirect back to edit page, the existing image should be shown.
     await expect(page.locator('#existing-image')).toBeVisible();

@@ -259,11 +259,11 @@
     <div class="form-row">
       <div>
         <label for="capacity">{{$.Strings.T "loc_capacity"}}</label>
-        <input id="capacity" type="number" min="0" step="1" name="capacity" value="{{derefInt .Location.Capacity}}">
+        <input id="capacity" type="number" min="0" step="1" name="capacity" value="{{with .Location.Capacity}}{{derefInt .}}{{end}}">
       </div>
       <div>
         <label for="size_sqm">{{$.Strings.T "loc_size_sqm"}}</label>
-        <input id="size_sqm" type="number" min="0" step="1" name="size_sqm" value="{{derefInt .Location.SizeSqm}}">
+        <input id="size_sqm" type="number" min="0" step="1" name="size_sqm" value="{{with .Location.SizeSqm}}{{derefInt .}}{{end}}">
       </div>
     </div>
   </section>
@@ -967,7 +967,8 @@ document.addEventListener('DOMContentLoaded', function(){
       return !!document.getElementById('floor_condition').value || document.querySelector('#sec-floor input[type=checkbox]:checked')!==null;
     },
     'sec-capacity':function(){
-      return !!document.getElementById('capacity').value || !!document.getElementById('size_sqm').value;
+      // #1622: an empty or 0 value is "not set", so the section stays hidden.
+      return parseInt(document.getElementById('capacity').value, 10) > 0 || parseInt(document.getElementById('size_sqm').value, 10) > 0;
     },
     'sec-media':function(){
       return document.querySelectorAll('#sec-media .media-row').length>0;

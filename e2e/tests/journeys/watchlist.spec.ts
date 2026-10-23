@@ -102,14 +102,17 @@ test.describe("Watchlist (#1554)", () => {
     ).toBeVisible();
     await other.close();
   });
-  test("starring on the home page fills the row star and raises no page errors", async ({ page }) => {
+  // The home page lists only the next 100 upcoming events, and a shared dev
+  // instance accumulates more than that, so the seeded event may not be on
+  // it. Its own page always shows the star.
+  test("starring on the event page fills the star and raises no page errors", async ({ page }) => {
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
     const id = seed.eventIds[0];
-    await page.goto("/");
-    const rowStar = page.locator(`tr.event-row [data-wl-star="${id}"]`).first();
-    await rowStar.click();
-    await expect(rowStar).toHaveText("★");
+    await page.goto(`/events/${id}`);
+    const star = page.locator(`button[data-wl-star="${id}"]`).first();
+    await star.click();
+    await expect(star).toHaveText("★");
     expect(errors).toEqual([]);
   });
 });

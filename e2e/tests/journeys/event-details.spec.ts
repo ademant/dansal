@@ -33,6 +33,8 @@ test.describe("Event details page", () => {
 
   test("has ICS download link", async ({ page }) => {
     await page.goto(`${EVENT_HREF_PREFIX}${seed.eventIds[0]}`);
+    // The calendar control opens a dropdown; the .ics link is inside it (#1583).
+    await page.locator(".cal-dd > button").first().click();
     const icsLink = page.locator('a[href$=".ics"]');
     await expect(icsLink.first()).toBeVisible();
   });

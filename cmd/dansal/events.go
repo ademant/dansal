@@ -2421,6 +2421,14 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	event, err := scanEventRow(db.QueryRow(query, id))
 	if err == sql.ErrNoRows {
+		// A row that exists but is hidden from this caller (an unpublished
+		// draft) is not gone: it may be published later, so answer 404, not
+		// 410, which would tell clients the id was deleted (#1634).
+		var exists int
+		if db.QueryRow("SELECT 1 FROM events WHERE id = ?", id).Scan(&exists) == nil {
+			writeError(w, "Event not found", http.StatusNotFound)
+			return
+		}
 		if idWasAllocated("events", id) {
 			writeError(w, "Event is gone", http.StatusGone)
 			return

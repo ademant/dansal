@@ -472,6 +472,7 @@ type Event struct {
 	HasFestival          bool             `json:"has_festival"`
 	WorkshopDifficulty   string           `json:"workshop_difficulty,omitempty"`
 	IsCancelled          bool             `json:"is_cancelled"`
+	NoLiveMusic          bool             `json:"no_live_music,omitempty"`
 	Tags                 []string         `json:"tags"`
 	IsPublished          bool             `json:"is_published"`
 	ShortCode            string           `json:"short_code"`
@@ -2136,6 +2137,7 @@ type EventCreateReq struct {
 	LocationID         *int            `json:"location_id,omitempty"`
 	Location           EventLocReq     `json:"location"`
 	Musicians          []int           `json:"musicians,omitempty"`
+	NoLiveMusic        bool            `json:"no_live_music"`
 	Instructors        []int           `json:"instructors,omitempty"`
 	Dances             []int           `json:"dances,omitempty"`
 	ImageAIGenerated   bool            `json:"image_ai_generated,omitempty"`
@@ -2174,6 +2176,7 @@ type EventUpdateReq struct {
 	LocationID           *int            `json:"location_id,omitempty"`
 	Location             EventLocReq     `json:"location"`
 	Musicians            []int           `json:"musicians,omitempty"`
+	NoLiveMusic          bool            `json:"no_live_music"`
 	Instructors          []int           `json:"instructors,omitempty"`
 	Dances               []int           `json:"dances,omitempty"`
 	ImageAIGenerated     bool            `json:"image_ai_generated,omitempty"`
@@ -3726,6 +3729,7 @@ type SuggestEventReq struct {
 	ContactName        string              `json:"contact_name,omitempty"`
 	ContactEmail       string              `json:"contact_email,omitempty"`
 	Musicians          []string            `json:"musicians,omitempty"`
+	NoLiveMusic        bool                `json:"no_live_music,omitempty"`
 	Instructors        []string            `json:"instructors,omitempty"`
 	Timetable          []TimetableEntryReq `json:"timetable,omitempty"`
 }

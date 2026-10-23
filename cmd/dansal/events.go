@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -41,6 +42,7 @@ type Event struct {
 	HasFestival        bool             `json:"has_festival"`
 	WorkshopDifficulty string           `json:"workshop_difficulty,omitempty"`
 	IsCancelled        bool             `json:"is_cancelled"`
+	NoLiveMusic        bool             `json:"no_live_music"`
 	Tags               []string         `json:"tags"`
 	IsPublished        bool             `json:"is_published"`
 	ShortCode          string           `json:"short_code"`
@@ -143,6 +145,7 @@ type EventWriteRequest struct {
 	HasFestival        bool                 `json:"has_festival"`
 	WorkshopDifficulty string               `json:"workshop_difficulty,omitempty" enum:"beginner,advanced,profi"`
 	IsCancelled        bool                 `json:"is_cancelled"`
+	NoLiveMusic        bool                 `json:"no_live_music"`
 	IsPublished        bool                 `json:"is_published"`
 	Tags               []string             `json:"tags"`
 	URL                string               `json:"url"`
@@ -202,6 +205,7 @@ type EventMergePatchRequest struct {
 	HasFestival          *bool             `json:"has_festival,omitempty"`
 	WorkshopDifficulty   *string           `json:"workshop_difficulty,omitempty" enum:"beginner,advanced,profi"`
 	IsCancelled          *bool             `json:"is_cancelled,omitempty"`
+	NoLiveMusic          *bool             `json:"no_live_music,omitempty"`
 	IsPublished          *bool             `json:"is_published,omitempty"`
 	Tags                 *[]string         `json:"tags,omitempty"`
 	URL                  *string           `json:"url,omitempty"`
@@ -420,7 +424,20 @@ func parseTimeToUnix(s string) (int64, error) {
 // SELECT used by all event list / single-event queries.
 // Dance names are aggregated once via a derived table JOIN rather than a
 // correlated subquery, so GROUP_CONCAT runs O(n) total instead of O(n) per row.
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, COALESCE(e.short_code,''), COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(NULLIF(l.address,''), lp.address, ''), COALESCE(NULLIF(l.zipcode,''), lp.zipcode, ''), e.organization_id, COALESCE(json(e.pricing),''), e.location_id, COALESCE(NULLIF(l.town,''), lp.town, ''), COALESCE(NULLIF(l.country,''), lp.country, ''), COALESCE(NULLIF(l.country_code,''), lp.country_code, ''), COALESCE(NULLIF(l.region,''), lp.region, ''), COALESCE(l.latitude, lp.latitude), COALESCE(l.longitude, lp.longitude), COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(json(e.attributes),'{}'), COALESCE(NULLIF(e.contact_name,''), o.contact_name, ''), COALESCE(NULLIF(e.contact_email,''), o.contact_email, ''), COALESCE(NULLIF(l.parking,''), lp.parking, ''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,''), e.created_by_id, l.osm_id, COALESCE(l.osm_type,''), COALESCE(NULLIF(l.geohash,''), lp.geohash, ''), e.series_id, e.needs_duplicate_review, e.duplicate_of_id, l.parent_id, e.previous_start_time, COALESCE(e.suggester_email,''), COALESCE(e.suggester_name,''), COALESCE(e.pending_edit_json,''), COALESCE(e.pending_edit_submitted_at,0), COALESCE(e.image_ai_generated,0), e.email_verified, COALESCE((SELECT image_ai_generated FROM event_series WHERE id = e.series_id), 0), COALESCE((SELECT cadence FROM event_series WHERE id = e.series_id), ''), COALESCE(json(e.timetable_tracks),''), COALESCE(json(e.timetable_room_order),''), COALESCE(e.reservation_requested,0), COALESCE((SELECT attribution FROM fetch_sources WHERE id = e.fetch_source_id), ''), COALESCE((SELECT licence FROM fetch_sources WHERE id = e.fetch_source_id), ''), COALESCE((SELECT terms_url FROM fetch_sources WHERE id = e.fetch_source_id), '') FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN locations lp ON l.parent_id = lp.id LEFT JOIN organizations o ON e.organization_id = o.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, e.no_live_music, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, COALESCE(e.short_code,''), COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(NULLIF(l.address,''), lp.address, ''), COALESCE(NULLIF(l.zipcode,''), lp.zipcode, ''), e.organization_id, COALESCE(json(e.pricing),''), e.location_id, COALESCE(NULLIF(l.town,''), lp.town, ''), COALESCE(NULLIF(l.country,''), lp.country, ''), COALESCE(NULLIF(l.country_code,''), lp.country_code, ''), COALESCE(NULLIF(l.region,''), lp.region, ''), COALESCE(l.latitude, lp.latitude), COALESCE(l.longitude, lp.longitude), COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(json(e.attributes),'{}'), COALESCE(NULLIF(e.contact_name,''), o.contact_name, ''), COALESCE(NULLIF(e.contact_email,''), o.contact_email, ''), COALESCE(NULLIF(l.parking,''), lp.parking, ''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,''), e.created_by_id, l.osm_id, COALESCE(l.osm_type,''), COALESCE(NULLIF(l.geohash,''), lp.geohash, ''), e.series_id, e.needs_duplicate_review, e.duplicate_of_id, l.parent_id, e.previous_start_time, COALESCE(e.suggester_email,''), COALESCE(e.suggester_name,''), COALESCE(e.pending_edit_json,''), COALESCE(e.pending_edit_submitted_at,0), COALESCE(e.image_ai_generated,0), e.email_verified, COALESCE((SELECT image_ai_generated FROM event_series WHERE id = e.series_id), 0), COALESCE((SELECT cadence FROM event_series WHERE id = e.series_id), ''), COALESCE(json(e.timetable_tracks),''), COALESCE(json(e.timetable_room_order),''), COALESCE(e.reservation_requested,0), COALESCE((SELECT attribution FROM fetch_sources WHERE id = e.fetch_source_id), ''), COALESCE((SELECT licence FROM fetch_sources WHERE id = e.fetch_source_id), ''), COALESCE((SELECT terms_url FROM fetch_sources WHERE id = e.fetch_source_id), '') FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN locations lp ON l.parent_id = lp.id LEFT JOIN organizations o ON e.organization_id = o.id`
+
+// boolToInt is the SQLite integer for a flag column.
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// errNoLiveMusicWithMusicians: an event that lists musicians has live music, so
+// it cannot also be marked "no live music" (#1612). The UI keeps the two apart;
+// the API refuses the combination as a safety net.
+var errNoLiveMusicWithMusicians = errors.New("an event with listed musicians cannot be marked as no live music")
 
 // boolParam converts a "true"/"false" query param string to a SQLite integer.
 func boolParam(s string) int {
@@ -467,6 +484,7 @@ func isReschedule(oldStart, newStart int64, wasPublished, wasCancelled bool) boo
 func scanEventRow(s scanner) (Event, error) {
 	var event Event
 	var loc Location
+	var noLiveMusicInt int
 	var hasBallInt, hasWorkshopInt, hasFestivalInt, isCancelledInt, isPublishedInt, bookingEnabledInt, imageAIGeneratedInt, emailVerifiedInt, seriesImageAIGeneratedInt, reservationRequestedInt int
 	var locAttrsJSON, evtAttrsJSON string
 	var startEpoch, endEpoch, changedAtEpoch int64
@@ -478,7 +496,7 @@ func scanEventRow(s scanner) (Event, error) {
 	var needsDuplicateReviewInt int
 	var pendingEditSubmittedEpoch int64
 	if err := s.Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
-		&hasBallInt, &hasWorkshopInt, &hasFestivalInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
+		&hasBallInt, &hasWorkshopInt, &hasFestivalInt, &isCancelledInt, &noLiveMusicInt, &event.TagsJSON, &isPublishedInt,
 		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &loc.Location,
 		&loc.ShortName, &loc.Address, &loc.Zipcode, &orgID,
 		&event.PricingJSON, &locID, &loc.Town, &loc.Country, &loc.CountryCode, &loc.Region,
@@ -527,6 +545,7 @@ func scanEventRow(s scanner) (Event, error) {
 	event.HasWorkshop = hasWorkshopInt == 1
 	event.HasFestival = hasFestivalInt == 1
 	event.IsCancelled = isCancelledInt == 1
+	event.NoLiveMusic = noLiveMusicInt == 1
 	event.IsPublished = isPublishedInt == 1
 	event.BookingEnabled = bookingEnabledInt == 1
 	event.ImageAIGenerated = imageAIGeneratedInt == 1
@@ -1131,6 +1150,7 @@ type EventInput struct {
 	LocationID                        int64
 	HasBall, HasWorkshop, HasFestival bool
 	IsCancelled                       bool
+	NoLiveMusic                       bool
 	WorkshopDifficulty                string
 	BookingURL                        string
 	IsPublished                       bool
@@ -1171,6 +1191,7 @@ func insertEventCore(q querier, in EventInput) (int, string, string, error) {
 	locationID := in.LocationID
 	hasBall, hasWorkshop, hasFestival := in.HasBall, in.HasWorkshop, in.HasFestival
 	isCancelled := in.IsCancelled
+	noLiveMusic := in.NoLiveMusic
 	workshopDifficulty, bookingURL := in.WorkshopDifficulty, in.BookingURL
 	isPublished := in.IsPublished
 	organizationID := in.OrganizationID
@@ -1369,8 +1390,8 @@ func insertEventCore(q querier, in EventInput) (int, string, string, error) {
 			createdByArg = *createdByID
 		}
 		result, err = q.Exec(
-			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, has_festival, is_cancelled, workshop_difficulty, is_published, organization_id, short_code, url, source, source_last_modified, pricing, booking_url, changed_at, changed_by, fetch_source_id, food, drink, floor_condition, attributes, contact_name, contact_email, created_by_id, image_ai_generated, email_verified, timetable_tracks, reservation_requested) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, jsonb(?), ?, ?, ?, ?, ?, ?, ?, jsonb(?), ?, ?, ?, ?, 1, jsonb(?), ?)",
-			uidArg, title, description, startTime, endTime, locIDArg, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, orgIDArg, shortCode, urlVal(url), sourceArg, slmArg, pricingArg, urlVal(bookingURL), insChangedAt, insChangedBy, insFetchSourceID, food, drink, floorCondition, attrsJSON(attributes), contactName, contactEmail, createdByArg, imageAIGenerated, timetableTracksArg, reservationRequested,
+			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, has_festival, is_cancelled, no_live_music, workshop_difficulty, is_published, organization_id, short_code, url, source, source_last_modified, pricing, booking_url, changed_at, changed_by, fetch_source_id, food, drink, floor_condition, attributes, contact_name, contact_email, created_by_id, image_ai_generated, email_verified, timetable_tracks, reservation_requested) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, jsonb(?), ?, ?, ?, ?, ?, ?, ?, jsonb(?), ?, ?, ?, ?, 1, jsonb(?), ?)",
+			uidArg, title, description, startTime, endTime, locIDArg, hasBall, hasWorkshop, hasFestival, isCancelled, noLiveMusic, workshopDifficulty, isPublished, orgIDArg, shortCode, urlVal(url), sourceArg, slmArg, pricingArg, urlVal(bookingURL), insChangedAt, insChangedBy, insFetchSourceID, food, drink, floorCondition, attrsJSON(attributes), contactName, contactEmail, createdByArg, imageAIGenerated, timetableTracksArg, reservationRequested,
 		)
 		if err == nil {
 			break
@@ -1450,6 +1471,7 @@ func createEventFromRequest(q querier, req EventCreateRequest, locationID int64,
 			HasWorkshop:        req.HasWorkshop,
 			HasFestival:        req.HasFestival,
 			IsCancelled:        req.IsCancelled,
+			NoLiveMusic:        req.NoLiveMusic,
 			WorkshopDifficulty: req.WorkshopDifficulty,
 			BookingURL:         req.BookingURL,
 			IsPublished:        isPublished,
@@ -2244,6 +2266,10 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 	var allCreatedEvents []Event
 	var totalCounts ImportCounts
 	for i, req := range requests {
+		if req.NoLiveMusic && len(req.Musicians) > 0 {
+			writeError(w, errNoLiveMusicWithMusicians.Error(), http.StatusBadRequest)
+			return
+		}
 		locationID, err := resolveLocationID(tx, req.LocationID, req.Location)
 		if err != nil {
 			writeInternalError(w, err)
@@ -2456,6 +2482,10 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &req) {
 		return
 	}
+	if req.NoLiveMusic && len(req.Musicians) > 0 {
+		writeError(w, errNoLiveMusicWithMusicians.Error(), http.StatusBadRequest)
+		return
+	}
 	if req.Title == "" {
 		writeError(w, "title is required", http.StatusBadRequest)
 		return
@@ -2573,7 +2603,7 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 
 	if _, err := tx.Exec(
 		`UPDATE events SET title=?, description=?, start_time=?, end_time=?, location_id=?,
-		 has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, is_published=?,
+		 has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, no_live_music=?, is_published=?,
 		 workshop_difficulty=?, url=?, booking_url=?, organization_id=?, pricing=jsonb(?),
 		 availability=?, tickets_total=?, booking_enabled=?, reservation_requested=?, food=?, drink=?, floor_condition=?, attributes=jsonb(?),
 		 contact_name=?, contact_email=?, image_ai_generated=?, changed_at=?, changed_by=?, changed_by_id=?,
@@ -2581,7 +2611,7 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 		 timetable_tracks=CASE WHEN ? IS NOT NULL THEN jsonb(?) ELSE timetable_tracks END,
 		 timetable_room_order=CASE WHEN ? IS NOT NULL THEN jsonb(?) ELSE timetable_room_order END WHERE id=?`,
 		req.Title, req.Description, startTime, endTime, locationIDArg,
-		req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.IsPublished,
+		req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.NoLiveMusic, req.IsPublished,
 		req.WorkshopDifficulty, urlVal(req.URL), urlVal(req.BookingURL), orgIDArg, pricingArg,
 		req.Availability, req.TicketsTotal, req.BookingEnabled, req.ReservationRequested, req.Food, req.Drink, req.FloorCondition, attrsJSON(req.Attributes),
 		req.ContactName, req.ContactEmail, req.ImageAIGenerated, time.Now().UTC().Unix(), changedByUser, callerIDArg,
@@ -2664,6 +2694,21 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 	var req EventMergePatchRequest
 	if !decodeJSONBody(w, r, &req) {
 		return
+	}
+	if req.NoLiveMusic != nil && *req.NoLiveMusic {
+		if req.Musicians != nil {
+			if len(*req.Musicians) > 0 {
+				writeError(w, errNoLiveMusicWithMusicians.Error(), http.StatusBadRequest)
+				return
+			}
+		} else {
+			var n int
+			db.QueryRow("SELECT COUNT(*) FROM event_musicians WHERE event_id=?", id).Scan(&n)
+			if n > 0 {
+				writeError(w, errNoLiveMusicWithMusicians.Error(), http.StatusBadRequest)
+				return
+			}
+		}
 	}
 	if req.Title != nil && *req.Title == "" {
 		writeError(w, "title is required", http.StatusBadRequest)
@@ -2778,6 +2823,10 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.IsCancelled != nil {
 		isCancelled = *req.IsCancelled
+	}
+	var nlmArg any
+	if req.NoLiveMusic != nil {
+		nlmArg = boolToInt(*req.NoLiveMusic)
 	}
 	if req.IsPublished != nil {
 		isPublished = *req.IsPublished
@@ -2905,13 +2954,13 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 
 	if _, err := tx.Exec(
 		`UPDATE events SET title=?, description=?, start_time=?, end_time=?, location_id=?,
-		 has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, is_published=?,
+		 has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, no_live_music=COALESCE(?, no_live_music), is_published=?,
 		 workshop_difficulty=?, url=?, booking_url=?, organization_id=?, pricing=jsonb(?),
 		 availability=?, tickets_total=?, booking_enabled=?, reservation_requested=?, food=?, drink=?, floor_condition=?, attributes=jsonb(?),
 		 contact_name=?, contact_email=?, changed_at=?, changed_by=?, changed_by_id=?,
 		 previous_start_time=COALESCE(?,previous_start_time), timetable_tracks=jsonb(?), timetable_room_order=jsonb(?) WHERE id=?`,
 		title, description, startUnix, endUnix, locationIDArg,
-		hasBall, hasWorkshop, hasFestival, isCancelled, isPublished,
+		hasBall, hasWorkshop, hasFestival, isCancelled, nlmArg, isPublished,
 		workshopDifficulty, urlVal(url), urlVal(bookingURL), orgIDArg, pricingArg,
 		availability, ticketsTotal, bookingEnabled, reservationRequested, food, drink, floorCondition, attrsRaw,
 		contactName, contactEmail, time.Now().UTC().Unix(), changedByUser, callerIDArg,
@@ -3383,6 +3432,7 @@ func cloneEvent(w http.ResponseWriter, r *http.Request) {
 		HasWorkshop:        cloneReq.HasWorkshop,
 		HasFestival:        cloneReq.HasFestival,
 		IsCancelled:        false,
+		NoLiveMusic:        src.NoLiveMusic,
 		WorkshopDifficulty: cloneReq.WorkshopDifficulty,
 		BookingURL:         cloneReq.BookingURL,
 		IsPublished:        false,

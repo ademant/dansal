@@ -45,6 +45,7 @@ type SuggestRequest struct {
 	ContactName        string                  `json:"contact_name,omitempty"`
 	ContactEmail       string                  `json:"contact_email,omitempty"`
 	Musicians          []string                `json:"musicians,omitempty"`
+	NoLiveMusic        bool                    `json:"no_live_music,omitempty"`
 	Instructors        []string                `json:"instructors,omitempty"`
 	Timetable          []TimetableEntryRequest `json:"timetable,omitempty"`
 }
@@ -195,6 +196,10 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 	var req SuggestRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		writeError(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if req.NoLiveMusic && len(req.Musicians) > 0 {
+		writeError(w, errNoLiveMusicWithMusicians.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -363,12 +368,12 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 		res, insertErr = tx.Exec(
 			`INSERT INTO events
 			 (title, description, start_time, end_time, location_id,
-			  has_ball, has_workshop, has_festival, is_cancelled, workshop_difficulty,
+			  has_ball, has_workshop, has_festival, is_cancelled, no_live_music, workshop_difficulty,
 			  is_published, url, food, drink, pricing, contact_name, contact_email,
 			  suggester_email, suggester_name, suggestion_token, suggestion_token_expires_at, email_verified, short_code)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, jsonb(?), ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, jsonb(?), ?, ?, ?, ?, ?, ?, ?, ?)`,
 			req.Title, req.Description, startTime, endTime, locIDArg,
-			req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.WorkshopDifficulty,
+			req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, boolToInt(req.NoLiveMusic), req.WorkshopDifficulty,
 			urlVal(req.URL), req.Food, req.Drink, pricingArg, req.ContactName, req.ContactEmail,
 			req.Email, req.SuggesterName, tokenArg, tokenExpiryArg, emailVerified, shortCode,
 		)

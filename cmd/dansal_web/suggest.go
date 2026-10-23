@@ -388,6 +388,7 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			ContactName:   strings.TrimSpace(r.FormValue("contact_name")),
 			ContactEmail:  strings.TrimSpace(r.FormValue("contact_email")),
 			Musicians:     musicians,
+			NoLiveMusic:   r.FormValue("dansal_no_live_music") == "1",
 			Instructors:   instructors,
 			Timetable:     timetableFromForm(r),
 		}
@@ -481,6 +482,7 @@ type wizPrefill struct {
 	ContactName  string              `json:"contact_name"`
 	ContactEmail string              `json:"contact_email"`
 	Musicians    []string            `json:"musicians"`
+	NoLiveMusic  bool                `json:"no_live_music,omitempty"`
 	Instructors  []string            `json:"instructors"`
 	Timetable    []TimetableEntryReq `json:"timetable,omitempty"`
 	// Email/SuggesterName (#1467) are only populated by wizPrefillFromForm,
@@ -608,6 +610,7 @@ func wizPrefillFromForm(r *http.Request) wizPrefill {
 		ContactName:   strings.TrimSpace(r.FormValue("contact_name")),
 		ContactEmail:  strings.TrimSpace(r.FormValue("contact_email")),
 		Musicians:     peopleFromForm(r, "dansal_musicians"),
+		NoLiveMusic:   r.FormValue("dansal_no_live_music") == "1",
 		Instructors:   peopleFromForm(r, "dansal_instructors"),
 		Timetable:     timetableFromForm(r),
 		Email:         r.FormValue("email"),
@@ -831,6 +834,7 @@ func suggestManageSubmitHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			ContactName:  strings.TrimSpace(r.FormValue("contact_name")),
 			ContactEmail: strings.TrimSpace(r.FormValue("contact_email")),
 			Musicians:    musicians,
+			NoLiveMusic:  r.FormValue("dansal_no_live_music") == "1",
 			Instructors:  instructors,
 			Timetable:    timetable,
 		}

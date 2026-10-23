@@ -439,6 +439,36 @@ func boolToInt(b bool) int {
 // the API refuses the combination as a safety net.
 var errNoLiveMusicWithMusicians = errors.New("an event with listed musicians cannot be marked as no live music")
 
+// bulkEventPermitted mirrors the bulk handlers' rule: admins may change any
+// event; others only events without an organisation or of an organisation they
+// belong to.
+func bulkEventPermitted(role string, callerID, id int) bool {
+	if role == RoleAdmin {
+		return true
+	}
+	var existingOrg int
+	if err := db.QueryRow("SELECT COALESCE(organization_id,0) FROM events WHERE id=?", id).Scan(&existingOrg); err != nil {
+		return false
+	}
+	return existingOrg == 0 || isOrgMember(callerID, existingOrg)
+}
+
+// bulkNoLiveMusicConflict reports whether a bulk change would leave the event
+// with both "no live music" and musicians. flag is the requested value (nil
+// keeps the event's current flag); addsMusicians is true when the change adds
+// musicians.
+func bulkNoLiveMusicConflict(id int, flag *bool, addsMusicians bool) bool {
+	var current int
+	db.QueryRow("SELECT no_live_music FROM events WHERE id=?", id).Scan(&current)
+	effFlag := current == 1
+	if flag != nil {
+		effFlag = *flag
+	}
+	var n int
+	db.QueryRow("SELECT COUNT(*) FROM event_musicians WHERE event_id=?", id).Scan(&n)
+	return effFlag && (n > 0 || addsMusicians)
+}
+
 // boolParam converts a "true"/"false" query param string to a SQLite integer.
 func boolParam(s string) int {
 	if s == "true" {
@@ -3964,12 +3994,23 @@ func bulkSetEventAttributes(w http.ResponseWriter, r *http.Request) {
 		Bar            *bool    `json:"bar"`             // nil = skip
 		Kitchen        *bool    `json:"kitchen"`         // nil = skip
 		PricingType    *string  `json:"pricing_type"`    // nil = skip; "free"/"donation"
+		NoLiveMusic    *bool    `json:"no_live_music"`   // nil = skip; sets the flag (#1612)
+		Conflict       string   `json:"conflict"`        // "skip" (default) or "overwrite" when the flag and musicians clash
+		DryRun         bool     `json:"dry_run"`         // report conflicting event IDs, write nothing
 	}
 	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 	if len(req.IDs) == 0 {
 		writeError(w, "ids required", http.StatusBadRequest)
+		return
+	}
+	if req.NoLiveMusic != nil && *req.NoLiveMusic && len(req.AddMusicians) > 0 {
+		writeError(w, errNoLiveMusicWithMusicians.Error(), http.StatusBadRequest)
+		return
+	}
+	if req.Conflict != "" && req.Conflict != "skip" && req.Conflict != "overwrite" {
+		writeError(w, "conflict must be skip or overwrite", http.StatusBadRequest)
 		return
 	}
 	if req.Food != nil && !validFood(*req.Food) {
@@ -3987,6 +4028,25 @@ func bulkSetEventAttributes(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// #1612: musicians and "no live music" exclude each other. A conflicting
+	// event is skipped, unless conflict is "overwrite"; dry_run only reports.
+	conflicts := map[int]bool{}
+	var conflictList []int
+	if req.NoLiveMusic != nil || len(req.AddMusicians) > 0 {
+		for _, id := range req.IDs {
+			if !bulkEventPermitted(role, callerID, id) {
+				continue
+			}
+			if bulkNoLiveMusicConflict(id, req.NoLiveMusic, len(req.AddMusicians) > 0) {
+				conflicts[id] = true
+				conflictList = append(conflictList, id)
+			}
+		}
+	}
+	if req.DryRun {
+		writeJSON(w, map[string]any{"conflicts": conflictList})
+		return
+	}
 	for _, id := range req.IDs {
 		if role != RoleAdmin {
 			var existingOrg int
@@ -3996,6 +4056,20 @@ func bulkSetEventAttributes(w http.ResponseWriter, r *http.Request) {
 			if existingOrg != 0 && !isOrgMember(callerID, existingOrg) {
 				continue
 			}
+		}
+		if conflicts[id] {
+			if req.Conflict != "overwrite" {
+				continue
+			}
+			if req.NoLiveMusic != nil && *req.NoLiveMusic {
+				db.Exec("DELETE FROM event_musicians WHERE event_id=?", id)
+			}
+			if len(req.AddMusicians) > 0 {
+				db.Exec("UPDATE events SET no_live_music=0 WHERE id=?", id)
+			}
+		}
+		if req.NoLiveMusic != nil {
+			db.Exec("UPDATE events SET no_live_music=? WHERE id=?", boolToInt(*req.NoLiveMusic), id)
 		}
 		if req.OrgID != nil {
 			if *req.OrgID == 0 {

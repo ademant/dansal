@@ -129,7 +129,9 @@ test.describe("Legal and help pages", () => {
       }
 
       expect(resp?.status()).toBe(200);
-      await expect(page.locator("h1")).not.toBeEmpty();
+      // The first h1 is the page title from the shared template; the stored
+      // content may carry its own h1 after it, so don't match them all.
+      await expect(page.locator("h1").first()).not.toBeEmpty();
     });
   }
 });

@@ -15,6 +15,10 @@ type SaveError struct {
 	Key    string
 	Detail string
 	Ref    string
+	// ExistingID and ExistingStart name the event a create was refused for
+	// matching (#1637); zero when the admin may not see that event.
+	ExistingID    int
+	ExistingStart int64
 }
 
 // adminSaveError classifies a failed save: 429 and 403 get their own

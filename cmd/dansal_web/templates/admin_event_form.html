@@ -24,7 +24,11 @@
   </div>
 </dialog>
 {{end}}
-{{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}{{template "save-error-extra" (dict "D" .ErrorDetail "R" .ErrorRef "S" $.Strings)}}</p>{{end}}
+{{if eq .ErrorKey "admin_event_dup_url_text"}}<div class="form-error" role="alert">
+  <p>{{$.Strings.T "admin_event_dup_url_text"}}{{if .ErrorExistingID}} <a href="/admin/events/{{.ErrorExistingID}}/edit">{{.ErrorDetail}}</a> ({{fmtUnix .ErrorExistingStart}}){{end}}</p>
+  <p>{{$.Strings.T "admin_event_dup_url_correct"}}</p>
+  <button type="submit" name="intent" value="create_anyway" form="evt-form" class="btn-secondary">{{$.Strings.T "admin_event_dup_url_create_anyway"}}</button>
+</div>{{else if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}{{template "save-error-extra" (dict "D" .ErrorDetail "R" .ErrorRef "S" $.Strings)}}</p>{{end}}
 
 {{if .Event.PendingEditJSON}}
 <div class="pending-edit-banner">

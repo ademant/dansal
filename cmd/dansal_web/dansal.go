@@ -2156,6 +2156,9 @@ func (c *DansalClient) UseMagicLogin(ctx context.Context, token, clientIP, userA
 // ── event creation types ───────────────────────────────────────────────────
 
 type EventCreateReq struct {
+	// CreateAnyway confirms a manual create past a URL and start-time match
+	// with an existing event (#1637).
+	CreateAnyway       bool            `json:"create_anyway,omitempty"`
 	Title              string          `json:"title"`
 	Description        string          `json:"description,omitempty"`
 	StartTime          string          `json:"start_time"`
@@ -2275,10 +2278,35 @@ func (c *DansalClient) GetAdminEventsWithTotal(ctx context.Context, token string
 	return events, total, err
 }
 
+// DuplicateEventError is returned by CreateEvent when the API refuses a manual
+// create because an event with the same URL and start time exists (#1637).
+// The matched event's details are empty when the caller may not see it.
+type DuplicateEventError struct {
+	ExistingID        int    `json:"existing_id"`
+	ExistingTitle     string `json:"existing_title"`
+	ExistingStartTime int64  `json:"existing_start_time"`
+	ExistingShortCode string `json:"existing_short_code"`
+}
+
+func (e *DuplicateEventError) Error() string {
+	return fmt.Sprintf("event with this URL and start time already exists (id %d)", e.ExistingID)
+}
+
 func (c *DansalClient) CreateEvent(ctx context.Context, req EventCreateReq, token string) (Event, error) {
 	body, _ := json.Marshal(req)
+	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/events", token, body)
+	if err != nil {
+		return Event{}, err
+	}
+	if resp.StatusCode == http.StatusConflict {
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, maxAPIErrorBody))
+		var dup DuplicateEventError
+		json.Unmarshal(b, &dup)
+		return Event{}, &dup
+	}
 	var result []Event
-	if err := c.do(ctx, http.MethodPost, "/api/v1/events", token, body, &result, http.StatusCreated, http.StatusOK); err != nil {
+	if err := decodeAPIResponse(resp, &result, http.StatusCreated, http.StatusOK); err != nil {
 		return Event{}, err
 	}
 	if len(result) == 0 {

@@ -35,18 +35,25 @@ export function clearMailbox(): void {
  * short delay between the triggering request and the file being written.
  * The default 15 s timeout gives ample margin even under CI load.
  *
+ * Returns the newest match (the last one in the file). clearMailbox() can fail
+ * silently when the test user cannot unlink the mbox, so an earlier run's
+ * message may still be in it; the message this test triggered is always the
+ * last one written.
+ *
  * Throws if no match appears within `timeoutMs`.
  */
 export async function waitForMail(
   pattern: RegExp,
   timeoutMs = 15_000
 ): Promise<RegExpMatchArray> {
+  const all = new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : pattern.flags + "g");
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
       const content = fs.readFileSync(MAIL_FILE, "utf-8");
-      const m = content.match(pattern);
-      if (m) return m;
+      let newest: RegExpMatchArray | null = null;
+      for (const m of content.matchAll(all)) newest = m;
+      if (newest) return newest;
     } catch {
       // file not written yet — keep polling
     }

@@ -68,7 +68,9 @@ test("TOTP: enable, log in with a second factor, then disable", async ({ browser
       method: "POST",
       form: { code: confirmCode },
     });
-    expect(confirmResp.url()).toBe(`${WEB_BASE}/settings?saved=1`);
+    // Success redirects to /settings?msg=<one-time flash token> (#1516).
+    expect(new URL(confirmResp.url()).pathname).toBe("/settings");
+    expect(new URL(confirmResp.url()).searchParams.has("msg")).toBe(true);
 
     // Enabled state: the disable form (not the setup link) is now shown.
     await setupPage.goto(`${WEB_BASE}/settings`);
@@ -129,7 +131,8 @@ test("TOTP: enable, log in with a second factor, then disable", async ({ browser
         method: "POST",
         form: { code: disableCode },
       });
-      expect(disableResp.url()).toBe(`${WEB_BASE}/settings?saved=1`);
+      expect(new URL(disableResp.url()).pathname).toBe("/settings");
+      expect(new URL(disableResp.url()).searchParams.has("msg")).toBe(true);
 
       await loginPage.goto(`${WEB_BASE}/settings`);
       await expect(

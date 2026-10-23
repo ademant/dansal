@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -155,6 +156,8 @@ type AdminEventFormData struct {
 	ErrorKey           string
 	ErrorDetail        string // #1421: API validation message / reference
 	ErrorRef           string
+	ErrorExistingID    int   // #1637: the event a create matched; 0 if not shown
+	ErrorExistingStart int64 // #1637: its start time
 	UserOrgs           []Organization
 	Templates          []EventTemplate
 	Series             []EventSeries
@@ -2550,6 +2553,8 @@ func renderEventFormError(w http.ResponseWriter, r *http.Request, cfg *Config, t
 		ErrorKey:           se.Key,
 		ErrorDetail:        se.Detail,
 		ErrorRef:           se.Ref,
+		ErrorExistingID:    se.ExistingID,
+		ErrorExistingStart: se.ExistingStart,
 	}))
 }
 
@@ -2683,8 +2688,19 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			return
 		}
 
+		// #1637: "create anyway" is the button shown after a URL and start-time
+		// match was refused; without it the same match is refused again.
+		req.CreateAnyway = intent == "create_anyway"
 		event, err := client.CreateEvent(r.Context(), req, token)
 		if err != nil {
+			var dup *DuplicateEventError
+			if errors.As(err, &dup) {
+				renderErrFull(SaveError{
+					Key: "admin_event_dup_url_text", Detail: dup.ExistingTitle,
+					ExistingID: dup.ExistingID, ExistingStart: dup.ExistingStartTime,
+				})
+				return
+			}
 			log.Printf("create event error: %v", err)
 			renderErrFull(adminSaveError(err))
 			return

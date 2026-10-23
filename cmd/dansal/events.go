@@ -238,8 +238,12 @@ type EventCreateRequest struct {
 	SourceLastModified int64       `json:"source_last_modified,omitempty"`
 	// ICalSequence (#1578): the feed's VEVENT SEQUENCE for this event; an
 	// unchanged sequence on re-import skips the update. Set by the iCal importer.
-	ICalSequence    int    `json:"-"`
-	FetchSourceID   int    `json:"fetch_source_id,omitempty"`
+	ICalSequence  int `json:"-"`
+	FetchSourceID int `json:"fetch_source_id,omitempty"`
+	// CreateAnyway (#1637) confirms a manual create whose URL and start time
+	// match an existing event: the event is inserted as new and flagged for
+	// review, instead of the request being refused with 409.
+	CreateAnyway    bool   `json:"create_anyway,omitempty"`
 	DuplicateStatus string `json:"duplicate_status,omitempty"`
 	// DuplicateHintID (#1424) is preview-response only: the existing event a
 	// row would be flagged against (tier-3 review / tier 5) — reported as
@@ -1181,22 +1185,58 @@ type EventInput struct {
 	HasBall, HasWorkshop, HasFestival bool
 	IsCancelled                       bool
 	NoLiveMusic                       bool
-	WorkshopDifficulty                string
-	BookingURL                        string
-	IsPublished                       bool
-	OrganizationID                    *int
-	UID, URL, Source                  string
-	SourceLastModified                int64
-	ICalSequence                      int
-	Pricing                           *Pricing
-	TimetableTracks                   []TimetableTrack
-	FetchSourceID                     int
-	Food, Drink, FloorCondition       string
-	Attributes                        map[string]bool
-	ContactName, ContactEmail         string
-	CreatedByID                       *int
-	ImageAIGenerated                  bool
-	ReservationRequested              bool
+	// ConfirmNew (#1637): a manual create (no FetchSourceID) that matches an
+	// existing event by URL and start time is inserted as new, flagged for
+	// review, rather than refused with duplicateURLError.
+	ConfirmNew                  bool
+	WorkshopDifficulty          string
+	BookingURL                  string
+	IsPublished                 bool
+	OrganizationID              *int
+	UID, URL, Source            string
+	SourceLastModified          int64
+	ICalSequence                int
+	Pricing                     *Pricing
+	TimetableTracks             []TimetableTrack
+	FetchSourceID               int
+	Food, Drink, FloorCondition string
+	Attributes                  map[string]bool
+	ContactName, ContactEmail   string
+	CreatedByID                 *int
+	ImageAIGenerated            bool
+	ReservationRequested        bool
+}
+
+// duplicateURLError is returned by insertEvent when a manual create (no feed
+// source) matches an existing event by URL and start time (#1637). Nothing is
+// written; the caller reports it so the admin can choose between correcting
+// the entry and creating the event anyway.
+type duplicateURLError struct {
+	ExistingID int
+	ShortCode  string
+	Title      string
+	StartTime  int64
+}
+
+func (e *duplicateURLError) Error() string {
+	return fmt.Sprintf("an event with this URL and start time already exists (id %d)", e.ExistingID)
+}
+
+// writeDuplicateURLConflict answers a refused manual create with 409. The
+// matched event's details are included only for callers who may open it
+// (admins and members of its organisation): a URL and time match must not
+// reveal another organisation's draft.
+func writeDuplicateURLConflict(w http.ResponseWriter, dup *duplicateURLError, callerID int, callerRole string) {
+	body := map[string]any{"error": "an event with this URL and start time already exists"}
+	var orgID sql.NullInt64
+	db.QueryRow("SELECT organization_id FROM events WHERE id = ?", dup.ExistingID).Scan(&orgID)
+	if callerRole == RoleAdmin || (orgID.Valid && isOrgMember(callerID, int(orgID.Int64))) {
+		body["existing_id"] = dup.ExistingID
+		body["existing_title"] = dup.Title
+		body["existing_start_time"] = dup.StartTime
+		body["existing_short_code"] = dup.ShortCode
+	}
+	writeJSONStatus(w, http.StatusConflict, body)
 }
 
 // insertEvent upserts an event. Returns (id, shortCode, outcome, error) where
@@ -1245,6 +1285,18 @@ func insertEventCore(q querier, in EventInput) (int, string, string, error) {
 	existing, tier, err := findExistingEvent(q, title, url, &startTime, locationID, uid, fetchSourceID)
 	if err != nil {
 		return 0, "", "", err
+	}
+	// #1637: a manual create is not a re-send of the event it URL-matches
+	// (tier 2 is meant for feed re-imports). Refuse it so the admin decides;
+	// with ConfirmNew insert a new event and flag both rows for review.
+	if tier == TierURL && fetchSourceID == 0 {
+		if !in.ConfirmNew {
+			return 0, "", "", &duplicateURLError{
+				ExistingID: existing.ID, ShortCode: existing.ShortCode,
+				Title: existing.Title, StartTime: existing.StartTime,
+			}
+		}
+		tier = TierLocationReview
 	}
 	existingID := existing.ID
 	existingShortCode := existing.ShortCode
@@ -1502,6 +1554,7 @@ func createEventFromRequest(q querier, req EventCreateRequest, locationID int64,
 			HasFestival:        req.HasFestival,
 			IsCancelled:        req.IsCancelled,
 			NoLiveMusic:        req.NoLiveMusic,
+			ConfirmNew:         req.CreateAnyway,
 			WorkshopDifficulty: req.WorkshopDifficulty,
 			BookingURL:         req.BookingURL,
 			IsPublished:        isPublished,
@@ -2312,6 +2365,11 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 		}
 		createdEvents, counts, err := createEventFromRequest(tx, req, locationID, reqIsPublished, &callerID)
 		if err != nil {
+			var dup *duplicateURLError
+			if errors.As(err, &dup) {
+				writeDuplicateURLConflict(w, dup, callerID, callerRole)
+				return
+			}
 			writeInternalError(w, err)
 			return
 		}

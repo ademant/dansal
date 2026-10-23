@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -143,6 +144,16 @@ func TestFindExistingEventAgreesWithBothCallers(t *testing.T) {
 				insIn.EndTime = *startPtr + 3600
 			}
 			_, _, insOutcome, err := insertEvent(db, insIn)
+			// #1637: a manual create that URL-matches is refused rather than
+			// merged; that refusal counts as a match.
+			var dup *duplicateURLError
+			if errors.As(err, &dup) {
+				if c.tier != TierURL {
+					t.Fatalf("insertEvent refused with URL match, but tier = %v", c.tier)
+				}
+				insOutcome = "refused"
+				err = nil
+			}
 			if err != nil {
 				t.Fatalf("insertEvent: %v", err)
 			}

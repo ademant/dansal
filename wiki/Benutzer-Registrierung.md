@@ -153,7 +153,7 @@ Unter **Einstellungen** (Klick auf dein Avatar-Symbol) kannst du:
 
 Bis jetzt ist nur Deine E-Mail-Adresse gespeichert. Dies muss keine Adresse sein, welche Du für tägliche Arbeiten verwendest. Es wird davon abgeraten, ein Passwort zu verwenden.
 
-Auf den Profileinstellungen kannst Du einen Nutzernamen festlegen. Nutzername wird aktuell nur verwendet, um anderen angemeldeten Personen zu zeigen, ob Du eine Veranstaltung verändert hast.
+In den Profileinstellungen legst du einen **Anzeigenamen** fest (früher „Nutzername“). Er wird nur verwendet, um anderen angemeldeten Personen zu zeigen, wer eine Veranstaltung zuletzt verändert hat.
 
 ---
 
@@ -236,7 +236,7 @@ Nach dem Scan (oder Öffnen des Links per Telegram/Signal) öffnet sich auf dem 
 
 **Option A — Passkey** (empfohlen): Kein Passwort nötig — der Browser speichert einen kryptografischen Schlüssel auf dem Gerät (Fingerabdruck, Gesicht, PIN).
 
-**Option B — Passwort**: Klassische Anmeldung mit Benutzername und Passwort.
+**Option B — Passwort**: Klassische Anmeldung mit E-Mail-Adresse oder Anzeigename und Passwort.
 
 Anzeigename und E-Mail sind optional — ein Konto ohne E-Mail-Adresse ist möglich.
 

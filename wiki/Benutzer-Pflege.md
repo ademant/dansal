@@ -8,6 +8,8 @@ Für Nutzer gibt es verschiedene Möglichkeiten, Veranstaltungen zu pflegen.
 
 Neben der großen Liste, die über den Menü-Link oben erreicht werden kann, können die Veranstaltungen auch direkt bei den Veranstaltungsorten oder Organisationen verwaltet werden. Bei den Orten und Organisationen gibt es zwei Ansichten: Eine Sicht, die auch den Besuchern dargestellt wird und eine Verwaltungssicht, in der die Veranstaltungen auch über Mehrfachauswahl verarbeitet werden können.
 
+Auf den Dashboards von Organisationen, Orten, Musikern und Anleitern gibt es ein 📅-Symbol, das die Verwaltungsansicht bereits auf diesen Eintrag vorfiltert.
+
 ## Löschen von Veranstaltungen
 
 Das Löschen von Veranstaltungen ist zeitlich begrenzt möglich: für normale Nutzer **einen Monat nach Erstellung**, spätestens aber **einen Monat vor Beginn** (mindestens die ersten **7 Tage** nach Erstellung). Administratoren können jederzeit löschen. Ist eine Veranstaltung schon eine Zeit sichtbar, ist es besser, sie abzusagen – die Absage wird auf der Seite transparent dargestellt.
@@ -33,8 +35,16 @@ Links neben der Tabelle sind verschiedene Aktionen für eine Mehrfachauswahl:
 - **Weitere…**: Verschiedene Eigenschaften (Tags, Tanzstile, Essen, Getränke, Barrierefreiheit, Eintritt) können den ausgewählten Veranstaltungen zugewiesen werden.
 - **Absagen**: Die ausgewählten Veranstaltungen werden abgesagt.
 - **Quelle erneut prüfen**: Die Herkunftsquelle der ausgewählten Veranstaltungen neu abrufen.
-- **Löschen**: Die ausgewählten Veranstaltungen endgültig löschen (nur Administratoren).
+- **Keine Live-Musik**: Ja oder Nein setzen. Gibt es Konflikte mit eingetragenen Musikern, fragt ein Dialog, ob diese Veranstaltungen übersprungen oder überschrieben werden sollen (Details: [Multi-Select](Benutzer-Multi-Select)).
 
+Das Löschen von Veranstaltungen ist in dieser Verwaltungsansicht nicht enthalten. Administratoren finden es auf der Veranstaltungsliste und auf den Dashboards.
+
+
+## Filter und CSV-Export
+
+Oberhalb der Tabelle kannst du die Liste eingrenzen: nach **Organisation**, **Ort**, **Stadt**, **Datum** (von / bis), **Musikern** und **Anleitern** (jeweils mehrere möglich), sowie nach **nicht veröffentlicht** und **mit Quelle**. Die Filter wirken auf dem Server, die Liste bleibt also vollständig, auch bei vielen Veranstaltungen.
+
+Mit **CSV exportieren** lädst du genau die gefilterten Veranstaltungen als Tabelle herunter. Die Datei nutzt das Trennzeichen `|` und ein UTF-8-Kodierungszeichen. In LibreOffice Calc wählst du dafür im Importdialog das Trennzeichen „Andere“ und tippst `|` ein.
 
 ## Terminempfehlungen
 

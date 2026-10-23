@@ -9,7 +9,7 @@ Diese Seite richtet sich an Systemadministratoren, die eine dansal-Instanz insta
 ## 💻 Systemanforderungen
 
 - **Betriebssystem**: Linux mit systemd (Debian/Ubuntu empfohlen)
-- **Go**: 1.26+ (für den Build aus dem Quellcode)
+- **Go**: 1.27+ (für den Build aus dem Quellcode)
 - **nginx**: Reverse-Proxy für TLS-Terminierung
 - **certbot**: Let's-Encrypt-TLS-Zertifikate
 - **openssl**: Wird vom Installer für Secret- und mTLS-Zertifikatserstellung benötigt
@@ -108,16 +108,15 @@ Die wichtigsten Einstellungen in `config.yaml`:
 | `server.base_url` | Öffentliche API-URL, für E-Mails und iCal-Feeds (erforderlich) |
 | `server.token_expiration_hours` | Sitzungsdauer in Stunden (Standard 24) |
 | `server.invite_expiry_hours` | Gültigkeitsdauer von Einladungslinks (Standard 48) |
-| `server.rate_limit` | Anfragen pro Minute pro IP (Standard 100) |
+| `server.rate_limit` | Anfragen pro Minute pro IP (Standard 30) |
 | `server.login_rate_limit` | Login-Versuche pro Minute pro IP (Standard 5) |
-| `server.admin_allowed_ips` | IPs mit Zugriff auf `/api/v1/admin/*` (Standard: nur localhost) |
 | `server.allowed_origins` | Für die API erlaubte CORS-Origins (Standard: alle) |
 
 Web-Frontend (`web.yaml`) und Webmin (`webmin.yaml`) haben jeweils eigene Schlüssel für Domain, ActivityPub, Branding und Verbindungseinstellungen – siehe die Beispiel-Konfigurationsdateien im Quellverzeichnis für die vollständige Liste.
 
 ## 🔄 Bestehende Instanz aktualisieren
 
-Immer alle vier Binaries gemeinsam bauen und als Einheit deployen:
+Immer alle fünf Binaries gemeinsam bauen und als Einheit deployen:
 
 ```bash
 # Bauen (als normaler Benutzer – sudo hat kein go im PATH)

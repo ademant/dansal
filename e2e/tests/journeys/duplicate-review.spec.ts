@@ -128,7 +128,8 @@ test.describe("Duplicate review (#1427)", () => {
     const gone = await page.request.fetch(`${API_BASE}/api/v1/events/${b}`, {
       headers: { Authorization: `Bearer ${await getTokenFromCookie(page)}` },
     });
-    expect(gone.status()).toBe(404);
+    // Deleted events are tombstoned and answer 410 Gone, not 404 (#1455).
+    expect(gone.status()).toBe(410);
   });
 
   test("entry points: list link, event-page banner, edit-form check dialog", async ({ page }) => {

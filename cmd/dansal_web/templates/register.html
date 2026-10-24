@@ -131,9 +131,10 @@
         <input type="text" id="field-org-name" name="org_name" class="form-input" value="{{.PrefillOrgName}}">
       </div>
       <div class="form-group">
-        <label for="field-org-actor-name">{{$.Strings.T "register_org_actor_name"}}</label>
-        <input type="text" id="field-org-actor-name" name="org_actor_name" class="form-input" pattern="[a-zA-Z0-9_-]+" title="Letters, digits, underscores and hyphens only" value="{{.PrefillOrgActorName}}">
+        <label for="field-org-actor-name">{{$.Strings.T "org_actor_name"}}</label>
+        <input type="text" id="field-org-actor-name" name="org_actor_name" class="form-input" pattern="[a-zA-Z0-9_-]+" title="Letters, digits, underscores and hyphens only" value="{{.PrefillOrgActorName}}" data-on="input" data-fn="updateActorPreview" data-args='["@value"]'>
         <p class="form-hint">{{$.Strings.T "register_org_actor_name_hint"}}</p>
+        <p class="form-hint" id="actor-preview" aria-live="polite" data-host="{{$.Domain}}">{{with .PrefillOrgActorName}}@{{.}}@{{$.Domain}}{{end}}</p>
       </div>
       <div class="form-group">
         <label for="field-org-desc">{{$.Strings.T "register_org_desc"}}</label>

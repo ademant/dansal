@@ -356,13 +356,29 @@ function tzNote(d, fallbackLabel, unparsedLabel){
   if (d.unparsed) parts.push(d.unparsed + ' ' + unparsedLabel);
   return parts.length ? ', ⚠ ' + parts.join(', ') : '';
 }
+// nominatimSearch: one lookup. Pasted venue addresses often start with the
+// venue name ("Aurachsaal, Gaisbühlstr. 4, Erlangen"), which Nominatim does not
+// match. So when the query finds nothing and has several comma-separated parts,
+// it retries once without the first part. cb(results, meta): meta.strippedPrefix
+// is the dropped part when the retry found something. Callers that do not use
+// it ignore the second argument. At most one extra request, and only on an
+// empty result (#1650).
 function nominatimSearch(q, lang, limit, cb){
-  var url = '/search/geocode/search?q=' + encodeURIComponent(q) + '&limit=' + (limit || 5);
-  if (lang) url += '&lang=' + encodeURIComponent(lang);
-  if (_geoToken) url += '&geo_token=' + encodeURIComponent(_geoToken);
-  fetch(url).then(function(r){ return r.json(); }).then(function(data){
-    cb(data || []);
-  }).catch(function(){ cb([]); });
+  function ask(query, next){
+    var url = '/search/geocode/search?q=' + encodeURIComponent(query) + '&limit=' + (limit || 5);
+    if (lang) url += '&lang=' + encodeURIComponent(lang);
+    if (_geoToken) url += '&geo_token=' + encodeURIComponent(_geoToken);
+    fetch(url).then(function(r){ return r.json(); }).then(function(data){
+      next(data || []);
+    }).catch(function(){ next([]); });
+  }
+  var parts = String(q).split(',').map(function(p){ return p.trim(); }).filter(Boolean);
+  ask(q, function(data){
+    if (data.length || parts.length < 2) { cb(data, {}); return; }
+    ask(parts.slice(1).join(', '), function(retry){
+      cb(retry, retry.length ? {strippedPrefix: parts[0]} : {});
+    });
+  });
 }
 function nominatimReverse(lat, lon, lang, cb){
   var url = '/search/geocode/reverse?lat=' + lat + '&lon=' + lon;

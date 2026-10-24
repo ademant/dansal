@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"io"
-	"log"
 	"math"
 	"net/http"
 	"net/url"
@@ -102,7 +102,7 @@ func adminOrgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 				var err error
 				statMap, err = client.GetOrgStats(r.Context())
 				if err != nil {
-					log.Printf("admin orgs: could not load stats: %v", err)
+					logging.Errorf("admin orgs: could not load stats: %v", err)
 				}
 				return nil
 			},
@@ -110,7 +110,7 @@ func adminOrgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 				var err error
 				sources, err = client.GetFetchSources(r.Context(), token)
 				if err != nil {
-					log.Printf("admin orgs: could not load fetch sources: %v", err)
+					logging.Errorf("admin orgs: could not load fetch sources: %v", err)
 				}
 				return nil
 			},
@@ -118,7 +118,7 @@ func adminOrgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 				var err error
 				locations, err = client.GetLocations(r.Context())
 				if err != nil {
-					log.Printf("admin orgs: could not load locations: %v", err)
+					logging.Errorf("admin orgs: could not load locations: %v", err)
 				}
 				return nil
 			},
@@ -238,7 +238,7 @@ func adminOrgCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			data, _ := io.ReadAll(file)
 			file.Close()
 			if uerr := client.UploadOrgImage(r.Context(), created.ID, data, header.Filename, token); uerr != nil {
-				log.Printf("upload org image error: %v", uerr)
+				logging.Errorf("upload org image error: %v", uerr)
 				flash = imageUploadErrorFlash("image", uerr)
 			}
 		}
@@ -246,7 +246,7 @@ func adminOrgCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			data, _ := io.ReadAll(file)
 			file.Close()
 			if uerr := client.UploadOrgAvatar(r.Context(), created.ID, data, header.Filename, token); uerr != nil {
-				log.Printf("upload org avatar error: %v", uerr)
+				logging.Errorf("upload org avatar error: %v", uerr)
 				if flash.ImageUploadError == "" {
 					flash = imageUploadErrorFlash("avatar", uerr)
 				}
@@ -397,18 +397,18 @@ func adminOrgFollowHandler(cfg *Config, db *sql.DB, client *DansalClient) http.H
 		}
 		apID, inboxURL, err := resolveActorFromInput(r.Context(), client.HTTP, input)
 		if err != nil {
-			log.Printf("follow resolve %q: %v", input, err)
+			logging.Errorf("follow resolve %q: %v", input, err)
 			http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit?follow_err=%s", id, url.QueryEscape("could not resolve: "+err.Error())), http.StatusSeeOther)
 			return
 		}
 		followActivityID, err := sendFollowActivity(cfg, actor, apID, inboxURL)
 		if err != nil {
-			log.Printf("sendFollow %s: %v", apID, err)
+			logging.Errorf("sendFollow %s: %v", apID, err)
 			http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit?follow_err=%s", id, url.QueryEscape("delivery failed: "+err.Error())), http.StatusSeeOther)
 			return
 		}
 		if err := addFollow(db, actor.ID, apID, inboxURL, followActivityID); err != nil {
-			log.Printf("addFollow: %v", err)
+			logging.Errorf("addFollow: %v", err)
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", id), http.StatusSeeOther)
 	}
@@ -440,11 +440,11 @@ func adminOrgUnfollowHandler(cfg *Config, db *sql.DB, client *DansalClient) http
 		}
 		if follow, err := getFollow(db, actor.ID, followeeAPID); err == nil {
 			if err := sendUndoFollow(cfg, actor, followeeAPID, follow.FolloweeInbox, follow.FollowActivityID); err != nil {
-				log.Printf("sendUndoFollow %s: %v", followeeAPID, err)
+				logging.Errorf("sendUndoFollow %s: %v", followeeAPID, err)
 			}
 		}
 		if err := removeFollow(db, actor.ID, followeeAPID); err != nil {
-			log.Printf("removeFollow: %v", err)
+			logging.Errorf("removeFollow: %v", err)
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", id), http.StatusSeeOther)
 	}
@@ -473,11 +473,11 @@ func adminOrgMemberHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		}
 		if action == "remove" {
 			if err := client.RemoveOrgMember(r.Context(), orgID, userID, token); err != nil {
-				log.Printf("remove org member %d from %d: %v", userID, orgID, err)
+				logging.Errorf("remove org member %d from %d: %v", userID, orgID, err)
 			}
 		} else {
 			if err := client.AddOrgMember(r.Context(), orgID, userID, token); err != nil {
-				log.Printf("add org member %d to %d: %v", userID, orgID, err)
+				logging.Errorf("add org member %d to %d: %v", userID, orgID, err)
 			}
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", orgID), http.StatusSeeOther)
@@ -518,11 +518,11 @@ func adminOrgLocationsHandler(cfg *Config, client *DansalClient) http.HandlerFun
 		}
 		if action == "remove" {
 			if err := client.UnassignLocationOrg(r.Context(), locID, orgID, token); err != nil {
-				log.Printf("unassign org %d from location %d: %v", orgID, locID, err)
+				logging.Errorf("unassign org %d from location %d: %v", orgID, locID, err)
 			}
 		} else {
 			if err := client.BulkAssignLocationOrg(r.Context(), []int{locID}, &orgID, token); err != nil {
-				log.Printf("assign org %d to location %d: %v", orgID, locID, err)
+				logging.Errorf("assign org %d to location %d: %v", orgID, locID, err)
 			}
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", orgID), http.StatusSeeOther)
@@ -599,7 +599,7 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 			data, _ := io.ReadAll(file)
 			file.Close()
 			if uerr := client.UploadOrgImage(r.Context(), id, data, header.Filename, token); uerr != nil {
-				log.Printf("upload org image error: %v", uerr)
+				logging.Errorf("upload org image error: %v", uerr)
 				flash = imageUploadErrorFlash("image", uerr)
 			}
 		}
@@ -607,7 +607,7 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 			data, _ := io.ReadAll(file)
 			file.Close()
 			if uerr := client.UploadOrgAvatar(r.Context(), id, data, header.Filename, token); uerr != nil {
-				log.Printf("upload org avatar error: %v", uerr)
+				logging.Errorf("upload org avatar error: %v", uerr)
 				if flash.ImageUploadError == "" {
 					flash = imageUploadErrorFlash("avatar", uerr)
 				}
@@ -622,7 +622,7 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 			newSlug := effectiveSlug(org)
 			if newSlug != effectiveSlug(originalOrg) {
 				if _, err := ensureActorWithMove(cfg, db, id, newSlug); err != nil {
-					log.Printf("actor rename for org %d: %v", id, err)
+					logging.Errorf("actor rename for org %d: %v", id, err)
 				}
 			}
 		}
@@ -666,7 +666,7 @@ func adminOrgDeleteHandler(cfg *Config, db *sql.DB, client *DansalClient) http.H
 			oldSlug = effectiveSlug(org)
 		}
 		if err := client.DeleteOrganization(r.Context(), id, getSessionToken(r)); err != nil {
-			log.Printf("delete organization %d: %v", id, err)
+			logging.Errorf("delete organization %d: %v", id, err)
 		} else if oldSlug != "" {
 			tombstoneOrgSlug(db, oldSlug)
 		}
@@ -702,7 +702,7 @@ func adminOrgRunFeedsHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 			}
 			if len(ids) > 0 {
 				if err := client.BulkRunFetchSources(r.Context(), ids, token); err != nil {
-					log.Printf("run feeds for org %d: %v", id, err)
+					logging.Errorf("run feeds for org %d: %v", id, err)
 				}
 			}
 		}
@@ -743,12 +743,12 @@ func adminOrgRedeliverHandler(cfg *Config, db *sql.DB, client *DansalClient) htt
 			}
 			events, err := client.GetEventsFiltered(ctx, params)
 			if err != nil {
-				log.Printf("redeliver org %d: fetch events: %v", id, err)
+				logging.Errorf("redeliver org %d: fetch events: %v", id, err)
 				return
 			}
 			actor, err := getActorByOrgID(db, id)
 			if err != nil {
-				log.Printf("redeliver org %d: actor not found: %v", id, err)
+				logging.Errorf("redeliver org %d: actor not found: %v", id, err)
 				return
 			}
 			sent := 0
@@ -758,12 +758,12 @@ func adminOrgRedeliverHandler(cfg *Config, db *sql.DB, client *DansalClient) htt
 				}
 				activity := buildCreateActivity(cfg, actor.OrgSlug, e)
 				if err := deliverActivityToFollowers(cfg, db, actor, activity); err != nil {
-					log.Printf("redeliver org %d event %d: %v", id, e.ID, err)
+					logging.Errorf("redeliver org %d event %d: %v", id, e.ID, err)
 				} else {
 					sent++
 				}
 			}
-			log.Printf("redeliver org %d: sent %d Create activities", id, sent)
+			logging.Infof("redeliver org %d: sent %d Create activities", id, sent)
 		}()
 		http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", id), http.StatusSeeOther)
 	}
@@ -814,7 +814,7 @@ func adminOrgImageDeleteHandler(cfg *Config, client *DansalClient) http.HandlerF
 			return
 		}
 		if err := client.DeleteOrgImage(r.Context(), id, getSessionToken(r)); err != nil {
-			log.Printf("delete org image %d: %v", id, err)
+			logging.Errorf("delete org image %d: %v", id, err)
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", id), http.StatusSeeOther)
 	}
@@ -831,7 +831,7 @@ func adminOrgAvatarDeleteHandler(cfg *Config, client *DansalClient) http.Handler
 			return
 		}
 		if err := client.DeleteOrgAvatar(r.Context(), id, getSessionToken(r)); err != nil {
-			log.Printf("delete org avatar %d: %v", id, err)
+			logging.Errorf("delete org avatar %d: %v", id, err)
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", id), http.StatusSeeOther)
 	}

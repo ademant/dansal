@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"html/template"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -147,7 +147,7 @@ func openWebDB(path string) *sql.DB {
 	}
 	db, err := sql.Open("sqlite3", path+"?_busy_timeout=5000&_journal_mode=WAL&_foreign_keys=ON")
 	if err != nil {
-		log.Printf("open web db %s: %v", path, err)
+		logging.Errorf("open web db %s: %v", path, err)
 		return nil
 	}
 	db.SetMaxOpenConns(4)
@@ -166,7 +166,7 @@ func getSiteSetting(db *sql.DB, key string) string {
 		// Missing key is expected; missing table happens on a brand-new DB
 		// before dansal-web has created it. Anything else is worth logging.
 		if err != sql.ErrNoRows && !strings.Contains(err.Error(), "no such table") {
-			log.Printf("get site setting %s: %v", key, err)
+			logging.Errorf("get site setting %s: %v", key, err)
 		}
 		return ""
 	}
@@ -180,7 +180,7 @@ func setSiteSetting(db *sql.DB, key, value string) {
 	if _, err := db.Exec(
 		"INSERT INTO site_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
 		key, value); err != nil {
-		log.Printf("set site setting %s: %v", key, err)
+		logging.Errorf("set site setting %s: %v", key, err)
 	}
 }
 
@@ -275,7 +275,7 @@ func handleAssetUploads(r *http.Request, dir string, keys []string, allowGIF boo
 			continue
 		}
 		if err := saveSiteAsset(dir, key, data); err != nil {
-			log.Printf("save site asset %s: %v", key, err)
+			logging.Errorf("save site asset %s: %v", key, err)
 		} else {
 			saved = append(saved, key)
 		}
@@ -286,7 +286,7 @@ func handleAssetUploads(r *http.Request, dir string, keys []string, allowGIF boo
 func fetchDances(ctx context.Context, dansalURL string) []dance {
 	var dances []dance
 	if err := getJSON(ctx, dansalURL+"/api/v1/dances", &dances); err != nil {
-		log.Printf("fetch dances: %v", err)
+		logging.Errorf("fetch dances: %v", err)
 		return nil
 	}
 	return dances
@@ -299,7 +299,7 @@ func loadDefaultDanceIDs(db *sql.DB) map[int]bool {
 	}
 	var ids []int
 	if err := json.Unmarshal([]byte(raw), &ids); err != nil {
-		log.Printf("default dance ids: parse %q: %v", raw, err)
+		logging.Errorf("default dance ids: parse %q: %v", raw, err)
 		return nil
 	}
 	m := make(map[int]bool, len(ids))
@@ -580,9 +580,9 @@ func siteConfigSaveHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		}
 
 		if len(uploadedAssets) > 0 {
-			log.Printf("audit: site_settings assets=[%s] updated by user=%d", strings.Join(uploadedAssets, ","), callerID)
+			logging.Infof("audit: site_settings assets=[%s] updated by user=%d", strings.Join(uploadedAssets, ","), callerID)
 		}
-		log.Printf("audit: site_settings keys=[site_name,contact,holiday_country,default_dance_ids,indexnow_key,rescheduled_badge_days,watchlist_retention_months,logo_ai_generated,banner_ai_generated,date_format,time_format,same_as,security_contact,security_policy,security_expires] updated by user=%d", callerID)
+		logging.Infof("audit: site_settings keys=[site_name,contact,holiday_country,default_dance_ids,indexnow_key,rescheduled_badge_days,watchlist_retention_months,logo_ai_generated,banner_ai_generated,date_format,time_format,same_as,security_contact,security_policy,security_expires] updated by user=%d", callerID)
 
 		http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Settings saved"), http.StatusSeeOther)
 	}
@@ -616,7 +616,7 @@ func siteConfigLegalTextSaveHandler(db *sql.DB) http.HandlerFunc {
 
 		tx, err := db.Begin()
 		if err != nil {
-			log.Printf("begin legal text save %s: %v", page, err)
+			logging.Errorf("begin legal text save %s: %v", page, err)
 			http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Error: could not save"), http.StatusSeeOther)
 			return
 		}
@@ -630,13 +630,13 @@ func siteConfigLegalTextSaveHandler(db *sql.DB) http.HandlerFunc {
 				page+"_"+lang, text,
 			); err != nil {
 				_ = tx.Rollback()
-				log.Printf("save legal text %s/%s: %v", page, lang, err)
+				logging.Errorf("save legal text %s/%s: %v", page, lang, err)
 				http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Error: could not save"), http.StatusSeeOther)
 				return
 			}
 		}
 		if err := tx.Commit(); err != nil {
-			log.Printf("commit legal text save %s: %v", page, err)
+			logging.Errorf("commit legal text save %s: %v", page, err)
 			http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Error: could not save"), http.StatusSeeOther)
 			return
 		}
@@ -645,7 +645,7 @@ func siteConfigLegalTextSaveHandler(db *sql.DB) http.HandlerFunc {
 		if u := getSessionUser(r); u != nil {
 			callerID = u.ID
 		}
-		log.Printf("audit: site_settings legal_page=%s updated by user=%d", page, callerID)
+		logging.Infof("audit: site_settings legal_page=%s updated by user=%d", page, callerID)
 		http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Saved"), http.StatusSeeOther)
 	}
 }
@@ -672,7 +672,7 @@ func siteConfigLegalTextExportHandler(db *sql.DB) http.HandlerFunc {
 			var text string
 			err := db.QueryRow("SELECT value FROM site_settings WHERE key = ?", page+"_"+lang).Scan(&text)
 			if err != nil && err != sql.ErrNoRows {
-				log.Printf("export legal text %s/%s: %v", page, lang, err)
+				logging.Errorf("export legal text %s/%s: %v", page, lang, err)
 				http.Error(w, "could not read legal document", http.StatusInternalServerError)
 				return
 			}
@@ -682,7 +682,7 @@ func siteConfigLegalTextExportHandler(db *sql.DB) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Header().Set("Content-Disposition", `attachment; filename="`+page+`.json"`)
 		if err := json.NewEncoder(w).Encode(export); err != nil {
-			log.Printf("encode legal text export %s: %v", page, err)
+			logging.Errorf("encode legal text export %s: %v", page, err)
 		}
 	}
 }
@@ -738,7 +738,7 @@ func siteConfigLegalTextImportHandler(db *sql.DB) http.HandlerFunc {
 
 		tx, err := db.Begin()
 		if err != nil {
-			log.Printf("begin legal text import %s: %v", page, err)
+			logging.Errorf("begin legal text import %s: %v", page, err)
 			redirectLegalTextImport(w, r, page, "Error: could not import legal text")
 			return
 		}
@@ -755,13 +755,13 @@ func siteConfigLegalTextImportHandler(db *sql.DB) http.HandlerFunc {
 				page+"_"+lang, text,
 			); err != nil {
 				_ = tx.Rollback()
-				log.Printf("save imported legal text %s/%s: %v", page, lang, err)
+				logging.Errorf("save imported legal text %s/%s: %v", page, lang, err)
 				redirectLegalTextImport(w, r, page, "Error: could not import legal text")
 				return
 			}
 		}
 		if err := tx.Commit(); err != nil {
-			log.Printf("commit legal text import %s: %v", page, err)
+			logging.Errorf("commit legal text import %s: %v", page, err)
 			redirectLegalTextImport(w, r, page, "Error: could not import legal text")
 			return
 		}
@@ -770,7 +770,7 @@ func siteConfigLegalTextImportHandler(db *sql.DB) http.HandlerFunc {
 		if u := getSessionUser(r); u != nil {
 			callerID = u.ID
 		}
-		log.Printf("audit: site_settings legal_page=%s imported_languages=%d by user=%d", page, len(imported.Languages), callerID)
+		logging.Infof("audit: site_settings legal_page=%s imported_languages=%d by user=%d", page, len(imported.Languages), callerID)
 		redirectLegalTextImport(w, r, page, "Legal text translations imported")
 	}
 }
@@ -822,7 +822,7 @@ func siteConfigRelayAssetsHandler(cfg *Config) http.HandlerFunc {
 		}
 		uploaded := handleAssetUploads(r, cfg.ImagesDir, []string{"relay-avatar", "relay-banner"}, true)
 		if len(uploaded) > 0 {
-			log.Printf("audit: relay assets=[%s] updated by user=%d", strings.Join(uploaded, ","), callerID)
+			logging.Infof("audit: relay assets=[%s] updated by user=%d", strings.Join(uploaded, ","), callerID)
 			go notifyRelayProfileUpdate(cfg)
 		}
 		http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Relay assets uploaded"), http.StatusSeeOther)
@@ -833,17 +833,17 @@ func notifyRelayProfileUpdate(cfg *Config) {
 	target := strings.TrimRight(cfg.WebURL, "/") + "/internal/relay/profile-update"
 	req, err := http.NewRequest(http.MethodPost, target, nil)
 	if err != nil {
-		log.Printf("relay profile update: create request: %v", err)
+		logging.Errorf("relay profile update: create request: %v", err)
 		return
 	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		log.Printf("relay profile update: call dansal-web: %v", err)
+		logging.Errorf("relay profile update: call dansal-web: %v", err)
 		return
 	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
-		log.Printf("relay profile update: dansal-web returned %s", resp.Status)
+		logging.Warnf("relay profile update: dansal-web returned %s", resp.Status)
 	}
 }
 
@@ -854,7 +854,7 @@ func siteConfigRelayRedeliverHandler(cfg *Config) http.HandlerFunc {
 		target := strings.TrimRight(cfg.WebURL, "/") + "/internal/relay/redeliver"
 		resp, err := httpClient.Post(target, "application/json", nil)
 		if err != nil {
-			log.Printf("relay redeliver: call dansal-web: %v", err)
+			logging.Errorf("relay redeliver: call dansal-web: %v", err)
 			http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Redeliver failed: "+err.Error()), http.StatusSeeOther)
 			return
 		}
@@ -916,7 +916,7 @@ func siteConfigTimezoneHandler(cfg *Config) http.HandlerFunc {
 		}); !ok {
 			return
 		}
-		log.Printf("audit: server.timezone set to %s by user=%d", tz, callerID)
+		logging.Infof("audit: server.timezone set to %s by user=%d", tz, callerID)
 		http.Redirect(w, r, "/site-config?flash="+url.QueryEscape("Timezone set to "+tz+" — applied immediately, no restart needed"), http.StatusSeeOther)
 	}
 }

@@ -2,8 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/ademant/dansal/internal/logging"
 	"html/template"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -498,7 +498,7 @@ func embedCalendarHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 
 		allTags, err := client.GetTags(r.Context())
 		if err != nil {
-			log.Printf("embed calendar: could not load tags: %v", err)
+			logging.Errorf("embed calendar: could not load tags: %v", err)
 		}
 
 		// fpLocales maps a dansal language code to the flatpickr locale file

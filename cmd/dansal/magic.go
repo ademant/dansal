@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"strconv"
 	"time"
@@ -66,19 +66,19 @@ func generateAdminMagicLink(w http.ResponseWriter, r *http.Request) {
 		sentTo = "telegram"
 		go func() {
 			if err2 := sendTelegramMessage(telegramChatID, msgText); err2 != nil {
-				log.Printf("magic: telegram send failed for user %d: %v", userID, err2)
+				logging.Errorf("magic: telegram send failed for user %d: %v", userID, err2)
 			}
 		}()
 	} else if matrixVerified == 1 && matrixID != "" {
 		sentTo = "matrix"
 		go func() {
 			if err2 := sendMatrixMessage(matrixID, msgText); err2 != nil {
-				log.Printf("magic: matrix send failed for user %d: %v", userID, err2)
+				logging.Errorf("magic: matrix send failed for user %d: %v", userID, err2)
 			}
 		}()
 	}
 
-	log.Printf("magic: admin user %s generated login link for user %d (sent_to=%q)", r.Header.Get("X-User-ID"), userID, sentTo)
+	logging.Debugf("magic: admin user %s generated login link for user %d (sent_to=%q)", r.Header.Get("X-User-ID"), userID, sentTo)
 	json.NewEncoder(w).Encode(map[string]string{
 		"url":        magicURL,
 		"expires_at": expiresAt.Format(time.RFC3339),
@@ -116,7 +116,7 @@ func generateSelfMagicLink(w http.ResponseWriter, r *http.Request) {
 	}
 	db.Exec("UPDATE users SET last_magic_sent_at=? WHERE id=?", time.Now().UTC().Unix(), callerID)
 
-	log.Printf("magic: user %d generated self magic link", callerID)
+	logging.Infof("magic: user %d generated self magic link", callerID)
 	json.NewEncoder(w).Encode(map[string]string{
 		"url":        buildBaseURL(r) + "/login/magic/" + token,
 		"expires_at": expiresAt.Format(time.RFC3339),
@@ -232,10 +232,10 @@ func requestMagicLogin(w http.ResponseWriter, r *http.Request) {
 		}
 		if err != nil {
 			db.Exec("DELETE FROM magic_login_tokens WHERE token=?", sha256Hex(token))
-			log.Printf("magic: send failed for user %d (%s) via %s: %v", user.ID, user.Email, req.Channel, err)
+			logging.Errorf("magic: send failed for user %d (%s) via %s: %v", user.ID, user.Email, req.Channel, err)
 			return
 		}
-		log.Printf("magic: sent login link to user %d (%s) via %s", user.ID, user.Email, req.Channel)
+		logging.Debugf("magic: sent login link to user %d (%s) via %s", user.ID, user.Email, req.Channel)
 	}()
 
 	w.WriteHeader(http.StatusNoContent)
@@ -283,12 +283,12 @@ func useMagicLogin(w http.ResponseWriter, r *http.Request) {
 	clientIP := getClientIP(r)
 	sessionToken, sessionExpiry, err := createTokenInDB(user.ID, r.UserAgent(), clientIP, "")
 	if err != nil {
-		log.Printf("magic: failed to create session for user %d: %v", user.ID, err)
+		logging.Errorf("magic: failed to create session for user %d: %v", user.ID, err)
 		writeError(w, "Failed to create session", http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("magic: user %d (%s) logged in via magic link from %s", user.ID, user.Email, clientIP)
+	logging.Debugf("magic: user %d (%s) logged in via magic link from %s", user.ID, user.Email, clientIP)
 	json.NewEncoder(w).Encode(LoginResponse{
 		Token:     sessionToken,
 		ExpiresAt: sessionExpiry.Format(time.RFC3339),

@@ -9,7 +9,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -22,6 +21,7 @@ import (
 	"time"
 
 	"github.com/ademant/dansal/internal/instance"
+	"github.com/ademant/dansal/internal/logging"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -50,7 +50,7 @@ func updateLastSeen(token string) {
 	lastSeenMu.Unlock()
 	go func() {
 		if _, err := db.Exec("UPDATE tokens SET last_seen_at=? WHERE token=?", now.Unix(), sha256Hex(token)); err != nil {
-			log.Printf("warn: update last_seen_at: %v", err)
+			logging.Errorf("warn: update last_seen_at: %v", err)
 		}
 	}()
 }
@@ -396,9 +396,9 @@ func startTokenCleanup() {
 			now := time.Now().UTC().Unix()
 			res, err := db.Exec("DELETE FROM tokens WHERE expires_at < ?", now)
 			if err != nil {
-				log.Printf("token cleanup: %v", err)
+				logging.Errorf("token cleanup: %v", err)
 			} else if n, _ := res.RowsAffected(); n > 0 {
-				log.Printf("token cleanup: removed %d expired token(s)", n)
+				logging.Debugf("token cleanup: removed %d expired token(s)", n)
 			}
 			db.Exec("DELETE FROM verification_tokens WHERE expires_at < ?", now)
 			db.Exec("DELETE FROM magic_login_tokens WHERE expires_at < ?", now)
@@ -446,7 +446,7 @@ func startTokenCleanup() {
 			// one, and running after the DELETEs above so it sees the
 			// table shapes those just changed.
 			if _, err := db.Exec("PRAGMA optimize"); err != nil {
-				log.Printf("PRAGMA optimize: %v", err)
+				logging.Errorf("PRAGMA optimize: %v", err)
 			}
 		}
 	}()
@@ -466,19 +466,19 @@ func migrateUsersRoles() {
 
 	conn, err := db.Conn(context.Background())
 	if err != nil {
-		log.Printf("migrateUsersRoles: get conn: %v", err)
+		logging.Errorf("migrateUsersRoles: get conn: %v", err)
 		return
 	}
 	defer conn.Close()
 
 	if _, err = conn.ExecContext(context.Background(), "PRAGMA foreign_keys=OFF"); err != nil {
-		log.Printf("migrateUsersRoles: pragma off: %v", err)
+		logging.Errorf("migrateUsersRoles: pragma off: %v", err)
 		return
 	}
 
 	tx, err := conn.BeginTx(context.Background(), nil)
 	if err != nil {
-		log.Printf("migrateUsersRoles: begin: %v", err)
+		logging.Errorf("migrateUsersRoles: begin: %v", err)
 		conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
 		return
 	}
@@ -515,12 +515,12 @@ func migrateUsersRoles() {
 		if _, err := tx.ExecContext(context.Background(), stmt); err != nil {
 			tx.Rollback()
 			conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
-			log.Printf("migrateUsersRoles: %v", err)
+			logging.Errorf("migrateUsersRoles: %v", err)
 			return
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		log.Printf("migrateUsersRoles: commit: %v", err)
+		logging.Errorf("migrateUsersRoles: commit: %v", err)
 	}
 	conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
 }
@@ -535,20 +535,20 @@ func migrateLocationsLatLng() {
 
 	conn, err := db.Conn(context.Background())
 	if err != nil {
-		log.Printf("migrateLocationsLatLng: %v", err)
+		logging.Errorf("migrateLocationsLatLng: %v", err)
 		return
 	}
 	defer conn.Close()
 
 	if _, err = conn.ExecContext(context.Background(), "PRAGMA foreign_keys=OFF"); err != nil {
-		log.Printf("migrateLocationsLatLng: pragma off: %v", err)
+		logging.Errorf("migrateLocationsLatLng: pragma off: %v", err)
 		return
 	}
 
 	tx, err := conn.BeginTx(context.Background(), nil)
 	if err != nil {
 		conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
-		log.Printf("migrateLocationsLatLng: begin: %v", err)
+		logging.Errorf("migrateLocationsLatLng: begin: %v", err)
 		return
 	}
 
@@ -578,12 +578,12 @@ func migrateLocationsLatLng() {
 		if _, err := tx.ExecContext(context.Background(), stmt); err != nil {
 			tx.Rollback()
 			conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
-			log.Printf("migrateLocationsLatLng: %v", err)
+			logging.Errorf("migrateLocationsLatLng: %v", err)
 			return
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		log.Printf("migrateLocationsLatLng: commit: %v", err)
+		logging.Errorf("migrateLocationsLatLng: commit: %v", err)
 	}
 	conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
 }
@@ -600,20 +600,20 @@ func migrateContactPostsCheckConstraint() {
 
 	conn, err := db.Conn(context.Background())
 	if err != nil {
-		log.Printf("migrateContactPostsCheckConstraint: get conn: %v", err)
+		logging.Errorf("migrateContactPostsCheckConstraint: get conn: %v", err)
 		return
 	}
 	defer conn.Close()
 
 	if _, err = conn.ExecContext(context.Background(), "PRAGMA foreign_keys=OFF"); err != nil {
-		log.Printf("migrateContactPostsCheckConstraint: pragma off: %v", err)
+		logging.Errorf("migrateContactPostsCheckConstraint: pragma off: %v", err)
 		return
 	}
 
 	tx, err := conn.BeginTx(context.Background(), nil)
 	if err != nil {
 		conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
-		log.Printf("migrateContactPostsCheckConstraint: begin: %v", err)
+		logging.Errorf("migrateContactPostsCheckConstraint: begin: %v", err)
 		return
 	}
 
@@ -646,15 +646,15 @@ func migrateContactPostsCheckConstraint() {
 		if _, err := tx.ExecContext(context.Background(), stmt); err != nil {
 			tx.Rollback()
 			conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
-			log.Printf("migrateContactPostsCheckConstraint: %v", err)
+			logging.Errorf("migrateContactPostsCheckConstraint: %v", err)
 			return
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		log.Printf("migrateContactPostsCheckConstraint: commit: %v", err)
+		logging.Errorf("migrateContactPostsCheckConstraint: commit: %v", err)
 	}
 	conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
-	log.Printf("migrateContactPostsCheckConstraint: rebuilt contact_posts with ticket types")
+	logging.Infof("migrateContactPostsCheckConstraint: rebuilt contact_posts with ticket types")
 }
 
 // migrateContactPostsLostFound extends the CHECK constraint to include lost_item / found_item.
@@ -668,18 +668,18 @@ func migrateContactPostsLostFound() {
 
 	conn, err := db.Conn(context.Background())
 	if err != nil {
-		log.Printf("migrateContactPostsLostFound: get conn: %v", err)
+		logging.Errorf("migrateContactPostsLostFound: get conn: %v", err)
 		return
 	}
 	defer conn.Close()
 	if _, err = conn.ExecContext(context.Background(), "PRAGMA foreign_keys=OFF"); err != nil {
-		log.Printf("migrateContactPostsLostFound: pragma off: %v", err)
+		logging.Errorf("migrateContactPostsLostFound: pragma off: %v", err)
 		return
 	}
 	tx, err := conn.BeginTx(context.Background(), nil)
 	if err != nil {
 		conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
-		log.Printf("migrateContactPostsLostFound: begin: %v", err)
+		logging.Errorf("migrateContactPostsLostFound: begin: %v", err)
 		return
 	}
 	stmts := []string{
@@ -713,15 +713,15 @@ func migrateContactPostsLostFound() {
 		if _, err := tx.ExecContext(context.Background(), stmt); err != nil {
 			tx.Rollback()
 			conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
-			log.Printf("migrateContactPostsLostFound: %v", err)
+			logging.Errorf("migrateContactPostsLostFound: %v", err)
 			return
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		log.Printf("migrateContactPostsLostFound: commit: %v", err)
+		logging.Errorf("migrateContactPostsLostFound: commit: %v", err)
 	}
 	conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
-	log.Printf("migrateContactPostsLostFound: added lost_item/found_item types")
+	logging.Infof("migrateContactPostsLostFound: added lost_item/found_item types")
 }
 
 // migrateUsersDropUsername rebuilds the users table to replace username with display_name.
@@ -737,18 +737,18 @@ func migrateUsersDropUsername() {
 
 	conn, err := db.Conn(context.Background())
 	if err != nil {
-		log.Printf("migrateUsersDropUsername: get conn: %v", err)
+		logging.Errorf("migrateUsersDropUsername: get conn: %v", err)
 		return
 	}
 	defer conn.Close()
 	if _, err = conn.ExecContext(context.Background(), "PRAGMA foreign_keys=OFF"); err != nil {
-		log.Printf("migrateUsersDropUsername: pragma off: %v", err)
+		logging.Errorf("migrateUsersDropUsername: pragma off: %v", err)
 		return
 	}
 	tx, err := conn.BeginTx(context.Background(), nil)
 	if err != nil {
 		conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
-		log.Printf("migrateUsersDropUsername: begin: %v", err)
+		logging.Errorf("migrateUsersDropUsername: begin: %v", err)
 		return
 	}
 	stmts := []string{
@@ -788,15 +788,15 @@ func migrateUsersDropUsername() {
 		if _, err := tx.ExecContext(context.Background(), stmt); err != nil {
 			tx.Rollback()
 			conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
-			log.Printf("migrateUsersDropUsername: %v", err)
+			logging.Errorf("migrateUsersDropUsername: %v", err)
 			return
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		log.Printf("migrateUsersDropUsername: commit: %v", err)
+		logging.Errorf("migrateUsersDropUsername: commit: %v", err)
 	}
 	conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
-	log.Printf("migrateUsersDropUsername: replaced username with display_name (backfilled from existing usernames)")
+	logging.Infof("migrateUsersDropUsername: replaced username with display_name (backfilled from existing usernames)")
 }
 
 // migrateInviteLinksRole rebuilds invite_links to add a CHECK constraint on
@@ -811,20 +811,20 @@ func migrateInviteLinksRole() {
 
 	conn, err := db.Conn(context.Background())
 	if err != nil {
-		log.Printf("migrateInviteLinksRole: get conn: %v", err)
+		logging.Errorf("migrateInviteLinksRole: get conn: %v", err)
 		return
 	}
 	defer conn.Close()
 
 	if _, err = conn.ExecContext(context.Background(), "PRAGMA foreign_keys=OFF"); err != nil {
-		log.Printf("migrateInviteLinksRole: pragma off: %v", err)
+		logging.Errorf("migrateInviteLinksRole: pragma off: %v", err)
 		return
 	}
 
 	tx, err := conn.BeginTx(context.Background(), nil)
 	if err != nil {
 		conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
-		log.Printf("migrateInviteLinksRole: begin: %v", err)
+		logging.Errorf("migrateInviteLinksRole: begin: %v", err)
 		return
 	}
 
@@ -851,15 +851,15 @@ func migrateInviteLinksRole() {
 		if _, err := tx.ExecContext(context.Background(), stmt); err != nil {
 			tx.Rollback()
 			conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
-			log.Printf("migrateInviteLinksRole: %v", err)
+			logging.Errorf("migrateInviteLinksRole: %v", err)
 			return
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		log.Printf("migrateInviteLinksRole: commit: %v", err)
+		logging.Errorf("migrateInviteLinksRole: commit: %v", err)
 	}
 	conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
-	log.Printf("migrateInviteLinksRole: added CHECK constraint on role")
+	logging.Infof("migrateInviteLinksRole: added CHECK constraint on role")
 }
 
 // migrateEventsFK adds FOREIGN KEY constraints on organization_id and
@@ -874,20 +874,20 @@ func migrateEventsFK() {
 
 	conn, err := db.Conn(context.Background())
 	if err != nil {
-		log.Printf("migrateEventsFK: get conn: %v", err)
+		logging.Errorf("migrateEventsFK: get conn: %v", err)
 		return
 	}
 	defer conn.Close()
 
 	if _, err = conn.ExecContext(context.Background(), "PRAGMA foreign_keys=OFF"); err != nil {
-		log.Printf("migrateEventsFK: pragma off: %v", err)
+		logging.Errorf("migrateEventsFK: pragma off: %v", err)
 		return
 	}
 
 	tx, err := conn.BeginTx(context.Background(), nil)
 	if err != nil {
 		conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
-		log.Printf("migrateEventsFK: begin: %v", err)
+		logging.Errorf("migrateEventsFK: begin: %v", err)
 		return
 	}
 
@@ -949,15 +949,15 @@ func migrateEventsFK() {
 		if _, err := tx.ExecContext(context.Background(), stmt); err != nil {
 			tx.Rollback()
 			conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
-			log.Printf("migrateEventsFK: %v", err)
+			logging.Errorf("migrateEventsFK: %v", err)
 			return
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		log.Printf("migrateEventsFK: commit: %v", err)
+		logging.Errorf("migrateEventsFK: commit: %v", err)
 	}
 	conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
-	log.Printf("migrateEventsFK: added FK constraints on organization_id and fetch_source_id")
+	logging.Infof("migrateEventsFK: added FK constraints on organization_id and fetch_source_id")
 }
 
 func migrateDB() {
@@ -3025,7 +3025,7 @@ func migrateEventTagsFK() {
 	db.Exec("DELETE FROM event_tags WHERE tag NOT IN (SELECT slug FROM tags)")
 	conn, err := db.Conn(context.Background())
 	if err != nil {
-		log.Printf("migrateEventTagsFK: get conn: %v", err)
+		logging.Errorf("migrateEventTagsFK: get conn: %v", err)
 		return
 	}
 	defer conn.Close()
@@ -3046,13 +3046,13 @@ func migrateEventTagsFK() {
 	for _, s := range stmts {
 		if _, err := conn.ExecContext(ctx, s); err != nil {
 			conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
-			log.Printf("migrateEventTagsFK: %v", err)
+			logging.Errorf("migrateEventTagsFK: %v", err)
 			return
 		}
 	}
 	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_tags_tag ON event_tags(tag, event_id)")
-	log.Printf("migrateEventTagsFK: added FK from event_tags.tag to tags.slug")
+	logging.Infof("migrateEventTagsFK: added FK from event_tags.tag to tags.slug")
 }
 
 // migrateEventTagsDropTagFK rebuilds event_tags without the FK on tag → tags.slug
@@ -3066,7 +3066,7 @@ func migrateEventTagsDropTagFK() {
 	}
 	conn, err := db.Conn(context.Background())
 	if err != nil {
-		log.Printf("migrateEventTagsDropTagFK: get conn: %v", err)
+		logging.Errorf("migrateEventTagsDropTagFK: get conn: %v", err)
 		return
 	}
 	defer conn.Close()
@@ -3086,13 +3086,13 @@ func migrateEventTagsDropTagFK() {
 	for _, s := range stmts {
 		if _, err := conn.ExecContext(ctx, s); err != nil {
 			conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
-			log.Printf("migrateEventTagsDropTagFK: %v", err)
+			logging.Errorf("migrateEventTagsDropTagFK: %v", err)
 			return
 		}
 	}
 	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_tags_tag ON event_tags(tag, event_id)")
-	log.Printf("migrateEventTagsDropTagFK: removed FK from event_tags.tag to tags.slug")
+	logging.Infof("migrateEventTagsDropTagFK: removed FK from event_tags.tag to tags.slug")
 }
 
 // rebuildTable runs a CHECK-widening table rebuild (create shadow, copy rows,
@@ -3172,11 +3172,11 @@ func migrateFetchSourcesTypeCheck() {
 		`DROP TABLE fetch_sources`,
 		`ALTER TABLE fetch_sources_chk RENAME TO fetch_sources`,
 	}); err != nil {
-		log.Printf("migrateFetchSourcesTypeCheck: %v", err)
+		logging.Errorf("migrateFetchSourcesTypeCheck: %v", err)
 		return
 	}
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_fetch_sources_organization_id ON fetch_sources(organization_id)")
-	log.Printf("migrateFetchSourcesTypeCheck: added CHECK constraint to fetch_sources.type")
+	logging.Infof("migrateFetchSourcesTypeCheck: added CHECK constraint to fetch_sources.type")
 }
 
 // migrateFetchSourcesKuferType widens fetch_sources.type's CHECK constraint to
@@ -3221,11 +3221,11 @@ func migrateFetchSourcesKuferType() {
 		`DROP TABLE fetch_sources`,
 		`ALTER TABLE fetch_sources_chk RENAME TO fetch_sources`,
 	}); err != nil {
-		log.Printf("migrateFetchSourcesKuferType: %v", err)
+		logging.Errorf("migrateFetchSourcesKuferType: %v", err)
 		return
 	}
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_fetch_sources_organization_id ON fetch_sources(organization_id)")
-	log.Printf("migrateFetchSourcesKuferType: added 'kufer' to fetch_sources.type CHECK constraint")
+	logging.Infof("migrateFetchSourcesKuferType: added 'kufer' to fetch_sources.type CHECK constraint")
 }
 
 // migrateFetchSourcesJcalType widens fetch_sources.type's CHECK constraint to
@@ -3278,11 +3278,11 @@ func migrateFetchSourcesJcalType() {
 		`DROP TABLE fetch_sources`,
 		`ALTER TABLE fetch_sources_chk RENAME TO fetch_sources`,
 	}); err != nil {
-		log.Printf("migrateFetchSourcesJcalType: %v", err)
+		logging.Errorf("migrateFetchSourcesJcalType: %v", err)
 		return
 	}
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_fetch_sources_organization_id ON fetch_sources(organization_id)")
-	log.Printf("migrateFetchSourcesJcalType: added 'jcal' to fetch_sources.type CHECK constraint")
+	logging.Infof("migrateFetchSourcesJcalType: added 'jcal' to fetch_sources.type CHECK constraint")
 }
 
 // migrateFetchSourcesJsonldType widens fetch_sources.type's CHECK constraint
@@ -3336,11 +3336,11 @@ func migrateFetchSourcesJsonldType() {
 		`DROP TABLE fetch_sources`,
 		`ALTER TABLE fetch_sources_chk RENAME TO fetch_sources`,
 	}); err != nil {
-		log.Printf("migrateFetchSourcesJsonldType: %v", err)
+		logging.Errorf("migrateFetchSourcesJsonldType: %v", err)
 		return
 	}
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_fetch_sources_organization_id ON fetch_sources(organization_id)")
-	log.Printf("migrateFetchSourcesJsonldType: added 'jsonld' to fetch_sources.type CHECK constraint and imported_once column")
+	logging.Infof("migrateFetchSourcesJsonldType: added 'jsonld' to fetch_sources.type CHECK constraint and imported_once column")
 }
 
 // migrateTimetableEntriesBreakType widens timetable_entries.entry_type's CHECK
@@ -3384,14 +3384,14 @@ func migrateTimetableEntriesBreakType() {
 		`DROP TABLE timetable_entries`,
 		`ALTER TABLE timetable_entries_chk RENAME TO timetable_entries`,
 	}); err != nil {
-		log.Printf("migrateTimetableEntriesBreakType: %v", err)
+		logging.Errorf("migrateTimetableEntriesBreakType: %v", err)
 		return
 	}
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_event_id ON timetable_entries(event_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_location_id ON timetable_entries(location_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_musician_id ON timetable_entries(musician_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_instructor_id ON timetable_entries(instructor_id)")
-	log.Printf("migrateTimetableEntriesBreakType: added 'break' to timetable_entries.entry_type CHECK constraint")
+	logging.Infof("migrateTimetableEntriesBreakType: added 'break' to timetable_entries.entry_type CHECK constraint")
 }
 
 // migrateTimetableEntriesExtendedTypes extends the entry_type CHECK in
@@ -3434,14 +3434,14 @@ func migrateTimetableEntriesExtendedTypes() {
 		`DROP TABLE timetable_entries`,
 		`ALTER TABLE timetable_entries_chk RENAME TO timetable_entries`,
 	}); err != nil {
-		log.Printf("migrateTimetableEntriesExtendedTypes: %v", err)
+		logging.Errorf("migrateTimetableEntriesExtendedTypes: %v", err)
 		return
 	}
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_event_id ON timetable_entries(event_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_location_id ON timetable_entries(location_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_musician_id ON timetable_entries(musician_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_timetable_entries_instructor_id ON timetable_entries(instructor_id)")
-	log.Printf("migrateTimetableEntriesExtendedTypes: extended timetable_entries.entry_type CHECK constraint")
+	logging.Infof("migrateTimetableEntriesExtendedTypes: extended timetable_entries.entry_type CHECK constraint")
 }
 
 // migrateEventsEnumChecks adds CHECK constraints to events.workshop_difficulty
@@ -3525,7 +3525,7 @@ func migrateEventsEnumChecks() {
 		`DROP TABLE events`,
 		`ALTER TABLE events_chk RENAME TO events`,
 	}); err != nil {
-		log.Printf("migrateEventsEnumChecks: %v", err)
+		logging.Errorf("migrateEventsEnumChecks: %v", err)
 		return
 	}
 	// Recreate indexes dropped by the table rebuild.
@@ -3538,7 +3538,7 @@ func migrateEventsEnumChecks() {
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_needs_duplicate_review ON events(needs_duplicate_review) WHERE needs_duplicate_review=1")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_published_end_start ON events(end_time, start_time) WHERE is_published=1")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_published_start_time ON events(start_time, end_time) WHERE is_published=1")
-	log.Printf("migrateEventsEnumChecks: added CHECK constraints to events.workshop_difficulty and events.availability")
+	logging.Infof("migrateEventsEnumChecks: added CHECK constraints to events.workshop_difficulty and events.availability")
 }
 
 // migrateLocationsEnumChecks adds CHECK constraints to locations.parking and
@@ -3603,12 +3603,12 @@ func migrateLocationsEnumChecks() {
 		`DROP TABLE locations`,
 		`ALTER TABLE locations_chk RENAME TO locations`,
 	}); err != nil {
-		log.Printf("migrateLocationsEnumChecks: %v", err)
+		logging.Errorf("migrateLocationsEnumChecks: %v", err)
 		return
 	}
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_fetch_sources_organization_id ON fetch_sources(organization_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_location_organizations_location_id ON location_organizations(location_id)")
-	log.Printf("migrateLocationsEnumChecks: added CHECK constraints to locations.parking and locations.floor_condition")
+	logging.Infof("migrateLocationsEnumChecks: added CHECK constraints to locations.parking and locations.floor_condition")
 }
 
 // migrateLocationAliasesToJunction migrates locations.aliases (JSON TEXT column) to
@@ -3636,18 +3636,18 @@ func migrateLocationAliasesToJunction() {
 	// Rebuild locations table without the aliases column.
 	conn, err := db.Conn(context.Background())
 	if err != nil {
-		log.Printf("migrateLocationAliasesToJunction: get conn: %v", err)
+		logging.Errorf("migrateLocationAliasesToJunction: get conn: %v", err)
 		return
 	}
 	defer conn.Close()
 	ctx := context.Background()
 	if _, err = conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF"); err != nil {
-		log.Printf("migrateLocationAliasesToJunction: pragma off: %v", err)
+		logging.Errorf("migrateLocationAliasesToJunction: pragma off: %v", err)
 		return
 	}
 	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
-		log.Printf("migrateLocationAliasesToJunction: begin: %v", err)
+		logging.Errorf("migrateLocationAliasesToJunction: begin: %v", err)
 		conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
 		return
 	}
@@ -3707,19 +3707,19 @@ func migrateLocationAliasesToJunction() {
 		if _, err := tx.ExecContext(ctx, s); err != nil {
 			tx.Rollback()
 			conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
-			log.Printf("migrateLocationAliasesToJunction: %v", err)
+			logging.Errorf("migrateLocationAliasesToJunction: %v", err)
 			return
 		}
 	}
 	if err := tx.Commit(); err != nil {
 		conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
-		log.Printf("migrateLocationAliasesToJunction: commit: %v", err)
+		logging.Errorf("migrateLocationAliasesToJunction: commit: %v", err)
 		return
 	}
 	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_fetch_sources_organization_id ON fetch_sources(organization_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_location_organizations_location_id ON location_organizations(location_id)")
-	log.Printf("migrateLocationAliasesToJunction: migrated locations.aliases to location_aliases junction table")
+	logging.Infof("migrateLocationAliasesToJunction: migrated locations.aliases to location_aliases junction table")
 }
 
 // migrateUsersEmailOptional makes users.email nullable so passkey-only accounts
@@ -3731,18 +3731,18 @@ func migrateUsersEmailOptional() {
 	}
 	conn, err := db.Conn(context.Background())
 	if err != nil {
-		log.Printf("migrateUsersEmailOptional: get conn: %v", err)
+		logging.Errorf("migrateUsersEmailOptional: get conn: %v", err)
 		return
 	}
 	defer conn.Close()
 	if _, err = conn.ExecContext(context.Background(), "PRAGMA foreign_keys=OFF"); err != nil {
-		log.Printf("migrateUsersEmailOptional: pragma off: %v", err)
+		logging.Errorf("migrateUsersEmailOptional: pragma off: %v", err)
 		return
 	}
 	tx, err := conn.BeginTx(context.Background(), nil)
 	if err != nil {
 		conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
-		log.Printf("migrateUsersEmailOptional: begin: %v", err)
+		logging.Errorf("migrateUsersEmailOptional: begin: %v", err)
 		return
 	}
 	stmts := []string{
@@ -3778,15 +3778,15 @@ func migrateUsersEmailOptional() {
 		if _, err := tx.ExecContext(context.Background(), stmt); err != nil {
 			tx.Rollback()
 			conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
-			log.Printf("migrateUsersEmailOptional: %v", err)
+			logging.Errorf("migrateUsersEmailOptional: %v", err)
 			return
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		log.Printf("migrateUsersEmailOptional: commit: %v", err)
+		logging.Errorf("migrateUsersEmailOptional: commit: %v", err)
 	}
 	conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
-	log.Printf("migrateUsersEmailOptional: users.email is now nullable")
+	logging.Infof("migrateUsersEmailOptional: users.email is now nullable")
 }
 
 func migrateFetchSourcesDropTemplatesFK() {
@@ -3810,7 +3810,7 @@ func migrateFetchSourcesDropTemplatesFK() {
 
 	conn, err := db.Conn(context.Background())
 	if err != nil {
-		log.Printf("migrateFetchSourcesDropTemplatesFK: get conn: %v", err)
+		logging.Errorf("migrateFetchSourcesDropTemplatesFK: get conn: %v", err)
 		return
 	}
 	defer conn.Close()
@@ -3835,7 +3835,7 @@ func migrateFetchSourcesDropTemplatesFK() {
 	conn.ExecContext(ctx, `DROP TABLE fetch_sources`)
 	conn.ExecContext(ctx, `ALTER TABLE fetch_sources_v2 RENAME TO fetch_sources`)
 	conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
-	log.Printf("migrateFetchSourcesDropTemplatesFK: removed bad FK on fetch_sources.template_id")
+	logging.Infof("migrateFetchSourcesDropTemplatesFK: removed bad FK on fetch_sources.template_id")
 }
 
 func logUnmappedCountries() {
@@ -3852,7 +3852,7 @@ func logUnmappedCountries() {
 		}
 	}
 	if len(unknown) > 0 {
-		log.Printf("WARNING: %d location(s) have unmapped country values (fix via admin UI): %v", len(unknown), unknown)
+		logging.Warnf("%d location(s) have unmapped country values (fix via admin UI): %v", len(unknown), unknown)
 	}
 }
 
@@ -4605,7 +4605,7 @@ func createTables() error {
 func reloadConfig(path string) {
 	newCfg, err := loadConfig(path)
 	if err != nil {
-		log.Printf("Config reload failed: %v", err)
+		logging.Errorf("Config reload failed: %v", err)
 		return
 	}
 	applyDefaults(newCfg)
@@ -4613,7 +4613,7 @@ func reloadConfig(path string) {
 	if newCfg.Server.Port != config.Server.Port ||
 		newCfg.Server.DBPath != config.Server.DBPath ||
 		newCfg.Server.AdminSocket != config.Server.AdminSocket {
-		log.Printf("Warning: port, db_path and admin_socket changes require a restart to take effect")
+		logging.Warnf("port, db_path and admin_socket changes require a restart to take effect")
 	}
 
 	// #1394: unlike the startup path, an invalid zone here must not take the
@@ -4621,11 +4621,11 @@ func reloadConfig(path string) {
 	// same as loadConfig's own "keep running on a bad reload" philosophy.
 	if newCfg.Server.Timezone != config.Server.Timezone {
 		if loc, err := validateInstanceTimezone(newCfg.Server.Timezone); err != nil {
-			log.Printf("Config reload: %v — keeping %q", err, config.Server.Timezone)
+			logging.Errorf("Config reload: %v — keeping %q", err, config.Server.Timezone)
 			newCfg.Server.Timezone = config.Server.Timezone
 		} else {
 			instanceTimezone = loc
-			log.Printf("server.timezone changed to %q — every event now displays in this zone", newCfg.Server.Timezone)
+			logging.Infof("server.timezone changed to %q — every event now displays in this zone", newCfg.Server.Timezone)
 		}
 	}
 
@@ -4637,7 +4637,7 @@ func reloadConfig(path string) {
 	initSuggestRateLimiters()
 	initFetchSuggestRateLimiters()
 	initRegisterRateLimiter()
-	log.Printf("Config reloaded from %s", path)
+	logging.Infof("Config reloaded from %s", path)
 }
 
 func main() {
@@ -4654,27 +4654,25 @@ func main() {
 	if inst := instance.FromConfigArg(); inst != "" {
 		tag = "dansal@" + inst
 	}
-	setupLogging(tag)
+	logging.Setup(tag)
 
 	var err error
 
 	configFilePath = *configPath
 	config, err = loadConfig(*configPath)
 	if err != nil {
-		log.Printf("Warning: could not load %s, using defaults: %v", *configPath, err)
+		logging.Warnf("could not load %s, using defaults: %v", *configPath, err)
 		config = &Config{}
 	}
 	applyDefaults(config)
 
 	// #1645: a bad server.log_level stops startup here, on stderr, because the
 	// level filter would hide a Fatal message written through the logger.
-	lvl, err := parseLogLevel(config.Server.LogLevel)
-	if err != nil {
+	if err := logging.SetLevel(config.Server.LogLevel); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	logLevel.Set(lvl)
-	slog.Info("log level set", "level", lvl.String())
+	logging.Infof("log level set: %s", config.Server.LogLevel)
 
 	// #1394: server.timezone is the authoritative instance-wide zone every
 	// timezone-less event input is parsed in and every stored epoch is
@@ -4688,14 +4686,14 @@ func main() {
 	}
 
 	if config.Server.InternalSharedSecret == "" {
-		log.Printf("warning: server.internal_shared_secret is unset — dansal-web's loopback API calls are NOT exempt from RateLimitMiddleware/ConnLimitMiddleware and share the same per-IP budget as all public traffic (rate_limit=%d/min, max_conns_per_ip=%d); set it to match dansal-web's internal_shared_secret (see #1118)", config.Server.RateLimit, config.Server.MaxConnsPerIP)
+		logging.Warnf("server.internal_shared_secret is unset — dansal-web's loopback API calls are NOT exempt from RateLimitMiddleware/ConnLimitMiddleware and share the same per-IP budget as all public traffic (rate_limit=%d/min, max_conns_per_ip=%d); set it to match dansal-web's internal_shared_secret (see #1118)", config.Server.RateLimit, config.Server.MaxConnsPerIP)
 	}
 
 	if len(config.Server.AllowedOrigins) == 0 {
 		if u, err := url.Parse(config.Server.BaseURL); err == nil && u.Host != "" {
-			log.Printf("info: server.allowed_origins is unset — CORS restricted to base_url origin (%s://%s)", u.Scheme, u.Host)
+			logging.Infof("server.allowed_origins is unset — CORS restricted to base_url origin (%s://%s)", u.Scheme, u.Host)
 		} else {
-			log.Printf("warning: server.allowed_origins and base_url are both unset — CORS defaults to '*' (all origins); set base_url or allowed_origins in config")
+			logging.Infof("warning: server.allowed_origins and base_url are both unset — CORS defaults to '*' (all origins); set base_url or allowed_origins in config")
 		}
 	}
 
@@ -4731,7 +4729,7 @@ func main() {
 	initMetrics()
 	startTokenCleanup()
 	startScheduledBackup()
-	log.Println("Database initialized successfully")
+	logging.Infof("Database initialized successfully")
 
 	rateLimiter = NewRateLimiter(config.Server.RateLimit, time.Minute)
 	loginRateLimiter = NewRateLimiter(config.Server.LoginRateLimit, time.Minute)
@@ -5190,7 +5188,7 @@ func main() {
 	go runHeartbeat()
 
 	listenAddr := getListenAddr()
-	log.Printf("dansal %s (built %s) starting on %s\n", Version, BuildTime, listenAddr)
+	logging.Infof("dansal %s (built %s) starting on %s", Version, BuildTime, listenAddr)
 	srv := &http.Server{
 		Addr:              listenAddr,
 		Handler:           handler,
@@ -5215,7 +5213,7 @@ func main() {
 		}
 		break
 	}
-	log.Println("Shutting down...")
+	logging.Infof("Shutting down...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -5224,7 +5222,7 @@ func main() {
 		adminLn.Close()
 	}
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Printf("Shutdown error: %v", err)
+		logging.Errorf("Shutdown error: %v", err)
 	}
-	log.Println("Server stopped")
+	logging.Infof("Server stopped")
 }

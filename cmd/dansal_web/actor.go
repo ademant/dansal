@@ -7,9 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"html"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"net/netip"
@@ -463,7 +463,7 @@ func nodeinfoHandler(cfg *Config, client *DansalClient, schemaVersion string) ht
 	return func(w http.ResponseWriter, r *http.Request) {
 		info, err := client.GetServiceInfo(r.Context())
 		if err != nil {
-			log.Printf("nodeinfo: could not load service info: %v", err)
+			logging.Errorf("nodeinfo: could not load service info: %v", err)
 		}
 		ni := buildNodeInfo(cfg, schemaVersion, info)
 		w.Header().Set("Content-Type", `application/json; profile="http://nodeinfo.diaspora.software/ns/schema/`+schemaVersion+`#"`)
@@ -601,11 +601,11 @@ func readInboxActivity(w http.ResponseWriter, r *http.Request) (raw map[string]a
 		if errors.As(err, new(errActorGone)) {
 			actType, _ := raw["type"].(string)
 			if actType == "Delete" && apObjectID(raw["object"]) == actorField {
-				log.Printf("inbox: accepting self-Delete from gone actor %s", actorField)
+				logging.Debugf("inbox: accepting self-Delete from gone actor %s", actorField)
 				return raw, true
 			}
 		}
-		log.Printf("inbox: verification failed for %s: %v", actorField, err)
+		logging.Warnf("inbox: verification failed for %s: %v", actorField, err)
 		writeJSONError(w, r, http.StatusUnauthorized, "signature verification failed")
 		return nil, false
 	}
@@ -664,7 +664,7 @@ func apObjectID(v any) string {
 func handleFollowActivity(w http.ResponseWriter, r *http.Request, client *DansalClient, actorField string, addFollower func(inboxURL string) error, sendAccept func(inboxURL string)) {
 	inboxURL, err := resolveInboxURL(r.Context(), client, actorField)
 	if err != nil {
-		log.Printf("inbox: resolve actor %s: %v", actorField, err)
+		logging.Errorf("inbox: resolve actor %s: %v", actorField, err)
 		inboxURL = ""
 	}
 	if inboxURL == "" {
@@ -731,7 +731,7 @@ func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, d
 		// Accept{Follow}: update our outbound follow state to accepted.
 		if followActivityID := apObjectID(raw["object"]); followActivityID != "" {
 			if err := updateFollowStateByActivityID(db, followActivityID, "accepted"); err != nil {
-				log.Printf("inbox Accept: update follow state for %s: %v", followActivityID, err)
+				logging.Errorf("inbox Accept: update follow state for %s: %v", followActivityID, err)
 			}
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -748,7 +748,7 @@ func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, d
 			return
 		}
 		if err := upsertFederatedEvent(db, fe); err != nil {
-			log.Printf("inbox: upsert federated event %s: %v", fe.APID, err)
+			logging.Errorf("inbox: upsert federated event %s: %v", fe.APID, err)
 		}
 		w.WriteHeader(http.StatusAccepted)
 
@@ -770,15 +770,15 @@ func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, d
 		// Only allow updates from the actor that originally created the event.
 		if storedActor, err := getFederatedEventActor(db, fe.APID); err == nil {
 			if storedActor != actorField {
-				log.Printf("inbox: Update rejected for %s: actor %q not owner (owner: %q)", fe.APID, actorField, storedActor)
+				logging.Warnf("inbox: Update rejected for %s: actor %q not owner (owner: %q)", fe.APID, actorField, storedActor)
 				w.WriteHeader(http.StatusAccepted)
 				return
 			}
 		} else if err != sql.ErrNoRows {
-			log.Printf("inbox: check event actor for %s: %v", fe.APID, err)
+			logging.Errorf("inbox: check event actor for %s: %v", fe.APID, err)
 		}
 		if err := upsertFederatedEvent(db, fe); err != nil {
-			log.Printf("inbox: update federated event %s: %v", fe.APID, err)
+			logging.Errorf("inbox: update federated event %s: %v", fe.APID, err)
 		}
 		w.WriteHeader(http.StatusAccepted)
 
@@ -788,15 +788,15 @@ func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, d
 			// Only allow deletion by the actor that created the event.
 			if storedActor, err := getFederatedEventActor(db, apID); err == nil {
 				if storedActor != actorField {
-					log.Printf("inbox: Delete rejected for %s: actor %q not owner (owner: %q)", apID, actorField, storedActor)
+					logging.Warnf("inbox: Delete rejected for %s: actor %q not owner (owner: %q)", apID, actorField, storedActor)
 					w.WriteHeader(http.StatusAccepted)
 					return
 				}
 				if err := deleteFederatedEvent(db, apID); err != nil {
-					log.Printf("inbox: delete federated event %s: %v", apID, err)
+					logging.Errorf("inbox: delete federated event %s: %v", apID, err)
 				}
 			} else if err != sql.ErrNoRows {
-				log.Printf("inbox: check event actor for delete %s: %v", apID, err)
+				logging.Errorf("inbox: check event actor for delete %s: %v", apID, err)
 			}
 			// ErrNoRows: event not in DB, nothing to do.
 		}
@@ -957,13 +957,13 @@ func sendAccept(cfg *Config, actor *ActorRecord, followActivity map[string]any, 
 	}
 	body, err := json.Marshal(accept)
 	if err != nil {
-		log.Printf("sendAccept marshal: %v", err)
+		logging.Errorf("sendAccept marshal: %v", err)
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	if err := postToInbox(ctx, inboxURL, actorKeyID(cfg, actor.OrgSlug), actor.PrivateKeyPEM, body); err != nil {
-		log.Printf("sendAccept post: %v", err)
+		logging.Errorf("sendAccept post: %v", err)
 	}
 }
 

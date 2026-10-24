@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"io"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -74,15 +74,15 @@ func loadEnrichAliases(db *sql.DB) (city []CityAlias, country []CountryAlias, re
 	var err error
 	city, err = listCityAliases(db)
 	if err != nil {
-		log.Printf("admin enrich: could not load city aliases: %v", err)
+		logging.Errorf("admin enrich: could not load city aliases: %v", err)
 	}
 	country, err = listCountryAliases(db)
 	if err != nil {
-		log.Printf("admin enrich: could not load country aliases: %v", err)
+		logging.Errorf("admin enrich: could not load country aliases: %v", err)
 	}
 	region, err = listRegionAliases(db)
 	if err != nil {
-		log.Printf("admin enrich: could not load region aliases: %v", err)
+		logging.Errorf("admin enrich: could not load region aliases: %v", err)
 	}
 	return city, country, region
 }
@@ -324,7 +324,7 @@ func adminEnrichPreviewHandler(cfg *Config, tmpls *Templates, db *sql.DB, client
 		cityMap := aliasMap(aliases)
 		musicians, err := client.GetMusicians(r.Context())
 		if err != nil {
-			log.Printf("admin enrich: could not load musicians: %v", err)
+			logging.Errorf("admin enrich: could not load musicians: %v", err)
 		}
 
 		// Pre-build normalized musician name → ID map.
@@ -521,7 +521,7 @@ func adminEnrichApplyHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 					}
 					m, err := client.CreateMusician(ctx, Musician{Bandname: name}, token)
 					if err != nil {
-						log.Printf("enrich: create musician %q: %v", name, err)
+						logging.Errorf("enrich: create musician %q: %v", name, err)
 						continue
 					}
 					created[name] = m.ID
@@ -546,7 +546,7 @@ func adminEnrichApplyHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 
 			req := EnrichEventReq{AddMusicianIDs: musicianIDs, Pricing: pricing}
 			if err := client.EnrichEvent(ctx, eventID, req, token); err != nil {
-				log.Printf("enrich event %d: %v", eventID, err)
+				logging.Errorf("enrich event %d: %v", eventID, err)
 			}
 		}
 
@@ -572,7 +572,7 @@ func adminEnrichAliasNewHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 		if _, err := db.Exec("INSERT OR REPLACE INTO city_aliases(alias, canonical) VALUES(?,?)", alias, canonical); err != nil {
-			log.Printf("could not insert city alias %q→%q: %v", alias, canonical, err)
+			logging.Errorf("could not insert city alias %q→%q: %v", alias, canonical, err)
 		}
 		http.Redirect(w, r, "/admin/enrich", http.StatusSeeOther)
 	}
@@ -591,7 +591,7 @@ func adminEnrichAliasDeleteHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 		if _, err := db.Exec("DELETE FROM city_aliases WHERE id=?", id); err != nil {
-			log.Printf("could not delete city alias %d: %v", id, err)
+			logging.Errorf("could not delete city alias %d: %v", id, err)
 		}
 		http.Redirect(w, r, "/admin/enrich", http.StatusSeeOther)
 	}

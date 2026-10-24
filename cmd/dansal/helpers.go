@@ -7,7 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -49,7 +49,7 @@ func forEachAdmin(fn func(id int, email, chatID, matrixID string, matrixVerified
 	}
 	rows, err := d.Query(`SELECT id, COALESCE(email,''), COALESCE(telegram_chat_id,''), COALESCE(matrix,''), COALESCE(matrix_verified,0) FROM users WHERE role = 'admin'`)
 	if err != nil {
-		log.Printf("forEachAdmin: %v", err)
+		logging.Errorf("forEachAdmin: %v", err)
 		return
 	}
 	defer rows.Close()
@@ -159,18 +159,18 @@ func notifyUser(chatID, matrixID string, matrixVerified bool, email, subject, bo
 	if chatID != "" {
 		hasChat = true
 		if err := sendTelegramMessage(chatID, body); err != nil {
-			log.Printf("notify: telegram to %s: %v", chatID, err)
+			logging.Errorf("notify: telegram to %s: %v", chatID, err)
 		}
 	}
 	if matrixVerified && matrixID != "" {
 		hasChat = true
 		if err := sendMatrixMessage(matrixID, body); err != nil {
-			log.Printf("notify: matrix to %s: %v", matrixID, err)
+			logging.Errorf("notify: matrix to %s: %v", matrixID, err)
 		}
 	}
 	if !hasChat && email != "" && (config.SMTP.Host != "" || config.SMTP.Sendmail != "") {
 		if _, err := SendEmail(email, subject, body, true); err != nil {
-			log.Printf("notify: email to %s: %v", email, err)
+			logging.Errorf("notify: email to %s: %v", email, err)
 		}
 	}
 }

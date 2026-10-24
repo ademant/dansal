@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"github.com/ademant/dansal/internal/logging"
 	"log"
 	"strings"
 	"time"
@@ -361,7 +362,7 @@ CREATE TABLE IF NOT EXISTS org_slug_redirects (
 	// page — postcode search failed with "no such table: postcodes" until
 	// then. Runs on every startup, independent of webmin.
 	if err := places.EnsureSchema(db); err != nil {
-		log.Printf("places: ensure schema: %v", err)
+		logging.Errorf("places: ensure schema: %v", err)
 	}
 
 	// Migration v8 (#1490, compliance G12): followers.fail_count — counts
@@ -983,9 +984,9 @@ func startDataRetentionSweep(cfg *Config, db *sql.DB) {
 func sweepGeocodeCache(cfg *Config, db *sql.DB) {
 	cutoff := time.Now().Add(-cfg.dataRetentionDuration()).Unix()
 	if res, err := db.Exec("DELETE FROM geocode_cache WHERE fetched_at < ?", cutoff); err != nil {
-		log.Printf("data retention sweep: geocode_cache: %v", err)
+		logging.Errorf("data retention sweep: geocode_cache: %v", err)
 	} else if n, _ := res.RowsAffected(); n > 0 {
-		log.Printf("data retention sweep: removed %d expired geocode_cache row(s)", n)
+		logging.Debugf("data retention sweep: removed %d expired geocode_cache row(s)", n)
 	}
 }
 
@@ -1037,7 +1038,7 @@ func getSiteSetting(db *sql.DB, key string) string {
 		// Missing key is expected; missing table happens on a brand-new DB
 		// before createTables has run. Anything else is worth logging.
 		if err != sql.ErrNoRows && !strings.Contains(err.Error(), "no such table") {
-			log.Printf("get site setting %s: %v", key, err)
+			logging.Errorf("get site setting %s: %v", key, err)
 		}
 		return ""
 	}

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -57,7 +57,7 @@ func adminOIDCProvidersHandler(cfg *Config, tmpls *Templates, client *DansalClie
 			providers, err = client.GetOIDCProvidersMine(r.Context(), token)
 		}
 		if err != nil {
-			log.Printf("admin oidc providers: %v", err)
+			logging.Errorf("admin oidc providers: %v", err)
 		}
 
 		title := i18n.T(r, "admin_oidc_providers_title")
@@ -105,7 +105,7 @@ func adminOIDCProviderCreateHandler(cfg *Config, client *DansalClient) http.Hand
 		credentialsOK := autoRegister || (clientID != "" && clientSecret != "")
 		if issuerURL != "" && displayName != "" && credentialsOK {
 			if _, err := client.CreateOIDCProvider(r.Context(), orgID, kind, issuerURL, clientID, clientSecret, displayName, getSessionToken(r)); err != nil {
-				log.Printf("create oidc provider %q: %v", issuerURL, err)
+				logging.Errorf("create oidc provider %q: %v", issuerURL, err)
 				msg := apiErrUserMessage(err)
 				if msg == "" {
 					msg = err.Error()
@@ -138,7 +138,7 @@ func adminOIDCProviderDeleteHandler(cfg *Config, client *DansalClient) http.Hand
 			return
 		}
 		if err := client.DeleteOIDCProvider(r.Context(), id, getSessionToken(r)); err != nil {
-			log.Printf("delete oidc provider %d: %v", id, err)
+			logging.Errorf("delete oidc provider %d: %v", id, err)
 		}
 		http.Redirect(w, r, "/admin/oidc-providers", http.StatusSeeOther)
 	}

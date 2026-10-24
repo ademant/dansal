@@ -6,13 +6,13 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"image"
 	"image/draw"
 	_ "image/gif"
 	"image/jpeg"
 	_ "image/png"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -313,11 +313,11 @@ func tryAttachImage(eventID int, prop *ics.IANAProperty) bool {
 		}
 		data, err := base64.StdEncoding.DecodeString(prop.Value)
 		if err != nil {
-			log.Printf("iCal ATTACH base64 decode for event %d: %v", eventID, err)
+			logging.Errorf("iCal ATTACH base64 decode for event %d: %v", eventID, err)
 			return false
 		}
 		if err := saveImageFromReader(eventID, bytes.NewReader(data)); err != nil {
-			log.Printf("iCal ATTACH save for event %d: %v", eventID, err)
+			logging.Errorf("iCal ATTACH save for event %d: %v", eventID, err)
 			return false
 		}
 		return true
@@ -338,31 +338,31 @@ func tryAttachImageURL(eventID int, rawURL string) bool {
 		head.Body.Close()
 		if head.StatusCode >= 200 && head.StatusCode < 300 {
 			if ct := head.Header.Get("Content-Type"); ct != "" && !strings.HasPrefix(ct, "image/") {
-				log.Printf("iCal image for event %d refused: content type %q", eventID, ct)
+				logging.Warnf("iCal image for event %d refused: content type %q", eventID, ct)
 				return false
 			}
 			if head.ContentLength > icalImageMaxBytes {
-				log.Printf("iCal image for event %d refused: %d bytes is over the limit", eventID, head.ContentLength)
+				logging.Warnf("iCal image for event %d refused: %d bytes is over the limit", eventID, head.ContentLength)
 				return false
 			}
 		}
 	}
 	resp, err := safeClient.Get(rawURL)
 	if err != nil {
-		log.Printf("iCal image fetch for event %d: %v", eventID, err)
+		logging.Errorf("iCal image fetch for event %d: %v", eventID, err)
 		return false
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		log.Printf("iCal image HTTP %d for event %d", resp.StatusCode, eventID)
+		logging.Warnf("iCal image HTTP %d for event %d", resp.StatusCode, eventID)
 		return false
 	}
 	if ct := resp.Header.Get("Content-Type"); ct != "" && !strings.HasPrefix(ct, "image/") {
-		log.Printf("iCal image for event %d refused: content type %q", eventID, ct)
+		logging.Warnf("iCal image for event %d refused: content type %q", eventID, ct)
 		return false
 	}
 	if err := saveImageFromReader(eventID, io.LimitReader(resp.Body, icalImageMaxBytes)); err != nil {
-		log.Printf("iCal image save for event %d: %v", eventID, err)
+		logging.Errorf("iCal image save for event %d: %v", eventID, err)
 		return false
 	}
 	return true
@@ -463,7 +463,7 @@ func serveJpegVariant(w http.ResponseWriter, r *http.Request, imgPath, idStr str
 		jpegPath = filepath.Join(filepath.Dir(imgPath), idStr+".jpeg")
 		if _, err := os.Stat(jpegPath); err != nil {
 			if err := generateJpegSibling(imgPath, jpegPath); err != nil {
-				log.Printf("image %s: jpeg variant: %v", idStr, err)
+				logging.Errorf("image %s: jpeg variant: %v", idStr, err)
 				writeError(w, "Image conversion failed", http.StatusInternalServerError)
 				return
 			}

@@ -3,7 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"strconv"
 	"strings"
@@ -25,16 +25,16 @@ func adminTemplatesHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		}
 		ts, err := listTemplates(db, su.ID, orgIDsForTemplates(r, client, su))
 		if err != nil {
-			log.Printf("admin templates: could not load templates: %v", err)
+			logging.Errorf("admin templates: could not load templates: %v", err)
 		}
 		orgs, err := client.GetOrganizations(r.Context())
 		if err != nil {
-			log.Printf("admin templates: could not load organizations: %v", err)
+			logging.Errorf("admin templates: could not load organizations: %v", err)
 		}
 		orgMap := buildOrgMap(orgs)
 		pinnedIDs, err := listPinnedTemplateIDs(db, su.ID)
 		if err != nil {
-			log.Printf("admin templates: could not load pinned templates: %v", err)
+			logging.Errorf("admin templates: could not load pinned templates: %v", err)
 		}
 		title := i18n.T(r, "admin_templates_title")
 		renderTemplate(w, tmpls.adminTemplates, tmplData(r, cfg, i18n, title, AdminTemplatesData{
@@ -53,7 +53,7 @@ func adminTemplatesHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 func saveEventAsTemplate(db *sql.DB, userID int, orgID *int, name string, ev Event) (int64, error) {
 	data, err := json.Marshal(templateDataFromEvent(ev))
 	if err != nil {
-		log.Printf("save template: could not marshal template data: %v", err)
+		logging.Errorf("save template: could not marshal template data: %v", err)
 		return 0, err
 	}
 	return saveTemplate(db, userID, orgID, nil, nil, name, string(data))
@@ -134,7 +134,7 @@ func adminTemplateDeleteHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 		if err := deleteTemplate(db, id, su.ID, su.Role == "admin"); err != nil {
-			log.Printf("delete template %d: %v", id, err)
+			logging.Errorf("delete template %d: %v", id, err)
 		}
 		http.Redirect(w, r, "/admin/templates", http.StatusSeeOther)
 	}
@@ -161,7 +161,7 @@ func adminTemplatePinHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 		if err := pinTemplate(db, su.ID, id); err != nil {
-			log.Printf("pin template %d: %v", id, err)
+			logging.Errorf("pin template %d: %v", id, err)
 		}
 		http.Redirect(w, r, templatePinRedirectTarget(r), http.StatusSeeOther)
 	}
@@ -178,7 +178,7 @@ func adminTemplateUnpinHandler(db *sql.DB) http.HandlerFunc {
 			return
 		}
 		if err := unpinTemplate(db, su.ID, id); err != nil {
-			log.Printf("unpin template %d: %v", id, err)
+			logging.Errorf("unpin template %d: %v", id, err)
 		}
 		http.Redirect(w, r, templatePinRedirectTarget(r), http.StatusSeeOther)
 	}
@@ -249,7 +249,7 @@ func adminTemplateAssignPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, c
 		}
 		ts, err := listTemplates(db, su.ID, orgIDsForTemplates(r, client, su))
 		if err != nil {
-			log.Printf("admin template assign: could not load templates: %v", err)
+			logging.Errorf("admin template assign: could not load templates: %v", err)
 		}
 		title := i18n.T(r, "admin_template_assign_title")
 		renderTemplate(w, tmpls.adminTemplateAssign, tmplData(r, cfg, i18n, title, AdminTemplateAssignData{
@@ -313,20 +313,20 @@ func adminTemplateAssignApplyHandler(cfg *Config, db *sql.DB, client *DansalClie
 		for _, evID := range eventIDs {
 			ev, err := client.GetEvent(r.Context(), evID)
 			if err != nil {
-				log.Printf("template assign get event %d: %v", evID, err)
+				logging.Errorf("template assign get event %d: %v", evID, err)
 				continue
 			}
 			var danceIDs []int
 			drows, err := db.QueryContext(r.Context(), "SELECT dance_id FROM event_dances WHERE event_id = ?", evID)
 			if err != nil {
-				log.Printf("template assign event_dances query %d: %v", evID, err)
+				logging.Errorf("template assign event_dances query %d: %v", evID, err)
 				continue
 			}
 			for drows.Next() {
 				var did int
 				if err := drows.Scan(&did); err != nil {
 					drows.Close()
-					log.Printf("template assign event_dances scan %d: %v", evID, err)
+					logging.Errorf("template assign event_dances scan %d: %v", evID, err)
 					continue
 				}
 				danceIDs = append(danceIDs, did)
@@ -366,7 +366,7 @@ func adminTemplateAssignApplyHandler(cfg *Config, db *sql.DB, client *DansalClie
 			}
 			applyTemplateFields(&req, &td, fields, tplLocations)
 			if _, err := client.UpdateEvent(r.Context(), evID, req, token); err != nil {
-				log.Printf("template assign update event %d: %v", evID, err)
+				logging.Errorf("template assign update event %d: %v", evID, err)
 			}
 			if fields["timetable"] && len(td.Timetable) > 0 {
 				var ttEntries []TimetableEntryReq
@@ -384,7 +384,7 @@ func adminTemplateAssignApplyHandler(cfg *Config, db *sql.DB, client *DansalClie
 					})
 				}
 				if err := client.ReplaceTimetable(r.Context(), evID, ttEntries, token); err != nil {
-					log.Printf("template assign timetable event %d: %v", evID, err)
+					logging.Errorf("template assign timetable event %d: %v", evID, err)
 				}
 			}
 		}

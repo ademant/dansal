@@ -3,8 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"io"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -50,7 +50,7 @@ func parseSeriesDefaults(raw json.RawMessage) seriesDefaults {
 	var d seriesDefaults
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &d); err != nil {
-			log.Printf("could not parse series defaults: %v", err)
+			logging.Warnf("could not parse series defaults: %v", err)
 		}
 	}
 	return d
@@ -311,7 +311,7 @@ func adminSeriesCreateHandler(cfg *Config, client *DansalClient) http.HandlerFun
 				"start_time": st,
 				"end_time":   et,
 			}, token); err != nil {
-				log.Printf("add series date %s to series %d: %v", d, created.ID, err)
+				logging.Errorf("add series date %s to series %d: %v", d, created.ID, err)
 			}
 		}
 
@@ -324,7 +324,7 @@ func adminSeriesCreateHandler(cfg *Config, client *DansalClient) http.HandlerFun
 		}
 		if len(assignIDs) > 0 {
 			if err := client.AssignEventsToSeries(r.Context(), created.ID, assignIDs, token); err != nil {
-				log.Printf("assign %d events to series %d: %v", len(assignIDs), created.ID, err)
+				logging.Errorf("assign %d events to series %d: %v", len(assignIDs), created.ID, err)
 			}
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/series/%d", created.ID), http.StatusSeeOther)
@@ -500,7 +500,7 @@ func adminSeriesDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFun
 		}
 		token := getSessionToken(r)
 		if err := client.DeleteSeries(r.Context(), id, token); err != nil {
-			log.Printf("delete series %d: %v", id, err)
+			logging.Errorf("delete series %d: %v", id, err)
 		}
 		http.Redirect(w, r, "/admin/series", http.StatusSeeOther)
 	}
@@ -538,7 +538,7 @@ func adminSeriesSaveDescriptionsHandler(cfg *Config, client *DansalClient) http.
 		}
 		if len(updates) > 0 {
 			if err := client.UpdateSeriesDescriptions(r.Context(), id, updates, token); err != nil {
-				log.Printf("update %d series descriptions: %v", len(updates), err)
+				logging.Errorf("update %d series descriptions: %v", len(updates), err)
 			}
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/series/%d", id), http.StatusSeeOther)
@@ -589,7 +589,7 @@ func adminSeriesRegenerateTokenHandler(cfg *Config, client *DansalClient) http.H
 		}
 		token := getSessionToken(r)
 		if _, err := client.RegenerateSeriesToken(r.Context(), id, token); err != nil {
-			log.Printf("regenerate token for series %d: %v", id, err)
+			logging.Errorf("regenerate token for series %d: %v", id, err)
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/series/%d", id), http.StatusSeeOther)
 	}
@@ -607,7 +607,7 @@ func adminSeriesRevokeTokenHandler(cfg *Config, client *DansalClient) http.Handl
 		}
 		token := getSessionToken(r)
 		if err := client.RevokeSeriesToken(r.Context(), id, token); err != nil {
-			log.Printf("revoke token for series %d: %v", id, err)
+			logging.Errorf("revoke token for series %d: %v", id, err)
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/series/%d", id), http.StatusSeeOther)
 	}
@@ -637,7 +637,7 @@ func adminSeriesImageUploadHandler(cfg *Config, client *DansalClient) http.Handl
 			data, _ := io.ReadAll(file)
 			file.Close()
 			if uerr := client.UploadSeriesImage(r.Context(), id, data, header.Filename, token); uerr != nil {
-				log.Printf("upload series image %d: %v", id, uerr)
+				logging.Errorf("upload series image %d: %v", id, uerr)
 				flashRedirect(w, r, path, flashToken(uerr), imageUploadErrorFlash("image", uerr))
 				return
 			}
@@ -659,7 +659,7 @@ func adminSeriesImageDeleteHandler(cfg *Config, client *DansalClient) http.Handl
 			return
 		}
 		if err := client.DeleteSeriesImage(r.Context(), id, getSessionToken(r)); err != nil {
-			log.Printf("delete series image %d: %v", id, err)
+			logging.Errorf("delete series image %d: %v", id, err)
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/series/%d", id), http.StatusSeeOther)
 	}
@@ -685,7 +685,7 @@ func adminSeriesApplyToEventsHandler(cfg *Config, client *DansalClient) http.Han
 			mode = "overwrite"
 		}
 		if err := client.ApplySeriesToEventsMode(r.Context(), id, mode, token); err != nil {
-			log.Printf("apply series %d to events: %v", id, err)
+			logging.Errorf("apply series %d to events: %v", id, err)
 			http.Error(w, "failed: "+err.Error(), http.StatusBadGateway)
 			return
 		}

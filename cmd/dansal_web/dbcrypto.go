@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"log"
 	"os"
 	"strings"
@@ -26,7 +27,7 @@ const encPrefix = "v1:"
 func initDBKey() {
 	v := os.Getenv(dbKeyEnvVar)
 	if v == "" {
-		log.Printf("warning: %s is not set — ActivityPub private keys stored in plaintext in DB; set this env var to enable encryption at rest", dbKeyEnvVar)
+		logging.Warnf("%s is not set — ActivityPub private keys stored in plaintext in DB; set this env var to enable encryption at rest", dbKeyEnvVar)
 		return
 	}
 	key, err := hex.DecodeString(v)
@@ -98,7 +99,7 @@ func migrateActorKeyEncryption(db *sql.DB) {
 	}
 	rows, err := db.Query("SELECT id, private_key_pem FROM actors")
 	if err != nil {
-		log.Printf("actorKeyMigration: query: %v", err)
+		logging.Errorf("actorKeyMigration: query: %v", err)
 		return
 	}
 	defer rows.Close()
@@ -122,10 +123,10 @@ func migrateActorKeyEncryption(db *sql.DB) {
 	for _, r := range plain {
 		enc := actorKeyEncrypt(r.pem)
 		if _, err := db.Exec("UPDATE actors SET private_key_pem=? WHERE id=?", enc, r.id); err != nil {
-			log.Printf("actorKeyMigration: update actor %d: %v", r.id, err)
+			logging.Errorf("actorKeyMigration: update actor %d: %v", r.id, err)
 		}
 	}
 	if len(plain) > 0 {
-		log.Printf("actorKeyMigration: encrypted %d plaintext actor key(s)", len(plain))
+		logging.Infof("actorKeyMigration: encrypted %d plaintext actor key(s)", len(plain))
 	}
 }

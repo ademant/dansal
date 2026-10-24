@@ -3,7 +3,7 @@ package main
 import (
 	"bytes"
 	"compress/gzip"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"strings"
 
@@ -50,7 +50,7 @@ var minifier = func() *minify.M {
 func minifyBytes(mediatype, label string, raw []byte) []byte {
 	min, err := minifier.Bytes(mediatype, raw)
 	if err != nil {
-		log.Printf("minify %s: %v -- serving unminified", label, err)
+		logging.Warnf("minify %s: %v -- serving unminified", label, err)
 		return raw
 	}
 	return min
@@ -149,7 +149,7 @@ func init() {
 	for _, loc := range flatpickrLocaleCodes {
 		raw, err := flatpickrLocalesFS.ReadFile("static/flatpickr/l10n/" + loc + ".js")
 		if err != nil {
-			log.Printf("flatpickr locale %s: %v -- skipping", loc, err)
+			logging.Warnf("flatpickr locale %s: %v -- skipping", loc, err)
 			continue
 		}
 		minified := minifyBytes("application/javascript", "flatpickr/l10n/"+loc+".js", raw)

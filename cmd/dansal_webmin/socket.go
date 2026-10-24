@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net"
 	"net/http"
 	"net/url"
@@ -114,7 +114,7 @@ func socketFlashRedirect(w http.ResponseWriter, r *http.Request, cfg *Config, ba
 	resp, err := sendSocket(cfg.AdminSocket, req)
 	if err != nil || !resp.OK {
 		msg := socketErrorMessage(err, resp)
-		log.Printf("%s: %v / %s", errLabel, err, msg)
+		logging.Errorf("%s: %v / %s", errLabel, err, msg)
 		http.Redirect(w, r, basePath+"?flash="+url.QueryEscape(errLabel+": "+msg), http.StatusSeeOther)
 		return resp, false
 	}

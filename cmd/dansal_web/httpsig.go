@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"io"
 	"net/http"
 	"net/url"
@@ -19,8 +20,6 @@ import (
 	"time"
 
 	"sync/atomic"
-
-	"log"
 )
 
 type pubKeyEntry struct {
@@ -63,7 +62,7 @@ func doKeyFetchRequest(ctx context.Context, httpClient *http.Client, url string,
 	if signed {
 		if s := keyFetchSigner.Load(); s != nil {
 			if err := SignGETRequest(req, s.keyID, s.privateKeyPEM); err != nil {
-				log.Printf("sign key fetch: %v", err)
+				logging.Errorf("sign key fetch: %v", err)
 			}
 		}
 	}

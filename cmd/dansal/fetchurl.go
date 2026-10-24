@@ -7,8 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -226,7 +226,7 @@ func getWithRetry(ctx context.Context, client *http.Client, rawURL string, heade
 			}
 		}
 		resp.Body.Close()
-		log.Printf("fetch: 429 from %s, retrying in %s (attempt %d)", rawURL, delay, attempt+1)
+		logging.Warnf("fetch: 429 from %s, retrying in %s (attempt %d)", rawURL, delay, attempt+1)
 		select {
 		case <-time.After(delay):
 		case <-ctx.Done():
@@ -816,7 +816,7 @@ func robotsAckFetchSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	recordRobotsAck(&src, rule, ack.RobotsAckReason, resolveDisplayName(callerID))
-	log.Printf("robots-ack: source_id=%d url=%q rule=%q caller=%d", src.ID, src.URL, rule, callerID)
+	logging.Infof("robots-ack: source_id=%d url=%q rule=%q caller=%d", src.ID, src.URL, rule, callerID)
 	writeJSON(w, src)
 }
 
@@ -1153,10 +1153,10 @@ func withEntrySavepoint(tx querier, fn func() error) error {
 // The always-on line stays short; config.Server.Debug additionally dumps the
 // full event request that failed to import (see #923).
 func logFailedImportEntry(src FetchSource, req EventCreateRequest, err error) {
-	log.Printf("fetch import: skipping entry from %s (title=%q, uid=%s): %v", src.URL, req.Title, req.UID, err)
+	logging.Warnf("fetch import: skipping entry from %s (title=%q, uid=%s): %v", src.URL, req.Title, req.UID, err)
 	if config != nil && config.Server.Debug {
 		if b, mErr := json.Marshal(req); mErr == nil {
-			log.Printf("fetch import: failed entry detail: %s", b)
+			logging.Warnf("fetch import: failed entry detail: %s", b)
 		}
 	}
 }
@@ -1796,12 +1796,12 @@ func fetchURL(w http.ResponseWriter, r *http.Request) {
 	allEvents, counts, err := importFromSource(r.Context(), src)
 	if err != nil {
 		recordFetchResult(src, 0, err)
-		log.Printf("fetchurl: source_id=%d url=%q type=%s result=error caller=%d err=%v", src.ID, src.URL, src.Type, callerID, err)
+		logging.Errorf("fetchurl: source_id=%d url=%q type=%s result=error caller=%d err=%v", src.ID, src.URL, src.Type, callerID, err)
 		writeError(w, err.Error(), http.StatusBadGateway)
 		return
 	}
 	recordFetchResult(src, len(allEvents), nil)
-	log.Printf("fetchurl: source_id=%d url=%q type=%s result=ok events=%d caller=%d", src.ID, src.URL, src.Type, len(allEvents), callerID)
+	logging.Infof("fetchurl: source_id=%d url=%q type=%s result=ok events=%d caller=%d", src.ID, src.URL, src.Type, len(allEvents), callerID)
 
 	w.Header().Set("Content-Type", "application/json")
 	if counts.AllNew() && len(allEvents) > 0 {
@@ -2038,12 +2038,12 @@ func fetchURLByID(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		recordFetchResult(src, 0, err)
-		log.Printf("fetchurl: source_id=%d url=%q type=%s result=error caller=%d err=%v", src.ID, src.URL, src.Type, callerID, err)
+		logging.Errorf("fetchurl: source_id=%d url=%q type=%s result=error caller=%d err=%v", src.ID, src.URL, src.Type, callerID, err)
 		writeError(w, err.Error(), http.StatusBadGateway)
 		return
 	}
 	recordFetchResult(src, len(allEvents), nil)
-	log.Printf("fetchurl: source_id=%d url=%q type=%s result=ok events=%d caller=%d", src.ID, src.URL, src.Type, len(allEvents), callerID)
+	logging.Infof("fetchurl: source_id=%d url=%q type=%s result=ok events=%d caller=%d", src.ID, src.URL, src.Type, len(allEvents), callerID)
 
 	w.Header().Set("Content-Type", "application/json")
 	if counts.AllNew() && len(allEvents) > 0 {

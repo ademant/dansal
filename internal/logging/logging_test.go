@@ -1,8 +1,9 @@
-package main
+package logging
 
 import (
 	"context"
 	"fmt"
+	"log"
 	"log/slog"
 	"strings"
 	"testing"
@@ -26,7 +27,7 @@ func newTestLogger(level slog.Level) (*slog.Logger, *recordingWriter) {
 	w := &recordingWriter{}
 	lv := new(slog.LevelVar)
 	lv.Set(level)
-	return slog.New(&syslogHandler{w: w, level: lv}), w
+	return slog.New(&handler{w: w, level: lv}), w
 }
 
 // TestSyslogHandlerMapsLevelsToPriorities covers #1645: each slog level is
@@ -98,7 +99,7 @@ func TestSyslogHandlerFormatsAttributes(t *testing.T) {
 // records afterwards.
 func TestSyslogHandlerEnabledTracksLevelChanges(t *testing.T) {
 	lv := new(slog.LevelVar)
-	h := &syslogHandler{w: &recordingWriter{}, level: lv}
+	h := &handler{w: &recordingWriter{}, level: lv}
 	if h.Enabled(context.Background(), slog.LevelInfo) != true {
 		t.Fatal("info should be enabled at the default level")
 	}
@@ -119,25 +120,32 @@ func TestParseLogLevel(t *testing.T) {
 		" error ": slog.LevelError,
 	}
 	for in, want := range ok {
-		got, err := parseLogLevel(in)
+		got, err := ParseLevel(in)
 		if err != nil {
-			t.Fatalf("parseLogLevel(%q): %v", in, err)
+			t.Fatalf("ParseLevel(%q): %v", in, err)
 		}
 		if got != want {
-			t.Fatalf("parseLogLevel(%q) = %v, want %v", in, got, want)
+			t.Fatalf("ParseLevel(%q) = %v, want %v", in, got, want)
 		}
 	}
-	if _, err := parseLogLevel("verbose"); err == nil {
-		t.Fatal("parseLogLevel(\"verbose\") should fail")
+	if _, err := ParseLevel("verbose"); err == nil {
+		t.Fatal("ParseLevel(\"verbose\") should fail")
 	}
 }
 
-// TestLogLevelDefaultsToInfo checks the config default is info when the key
-// is absent.
-func TestLogLevelDefaultsToInfo(t *testing.T) {
-	cfg := &Config{}
-	applyDefaults(cfg)
-	if cfg.Server.LogLevel != "info" {
-		t.Fatalf("LogLevel = %q, want info", cfg.Server.LogLevel)
+// TestStdlibLogGoesToErrPriority covers #1646: output of the standard log
+// package (log.Fatal and library messages) is sent at Err priority whatever
+// the configured level, so a fatal startup message is never filtered out.
+func TestStdlibLogGoesToErrPriority(t *testing.T) {
+	w := &recordingWriter{}
+	lv := new(slog.LevelVar)
+	lv.Set(slog.LevelError)
+	slog.SetDefault(slog.New(&handler{w: w, level: lv}))
+	setupWriter(w)
+	defer slog.SetDefault(slog.Default())
+
+	log.Printf("fatal: %s", "boom")
+	if len(w.got) != 1 || w.got[0] != "err fatal: boom" {
+		t.Fatalf("got %v, want [err fatal: boom]", w.got)
 	}
 }

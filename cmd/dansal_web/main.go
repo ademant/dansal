@@ -6,8 +6,8 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"log"
-	"log/syslog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -69,12 +69,14 @@ func main() {
 	if inst := instance.FromConfigArg(); inst != "" {
 		tag = "dansal-web@" + inst
 	}
-	if w, err := syslog.New(syslog.LOG_INFO|syslog.LOG_DAEMON, tag); err == nil {
-		log.SetOutput(w)
-		log.SetFlags(0)
-	}
+	logging.Setup(tag)
 
 	cfg := loadConfig()
+	if err := logging.SetLevel(cfg.LogLevel); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	logging.Infof("log level set: %s", cfg.LogLevel)
 
 	if *backfillTileAVIFFlag {
 		converted, skipped, failed := backfillTileAVIF(cfg.TileCacheDir)
@@ -137,7 +139,7 @@ func main() {
 	getOrCreateTileToken(db) // #1269: ensure the public tile token exists before the cache's first read
 	go warmAVIFEncoder()     // #1327: pay the WASM encoder's ~2s init cost here, not on a visitor's first tile/image request
 	if cfg.InternalSharedSecret == "" {
-		log.Printf("warning: internal_shared_secret is unset — backend calls to dansal will NOT be exempt from its rate/connection limiter and share the same per-IP budget as all public traffic; set it to match server.internal_shared_secret in dansal's config.yaml (see #1118)")
+		logging.Warnf("internal_shared_secret is unset — backend calls to dansal will NOT be exempt from its rate/connection limiter and share the same per-IP budget as all public traffic; set it to match server.internal_shared_secret in dansal's config.yaml (see #1118)")
 	}
 	client := &DansalClient{
 		BaseURL: cfg.DansalURL,
@@ -683,18 +685,18 @@ func main() {
 		for range sig {
 			newCfg := reloadConfig(cfg.configPath)
 			if newCfg == nil {
-				log.Print("reload failed, keeping current configuration")
+				logging.Errorf("reload failed, keeping current configuration")
 				continue
 			}
 			newI18n := loadI18n(newCfg.I18nFile)
 			live.store(buildHandler(newCfg, newI18n))
-			log.Print("configuration reloaded")
+			logging.Infof("configuration reloaded")
 		}
 	}()
 
 	relayActor, err := ensureRelayActor(db, cfg.RelayActorName)
 	if err != nil {
-		log.Printf("relay actor init: %v", err)
+		logging.Errorf("relay actor init: %v", err)
 	} else {
 		setKeyFetchSigner(actorKeyID(cfg, relayActor.OrgSlug), relayActor.PrivateKeyPEM)
 	}
@@ -703,7 +705,7 @@ func main() {
 	startFlashSweeper()
 	startDataRetentionSweep(cfg, db)
 
-	log.Printf("dansal-web %s (built %s) listening on %s (domain: %s, public base URL: %s, timeouts: read=%ds write=%ds idle=%ds)",
+	logging.Infof("dansal-web %s (built %s) listening on %s (domain: %s, public base URL: %s, timeouts: read=%ds write=%ds idle=%ds)",
 		Version, BuildTime, cfg.Listen, cfg.Domain, cfg.publicBaseURL(), cfg.ReadTimeoutSecs, cfg.WriteTimeoutSecs, cfg.IdleTimeoutSecs)
 	srv := &http.Server{
 		Addr:              cfg.Listen,
@@ -725,13 +727,13 @@ func main() {
 
 	<-ctx.Done()
 	stop()
-	log.Println("web server shutting down...")
+	logging.Infof("web server shutting down...")
 	shutCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutCtx); err != nil {
-		log.Printf("web server shutdown error: %v", err)
+		logging.Errorf("web server shutdown error: %v", err)
 	}
-	log.Println("web server stopped")
+	logging.Infof("web server stopped")
 }
 
 // baselineCSP builds the per-request CSP header. #1141/#1147: every <script>
@@ -814,7 +816,7 @@ func panicRecoveryMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if rec := recover(); rec != nil {
-				log.Printf("panic: %v method=%s path=%s\n%s", rec, r.Method, r.URL.Path, debug.Stack())
+				logging.Errorf("panic: %v method=%s path=%s\n%s", rec, r.Method, r.URL.Path, debug.Stack())
 				http.Error(w, "Internal server error", http.StatusInternalServerError)
 			}
 		}()

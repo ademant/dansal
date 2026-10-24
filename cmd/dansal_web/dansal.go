@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"io"
-	"log"
 	"math/rand"
 	"mime/multipart"
 	"net/http"
@@ -1024,7 +1024,7 @@ func (c *DansalClient) getWithTotalAuthed(ctx context.Context, path, token strin
 			if n, err := strconv.Atoi(v); err == nil {
 				total = n
 			} else {
-				log.Printf("dansal client: invalid X-Total-Count %q", v)
+				logging.Warnf("dansal client: invalid X-Total-Count %q", v)
 			}
 		}
 	}, out)

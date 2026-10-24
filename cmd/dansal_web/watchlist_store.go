@@ -5,7 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"strconv"
 	"time"
 )
@@ -85,8 +85,8 @@ func watchlistRetention(db *sql.DB) time.Duration {
 func sweepWatchlists(db *sql.DB) {
 	cutoff := time.Now().Add(-watchlistRetention(db)).Unix()
 	if res, err := db.Exec("DELETE FROM watchlists WHERE updated_at < ?", cutoff); err != nil {
-		log.Printf("data retention sweep: watchlists: %v", err)
+		logging.Errorf("data retention sweep: watchlists: %v", err)
 	} else if n, _ := res.RowsAffected(); n > 0 {
-		log.Printf("data retention sweep: removed %d expired watchlist(s)", n)
+		logging.Debugf("data retention sweep: removed %d expired watchlist(s)", n)
 	}
 }

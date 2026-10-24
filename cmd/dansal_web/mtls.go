@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"strings"
 )
@@ -36,7 +36,7 @@ func certAuthMiddleware(client *DansalClient) func(http.Handler) http.Handler {
 
 			lr, err := client.CertLogin(r.Context(), cn)
 			if err != nil {
-				log.Printf("cert-auth: CertLogin for %q failed: %v", cn, err)
+				logging.Warnf("cert-auth: CertLogin for %q failed: %v", cn, err)
 				next.ServeHTTP(w, r)
 				return
 			}

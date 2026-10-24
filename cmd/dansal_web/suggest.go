@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"html/template"
 	"io"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -93,7 +93,7 @@ func suggestPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		}
 		ip := getClientIP(r)
 		if tokenThrottle.isBlocked(ip) {
-			log.Printf("%s ip=%s path=/events/suggest", tokenBlock, ip)
+			logging.Warnf("%s ip=%s path=/events/suggest", tokenBlock, ip)
 			http.Error(w, i18n.T(r, "form_token_cap_error"), http.StatusTooManyRequests)
 			return
 		}
@@ -109,7 +109,7 @@ func suggestPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		tokenThrottle.record(ip)
 		dances, err := client.GetDances(r.Context())
 		if err != nil {
-			log.Printf("suggest: could not load dances: %v", err)
+			logging.Errorf("suggest: could not load dances: %v", err)
 		}
 		data := SuggestPageData{
 			HintSMTP:          cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
@@ -149,7 +149,7 @@ func suggestPreviewHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		ip := getClientIP(r)
 		key := ip + "|" + r.UserAgent()
 		if publicThrottle.isBlocked(key) {
-			log.Printf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
+			logging.Warnf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
 			title := i18n.T(r, "suggest_event_title")
 			renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
 				HintSMTP:          cfg.SMTPHost != "" || cfg.SMTPSendmail != "",
@@ -206,7 +206,7 @@ func suggestPreviewHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			if b, err := json.Marshal(pf); err == nil {
 				importAllPrefills[i] = string(b)
 			} else {
-				log.Printf("could not marshal import prefill: %v", err)
+				logging.Errorf("could not marshal import prefill: %v", err)
 			}
 		}
 
@@ -216,7 +216,7 @@ func suggestPreviewHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			if b, err := json.Marshal(prefills[0]); err == nil {
 				prefillJSON = template.JS(b)
 			} else {
-				log.Printf("could not marshal prefill JSON: %v", err)
+				logging.Errorf("could not marshal prefill JSON: %v", err)
 			}
 			for _, t := range prefills[0].Tags {
 				prefillTags[t] = true
@@ -225,7 +225,7 @@ func suggestPreviewHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 
 		dances, err := client.GetDances(r.Context())
 		if err != nil {
-			log.Printf("suggest: could not load dances: %v", err)
+			logging.Errorf("suggest: could not load dances: %v", err)
 		}
 		title := i18n.T(r, "suggest_event_title")
 		renderTemplate(w, tmpls.suggestEvent, tmplData(r, cfg, i18n, title, SuggestPageData{
@@ -265,14 +265,14 @@ func trimmedNonEmpty(vals []string) []string {
 func suggestError(w http.ResponseWriter, r *http.Request, cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n, errMsg, ip string) {
 	dances, err := client.GetDances(r.Context())
 	if err != nil {
-		log.Printf("suggest: could not load dances: %v", err)
+		logging.Errorf("suggest: could not load dances: %v", err)
 	}
 	pf := wizPrefillFromForm(r)
 	prefillJSON := template.JS("{}")
 	if b, merr := json.Marshal(pf); merr == nil {
 		prefillJSON = template.JS(b)
 	} else {
-		log.Printf("could not marshal error-prefill JSON: %v", merr)
+		logging.Errorf("could not marshal error-prefill JSON: %v", merr)
 	}
 	prefillTags := make(map[string]bool)
 	for _, t := range pf.Tags {
@@ -316,7 +316,7 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 		}
 		key := ip + "|" + r.UserAgent()
 		if publicThrottle.isBlocked(key) {
-			log.Printf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
+			logging.Warnf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
 			suggestError(w, r, cfg, tmpls, client, i18n, i18n.T(r, "suggest_error_rate_limit"), ip)
 			return
 		}
@@ -400,7 +400,7 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 		result, err := client.SuggestEvent(r.Context(), req, cfg.publicBaseURL(), getBoardSessionToken(r))
 		if err != nil {
 			clearPendingSubmission(ip, r.UserAgent(), pendingScope)
-			log.Printf("dansal-web: suggest submit failed ip_hash=%s err=%v", hashIP(ip), err)
+			logging.Errorf("dansal-web: suggest submit failed ip_hash=%s err=%v", hashIP(ip), err)
 			suggestError(w, r, cfg, tmpls, client, i18n, i18n.T(r, "suggest_error_submit"), ip)
 			return
 		}
@@ -416,7 +416,7 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 				defer file.Close()
 				if data, rerr := io.ReadAll(file); rerr == nil {
 					if uerr := client.UploadSuggestManageImage(r.Context(), token, data, header.Filename); uerr != nil {
-						log.Printf("suggest: upload image: %v", uerr)
+						logging.Errorf("suggest: upload image: %v", uerr)
 						flash = imageUploadErrorFlash("image", uerr)
 					}
 				}
@@ -637,7 +637,7 @@ func suggestManagePageHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		ip := getClientIP(r)
 		dances, err := client.GetDances(r.Context())
 		if err != nil {
-			log.Printf("suggest: could not load dances: %v", err)
+			logging.Errorf("suggest: could not load dances: %v", err)
 		}
 
 		// Build a name→ID map so we can pre-check dance checkboxes both
@@ -690,7 +690,7 @@ func suggestManagePageHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		}
 		b, err := json.Marshal(pf)
 		if err != nil {
-			log.Printf("could not marshal manage prefill: %v", err)
+			logging.Errorf("could not marshal manage prefill: %v", err)
 			b = []byte("{}")
 		}
 		prefillTags := make(map[string]bool, len(pf.Tags))
@@ -841,7 +841,7 @@ func suggestManageSubmitHandler(cfg *Config, tmpls *Templates, client *DansalCli
 
 		needsReview, err := client.PatchSuggestManageEvent(r.Context(), token, req)
 		if err != nil {
-			log.Printf("dansal-web: suggest manage patch failed ip_hash=%s err=%v", hashIP(getClientIP(r)), err)
+			logging.Errorf("dansal-web: suggest manage patch failed ip_hash=%s err=%v", hashIP(getClientIP(r)), err)
 			errKey := "suggest_error_submit"
 			if ae, ok := errors.AsType[*apiHTTPError](err); ok && ae.ErrorCode == "start_time_past" {
 				errKey = "suggest_date_past" // #1413
@@ -858,7 +858,7 @@ func suggestManageSubmitHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			defer file.Close()
 			if data, rerr := io.ReadAll(file); rerr == nil {
 				if uerr := client.UploadSuggestManageImage(r.Context(), token, data, header.Filename); uerr != nil {
-					log.Printf("suggest manage: upload image: %v", uerr)
+					logging.Errorf("suggest manage: upload image: %v", uerr)
 					flash = imageUploadErrorFlash("image", uerr)
 				}
 			}

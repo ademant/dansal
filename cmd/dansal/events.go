@@ -7,8 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"io"
-	"log"
 	"math"
 	"net/http"
 	"slices"
@@ -1117,10 +1117,10 @@ func titlesFuzzyOverlap(a, b string) bool {
 // since the events themselves were already inserted/updated successfully.
 func flagDuplicateReview(q querier, newID, candidateID int, title string) {
 	if _, err := q.Exec("UPDATE events SET needs_duplicate_review = 1, duplicate_of_id = ? WHERE id = ?", candidateID, newID); err != nil {
-		log.Printf("flagDuplicateReview: update new event %d: %v", newID, err)
+		logging.Errorf("flagDuplicateReview: update new event %d: %v", newID, err)
 	}
 	if _, err := q.Exec("UPDATE events SET needs_duplicate_review = 1, duplicate_of_id = ? WHERE id = ?", newID, candidateID); err != nil {
-		log.Printf("flagDuplicateReview: update candidate event %d: %v", candidateID, err)
+		logging.Errorf("flagDuplicateReview: update candidate event %d: %v", candidateID, err)
 	}
 	go notifyAdminsDuplicateReview(title)
 }
@@ -3336,7 +3336,7 @@ func declineEventHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Event not found", http.StatusNotFound)
 		return
 	}
-	log.Printf("events: declined suggestion %d (title=%q) — reason=%q", id, title, reason)
+	logging.Infof("events: declined suggestion %d (title=%q) — reason=%q", id, title, reason)
 	sendDeclineNotice(suggesterEmail, "Your suggested event was not published",
 		"Your suggested event was reviewed and not published.", reason)
 	w.WriteHeader(http.StatusNoContent)
@@ -3356,7 +3356,7 @@ func sendDeclineNotice(to, subject, intro, reason string) {
 	cfg := config.SMTP
 	go func() {
 		if _, err := sendEmailWithConfig(cfg, to, subject, body, false); err != nil {
-			log.Printf("decline notice to %s: %v", to, err)
+			logging.Errorf("decline notice to %s: %v", to, err)
 		}
 	}()
 }

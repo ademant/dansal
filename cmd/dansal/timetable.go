@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"regexp"
 	"sort"
@@ -111,7 +111,7 @@ func recordTimetableHistory(q querier, eventID, callerID int, snapshot []Timetab
 		"INSERT INTO timetable_history (event_id, changed_at, changed_by, snapshot) VALUES (?, ?, ?, ?)",
 		eventID, time.Now().UTC().Unix(), resolveDisplayName(callerID), string(b),
 	); err != nil {
-		log.Printf("recordTimetableHistory: event %d: %v", eventID, err)
+		logging.Errorf("recordTimetableHistory: event %d: %v", eventID, err)
 	}
 }
 

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"strings"
 )
@@ -27,7 +27,7 @@ func adminFetchurlSuggestionsHandler(cfg *Config, tmpls *Templates, client *Dans
 		token := getSessionToken(r)
 		suggestions, err := client.ListFetchSuggestions(r.Context(), token)
 		if err != nil {
-			log.Printf("admin fetchurl suggestions list: %v", err)
+			logging.Errorf("admin fetchurl suggestions list: %v", err)
 			suggestions = nil
 		}
 		flash := r.URL.Query().Get("flash")
@@ -55,7 +55,7 @@ func adminFetchurlSuggestionApproveHandler(client *DansalClient) http.HandlerFun
 		// robots_ack: the reviewer accepts a robots.txt restriction on the feed (#1545).
 		robotsAck := r.FormValue("robots_ack") != ""
 		if err := client.ApproveFetchSuggestion(r.Context(), token, id, robotsAck, robotsAckReasonAdmin); err != nil {
-			log.Printf("approve fetchurl suggestion %d: %v", id, err)
+			logging.Errorf("approve fetchurl suggestion %d: %v", id, err)
 			flash = "fetchurl_suggestion_approve_error"
 			if _, restricted := robotsNotAcknowledgedMessage(err); restricted {
 				flash = "fetchurl_suggestion_robots_error"
@@ -78,7 +78,7 @@ func adminFetchurlSuggestionRejectHandler(client *DansalClient) http.HandlerFunc
 		token := getSessionToken(r)
 		flash := "fetchurl_suggestion_rejected"
 		if err := client.RejectFetchSuggestion(r.Context(), token, id); err != nil {
-			log.Printf("reject fetchurl suggestion %d: %v", id, err)
+			logging.Errorf("reject fetchurl suggestion %d: %v", id, err)
 			flash = "fetchurl_suggestion_reject_error"
 		}
 		http.Redirect(w, r, "/admin/fetchurl-suggestions?flash="+flash, http.StatusSeeOther)

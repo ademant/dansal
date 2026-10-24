@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"strconv"
 	"strings"
@@ -51,7 +51,7 @@ func updateEventAvailability(eventID int) {
 		avail = "limited"
 	}
 	db.Exec("UPDATE events SET availability=? WHERE id=?", avail, eventID)
-	log.Printf("bookings: event %d availability → %q (%d/%d)", eventID, avail, approvedCount, ticketsTotal)
+	logging.Infof("bookings: event %d availability → %q (%d/%d)", eventID, avail, approvedCount, ticketsTotal)
 }
 
 // bookingVerifyExpiry returns now + VerificationExpiryHours.
@@ -318,7 +318,7 @@ func createBooking(w http.ResponseWriter, r *http.Request) {
 	cfg := config.SMTP
 	go func() {
 		if _, err := sendEmailWithConfig(cfg, req.Email, s.VerifySubject, verifyBody, false); err != nil {
-			log.Printf("bookings: verify email failed for booking %d: %v", id, err)
+			logging.Errorf("bookings: verify email failed for booking %d: %v", id, err)
 		}
 	}()
 
@@ -400,7 +400,7 @@ func verifyBooking(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "invalid or already used verification link", http.StatusNotFound)
 		return
 	}
-	log.Printf("bookings: verified booking %d for event %d", id, eventID)
+	logging.Infof("bookings: verified booking %d for event %d", id, eventID)
 	base := strings.TrimRight(config.Server.BaseURL, "/")
 	title := eventTitle(eventID)
 	loc := bookingMailStringsFor(lang)
@@ -452,7 +452,7 @@ func updateBookingStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "booking not found", http.StatusNotFound)
 		return
 	}
-	log.Printf("bookings: booking %d set to %s by user %d", bookingID, req.Status, callerID)
+	logging.Infof("bookings: booking %d set to %s by user %d", bookingID, req.Status, callerID)
 	updateEventAvailability(eventID)
 	if req.Status == "approved" {
 		var name, email, lang, qrToken string
@@ -551,7 +551,7 @@ func checkinBooking(w http.ResponseWriter, r *http.Request) {
 		}
 		b.Status = "checked_in"
 		b.QRToken = ""
-		log.Printf("bookings: booking %d checked in by user %d", b.ID, callerID)
+		logging.Infof("bookings: booking %d checked in by user %d", b.ID, callerID)
 		updateEventAvailability(b.EventID)
 	}
 
@@ -574,7 +574,7 @@ func deleteBooking(w http.ResponseWriter, r *http.Request) {
 	}
 
 	db.Exec("DELETE FROM bookings WHERE id=?", bookingID)
-	log.Printf("bookings: booking %d deleted by user %d", bookingID, callerID)
+	logging.Infof("bookings: booking %d deleted by user %d", bookingID, callerID)
 	updateEventAvailability(eventID)
 	w.WriteHeader(http.StatusNoContent)
 }

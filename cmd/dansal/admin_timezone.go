@@ -1,6 +1,8 @@
 package main
 
-import "log"
+import (
+	"github.com/ademant/dansal/internal/logging"
+)
 
 // Admin-socket commands for server.timezone (#1394), following the exact
 // shape adminHeartbeatGet/adminHeartbeatSet (admin_notify.go) already use for
@@ -43,6 +45,6 @@ func adminTimezoneSet(req adminRequest) adminResponse {
 		}
 	}
 	instanceTimezone = loc
-	log.Printf("server.timezone changed to %q via admin socket — every event now displays in this zone", req.Timezone)
+	logging.Infof("server.timezone changed to %q via admin socket — every event now displays in this zone", req.Timezone)
 	return adminResponse{OK: true}
 }

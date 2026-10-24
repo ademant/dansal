@@ -2,9 +2,9 @@ package main
 
 import (
 	"bytes"
+	"github.com/ademant/dansal/internal/logging"
 	"html"
 	"html/template"
-	"log"
 	"os"
 	"path/filepath"
 
@@ -32,12 +32,12 @@ func loadPagesContent(path string) *PagesContent {
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		log.Printf("pages: read %s: %v", path, err)
+		logging.Errorf("pages: read %s: %v", path, err)
 		return &PagesContent{}
 	}
 	var pc PagesContent
 	if err := yaml.Unmarshal(data, &pc); err != nil {
-		log.Printf("pages: parse %s: %v", path, err)
+		logging.Errorf("pages: parse %s: %v", path, err)
 		return &PagesContent{}
 	}
 	return &pc
@@ -104,7 +104,7 @@ func LegalMarkdownTextHTML(name, text string) template.HTML {
 	}
 	var buf bytes.Buffer
 	if err := legalMarkdown.Convert([]byte(text), &buf); err != nil {
-		log.Printf("legal markdown %s: render error: %v", name, err)
+		logging.Errorf("legal markdown %s: render error: %v", name, err)
 		return template.HTML(`<pre>` + html.EscapeString(text) + `</pre>`)
 	}
 	return template.HTML(sanitizeMarkdownHTML(buf.String()))

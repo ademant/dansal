@@ -6,8 +6,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"io/fs"
-	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -64,15 +64,15 @@ func startAdminSocket(path string) net.Listener {
 	os.Remove(path)
 	ln, err := net.Listen("unix", path)
 	if err != nil {
-		log.Printf("Admin socket error: %v", err)
+		logging.Errorf("Admin socket error: %v", err)
 		return nil
 	}
 	if err := os.Chmod(path, 0600); err != nil {
-		log.Printf("Admin socket chmod error: %v", err)
+		logging.Errorf("Admin socket chmod error: %v", err)
 		ln.Close()
 		return nil
 	}
-	log.Printf("Admin socket listening on %s", path)
+	logging.Infof("Admin socket listening on %s", path)
 	go func() {
 		for {
 			conn, err := ln.Accept()
@@ -175,7 +175,7 @@ func dispatchAdminCmd(req adminRequest) adminResponse {
 		if !resp.OK {
 			outcome = "error: " + resp.Error
 		}
-		log.Printf("admin-audit: cmd=%s target=%s result=%s", req.Cmd, adminAuditTarget(req), outcome)
+		logging.Infof("admin-audit: cmd=%s target=%s result=%s", req.Cmd, adminAuditTarget(req), outcome)
 	}
 	return resp
 }
@@ -325,7 +325,7 @@ func adminFetchAll() adminResponse {
 	kept := sources[:0]
 	for _, src := range sources {
 		if robotsDisallowRule(context.Background(), src.URL) != "" {
-			log.Printf("fetch-all: source_id=%d skipped: robots.txt disallows it (manual fetch only)", src.ID)
+			logging.Warnf("fetch-all: source_id=%d skipped: robots.txt disallows it (manual fetch only)", src.ID)
 			continue
 		}
 		kept = append(kept, src)
@@ -355,11 +355,11 @@ func adminFetchAll() adminResponse {
 			if fetchErr != nil {
 				r.Error = fetchErr.Error()
 				recordFetchResult(src, 0, fetchErr)
-				log.Printf("fetch-all: source_id=%d url=%q type=%s result=error err=%v", src.ID, src.URL, src.Type, fetchErr)
+				logging.Errorf("fetch-all: source_id=%d url=%q type=%s result=error err=%v", src.ID, src.URL, src.Type, fetchErr)
 			} else {
 				r.Events = len(events)
 				recordFetchResult(src, len(events), nil)
-				log.Printf("fetch-all: source_id=%d url=%q type=%s result=ok events=%d", src.ID, src.URL, src.Type, len(events))
+				logging.Infof("fetch-all: source_id=%d url=%q type=%s result=ok events=%d", src.ID, src.URL, src.Type, len(events))
 			}
 			results[i] = r
 		})
@@ -744,7 +744,7 @@ func adminPruneImages() adminResponse {
 				result.FreedBytes += info.Size()
 			}
 			result.Removed++
-			log.Printf("prune-images: removed %s", path)
+			logging.Debugf("prune-images: removed %s", path)
 		}
 	}
 	err := filepath.WalkDir(imagesDir, func(path string, d fs.DirEntry, err error) error {
@@ -968,7 +968,7 @@ func adminMailBounces() adminResponse {
 		}
 		results = append(results, bounceResult{MessageID: msgID, Reason: reason, Marked: marked})
 		if marked {
-			log.Printf("mail-bounces: marked delivery_failed for message_id=%s", msgID)
+			logging.Warnf("mail-bounces: marked delivery_failed for message_id=%s", msgID)
 		}
 	}
 	if results == nil {

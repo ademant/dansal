@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"context"
 	"database/sql"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net"
 	"net/http"
 	"net/url"
@@ -273,7 +273,7 @@ func internalRelayRedeliverHandler(cfg *Config, db *sql.DB, client *DansalClient
 			defer cancel()
 			relayActor, err := ensureRelayActor(db, cfg.RelayActorName)
 			if err != nil {
-				log.Printf("relay redeliver: get actor: %v", err)
+				logging.Errorf("relay redeliver: get actor: %v", err)
 				return
 			}
 			params := url.Values{
@@ -283,7 +283,7 @@ func internalRelayRedeliverHandler(cfg *Config, db *sql.DB, client *DansalClient
 			}
 			events, err := client.GetEventsFiltered(ctx, params)
 			if err != nil {
-				log.Printf("relay redeliver: get events: %v", err)
+				logging.Errorf("relay redeliver: get events: %v", err)
 				return
 			}
 			sent := 0
@@ -297,12 +297,12 @@ func internalRelayRedeliverHandler(cfg *Config, db *sql.DB, client *DansalClient
 				}
 				activity := buildAnnounceActivity(cfg, relayActor.OrgSlug, orgActor.OrgSlug, e)
 				if err := deliverActivityToFollowers(cfg, db, relayActor, activity); err != nil {
-					log.Printf("relay redeliver event %d: %v", e.ID, err)
+					logging.Errorf("relay redeliver event %d: %v", e.ID, err)
 				} else {
 					sent++
 				}
 			}
-			log.Printf("relay redeliver: sent %d Announce activities", sent)
+			logging.Infof("relay redeliver: sent %d Announce activities", sent)
 		}()
 		w.WriteHeader(http.StatusAccepted)
 	}

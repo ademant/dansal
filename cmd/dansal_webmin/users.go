@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -46,7 +46,7 @@ func usersPageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 		errMsg := ""
 		if err != nil {
 			errMsg = err.Error()
-			log.Printf("list admin users: %v", err)
+			logging.Errorf("list admin users: %v", err)
 		}
 		d := tmplData(r, cfg, "Admin Users", map[string]any{
 			"Users": users,
@@ -66,7 +66,7 @@ func userSessionsPageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 		if err != nil {
 			errMsg = err.Error()
 		} else if err := json.Unmarshal(resp.Data, &sessions); err != nil {
-			log.Printf("list-sessions %s: decode: %v", email, err)
+			logging.Errorf("list-sessions %s: decode: %v", email, err)
 			errMsg = "could not parse session list"
 		}
 		d := tmplData(r, cfg, "Sessions: "+email, map[string]any{

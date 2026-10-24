@@ -1,8 +1,8 @@
 package main
 
 import (
+	"github.com/ademant/dansal/internal/logging"
 	"html/template"
-	"log"
 	"net/http"
 	"strings"
 )
@@ -39,7 +39,7 @@ func render(w http.ResponseWriter, tmpl *template.Template, data any, withBase b
 		// calling http.Error here would trigger a superfluous WriteHeader
 		// warning. Log genuine template bugs; silently drop client disconnects.
 		if !isClientDisconnect(err) {
-			log.Printf("template error: %v", err)
+			logging.Errorf("template error: %v", err)
 		}
 	}
 }

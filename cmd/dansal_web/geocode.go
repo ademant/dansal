@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -109,7 +109,7 @@ func geocodeHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 					found, err = places.Search(db, countries, q, geocodePlaceLimit)
 				}
 				if err != nil {
-					log.Printf("geocode: place search: %v", err)
+					logging.Errorf("geocode: place search: %v", err)
 				}
 				if len(found) > 0 {
 					out := make([]geocodeResult, 0, len(found))
@@ -386,7 +386,7 @@ func nominatimGeocodeReverseHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 		}
 		if len(body) > 0 {
 			if err := setReverseGeocodeCache(db, latKey, lonKey, lang, body); err != nil {
-				log.Printf("geocode reverse: cache store: %v", err)
+				logging.Warnf("geocode reverse: cache store: %v", err)
 			}
 		}
 		w.Write(body)

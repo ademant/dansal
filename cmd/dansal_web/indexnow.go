@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"strings"
 	"time"
@@ -71,11 +71,11 @@ func notifyIndexNowURLs(baseURL, key string, urls []string) {
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Printf("indexnow: %v", err)
+		logging.Errorf("indexnow: %v", err)
 		return
 	}
 	resp.Body.Close()
 	if resp.StatusCode >= 300 {
-		log.Printf("indexnow: status %d for %d URL(s)", resp.StatusCode, len(urls))
+		logging.Infof("indexnow: status %d for %d URL(s)", resp.StatusCode, len(urls))
 	}
 }

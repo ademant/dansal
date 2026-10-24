@@ -6,8 +6,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -670,7 +670,7 @@ func encryptBackupInPlace(plainPath, keyFile string) (string, error) {
 		return "", err
 	}
 	if err := os.Remove(plainPath); err != nil {
-		log.Printf("backup: encrypted %s but could not remove plaintext %s: %v", encPath, plainPath, err)
+		logging.Errorf("backup: encrypted %s but could not remove plaintext %s: %v", encPath, plainPath, err)
 	}
 	return encPath, nil
 }
@@ -729,7 +729,7 @@ func pruneBackups(dir string, keep int, justWritten string) {
 		}
 	}
 	if removed > 0 {
-		log.Printf("backup: pruned %d old archive(s), kept %d", removed, kept)
+		logging.Debugf("backup: pruned %d old archive(s), kept %d", removed, kept)
 	}
 }
 
@@ -745,10 +745,10 @@ func startScheduledBackup() {
 			resp := createBackup("", time.Time{}, false)
 			if resp.OK {
 				if r, ok := resp.Data.(backupResult); ok {
-					log.Printf("scheduled backup: %s (%s)", r.Path, fmtSize(r.Size))
+					logging.Infof("scheduled backup: %s (%s)", r.Path, fmtSize(r.Size))
 				}
 			} else {
-				log.Printf("scheduled backup failed: %s", resp.Error)
+				logging.Errorf("scheduled backup failed: %s", resp.Error)
 			}
 		}
 	}()

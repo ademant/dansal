@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -305,7 +305,7 @@ func importFromKuferSource(ctx context.Context, src FetchSource) ([]Event, Impor
 		knrReqs, err := kuferFetchCourseEvents(ctx, base, knr, src)
 		if err != nil {
 			courseFailures++
-			log.Printf("kufer import: knr=%s: %v", knr, err)
+			logging.Errorf("kufer import: knr=%s: %v", knr, err)
 			continue
 		}
 		reqs = append(reqs, knrReqs...)

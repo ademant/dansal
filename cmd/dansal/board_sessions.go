@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"time"
 )
@@ -172,7 +172,7 @@ func requestBoardSessionRenewHandler(w http.ResponseWriter, r *http.Request) {
 
 	raw, err := generateToken(32)
 	if err != nil {
-		log.Printf("board-sessions: generate renew token: %v", err)
+		logging.Errorf("board-sessions: generate renew token: %v", err)
 		return
 	}
 	expiresAt := now + int64(bsRenewTTL.Seconds())
@@ -180,7 +180,7 @@ func requestBoardSessionRenewHandler(w http.ResponseWriter, r *http.Request) {
 		"INSERT OR REPLACE INTO verified_email_session_renew_tokens (token_hash, email, expires_at) VALUES (?,?,?)",
 		sha256Hex(raw), req.Email, expiresAt,
 	); err != nil {
-		log.Printf("board-sessions: store renew token: %v", err)
+		logging.Errorf("board-sessions: store renew token: %v", err)
 		return
 	}
 
@@ -195,7 +195,7 @@ func requestBoardSessionRenewHandler(w http.ResponseWriter, r *http.Request) {
 	)
 	go func() {
 		if _, err := SendEmail(req.Email, "Restore your board access", body, false); err != nil {
-			log.Printf("board-sessions: renew email to %s: %v", req.Email, err)
+			logging.Errorf("board-sessions: renew email to %s: %v", req.Email, err)
 		}
 	}()
 }

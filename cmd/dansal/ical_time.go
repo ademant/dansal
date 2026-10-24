@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"regexp"
 	"strconv"
 	"strings"
@@ -254,9 +254,9 @@ func (r *icalParseReport) fallback(uid, tzid string) {
 	}
 	r.TimezoneFallback++
 	if tzid != "" {
-		log.Printf("%s: event %q has unresolvable TZID %q; anchored its start time in the feed's VTIMEZONE or the instance zone", r.kind(), uid, tzid)
+		logging.Infof("%s: event %q has unresolvable TZID %q; anchored its start time in the feed's VTIMEZONE or the instance zone", r.kind(), uid, tzid)
 	} else {
-		log.Printf("%s: event %q has an unresolvable timezone; anchored its start time in the feed's VTIMEZONE or the instance zone", r.kind(), uid)
+		logging.Infof("%s: event %q has an unresolvable timezone; anchored its start time in the feed's VTIMEZONE or the instance zone", r.kind(), uid)
 	}
 }
 
@@ -265,7 +265,7 @@ func (r *icalParseReport) unparsed(uid string, reason any) {
 		return
 	}
 	r.Unparsed++
-	log.Printf("%s: skipping event %q: %v", r.kind(), uid, reason)
+	logging.Warnf("%s: skipping event %q: %v", r.kind(), uid, reason)
 }
 
 // fold adds the report into the import counters returned to the admin.

@@ -2,7 +2,7 @@ package main
 
 import (
 	"database/sql"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"net/url"
 	"sort"
@@ -55,7 +55,7 @@ func dashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalC
 				var err error
 				userOrgIDs, err = client.GetUserOrganizationIDs(ctx, su.ID, token)
 				if err != nil {
-					log.Printf("dashboard: could not load user orgs: %v", err)
+					logging.Errorf("dashboard: could not load user orgs: %v", err)
 				}
 				return nil
 			},
@@ -63,7 +63,7 @@ func dashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalC
 				var err error
 				allOrgs, err = client.GetOrganizations(ctx)
 				if err != nil {
-					log.Printf("dashboard: could not load organizations: %v", err)
+					logging.Errorf("dashboard: could not load organizations: %v", err)
 				}
 				return nil
 			},
@@ -71,7 +71,7 @@ func dashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalC
 				var err error
 				stats, err = client.GetMeStats(ctx, token)
 				if err != nil {
-					log.Printf("dashboard: could not load stats: %v", err)
+					logging.Errorf("dashboard: could not load stats: %v", err)
 				}
 				return nil
 			},
@@ -79,7 +79,7 @@ func dashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalC
 				var err error
 				orgStats, err = client.GetOrgStats(ctx)
 				if err != nil {
-					log.Printf("dashboard: could not load org stats: %v", err)
+					logging.Errorf("dashboard: could not load org stats: %v", err)
 				}
 				return nil
 			},
@@ -87,7 +87,7 @@ func dashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalC
 				var err error
 				allLocs, err = client.GetLocations(ctx)
 				if err != nil {
-					log.Printf("dashboard: could not load locations: %v", err)
+					logging.Errorf("dashboard: could not load locations: %v", err)
 				}
 				return nil
 			},
@@ -95,7 +95,7 @@ func dashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalC
 				var err error
 				series, err = client.GetSeriesList(ctx, token)
 				if err != nil {
-					log.Printf("dashboard: could not load series: %v", err)
+					logging.Errorf("dashboard: could not load series: %v", err)
 				}
 				return nil
 			},
@@ -126,7 +126,7 @@ func dashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalC
 					params.Set("limit", "1000")
 					evts, err := client.GetAdminEvents(ctx, token, params)
 					if err != nil {
-						log.Printf("dashboard: could not load events for org %d: %v", oid, err)
+						logging.Errorf("dashboard: could not load events for org %d: %v", oid, err)
 					}
 					evtMu.Lock()
 					events = append(events, evts...)

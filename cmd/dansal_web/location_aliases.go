@@ -2,7 +2,7 @@ package main
 
 import (
 	"database/sql"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"strconv"
 	"strings"
@@ -90,11 +90,11 @@ func newLocationAliasCache(db *sql.DB) *locationAliasCache {
 func (c *locationAliasCache) load() {
 	countryAliases, err := listCountryAliases(c.db)
 	if err != nil {
-		log.Printf("location alias cache: could not load country aliases: %v", err)
+		logging.Errorf("location alias cache: could not load country aliases: %v", err)
 	}
 	regionAliases, err := listRegionAliases(c.db)
 	if err != nil {
-		log.Printf("location alias cache: could not load region aliases: %v", err)
+		logging.Errorf("location alias cache: could not load region aliases: %v", err)
 	}
 	country := make(map[string]string, len(countryAliases))
 	for _, a := range countryAliases {
@@ -202,7 +202,7 @@ func genericAliasNewHandler(db *sql.DB, table string, cols []string) http.Handle
 		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(cols)), ",")
 		query := "INSERT OR REPLACE INTO " + table + "(" + strings.Join(cols, ",") + ") VALUES(" + placeholders + ")"
 		if _, err := db.Exec(query, vals...); err != nil {
-			log.Printf("could not insert %s row %v: %v", table, vals, err)
+			logging.Errorf("could not insert %s row %v: %v", table, vals, err)
 		}
 		http.Redirect(w, r, "/admin/enrich", http.StatusSeeOther)
 	}
@@ -221,7 +221,7 @@ func genericAliasDeleteHandler(db *sql.DB, table string) http.HandlerFunc {
 			return
 		}
 		if _, err := db.Exec("DELETE FROM "+table+" WHERE id=?", id); err != nil {
-			log.Printf("could not delete %s row %d: %v", table, id, err)
+			logging.Errorf("could not delete %s row %d: %v", table, id, err)
 		}
 		http.Redirect(w, r, "/admin/enrich", http.StatusSeeOther)
 	}

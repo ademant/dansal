@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -704,7 +704,7 @@ func oidcCallback(w http.ResponseWriter, r *http.Request) {
 
 	flow, err := loadAndConsumeOIDCFlow(req.FlowID)
 	if err != nil {
-		log.Printf("oidc callback from %s: %v", clientIP, err)
+		logging.Errorf("oidc callback from %s: %v", clientIP, err)
 		writeError(w, "Login flow expired or invalid — please try again", http.StatusBadRequest)
 		return
 	}
@@ -727,7 +727,7 @@ func oidcCallback(w http.ResponseWriter, r *http.Request) {
 	if p.Kind == oidcProviderKindMastodon {
 		issuer, subject, err = mastodonExchangeAndIdentify(r.Context(), p, secret, flow.RedirectURI, req.Code, flow.PKCEVerifier)
 		if err != nil {
-			log.Printf("oidc callback from %s: mastodon exchange failed: %v", clientIP, err)
+			logging.Errorf("oidc callback from %s: mastodon exchange failed: %v", clientIP, err)
 			writeError(w, "Could not complete login with provider", http.StatusBadGateway)
 			return
 		}
@@ -741,7 +741,7 @@ func oidcCallback(w http.ResponseWriter, r *http.Request) {
 
 		token, err2 := oauth2Cfg.Exchange(r.Context(), req.Code, oauth2.VerifierOption(flow.PKCEVerifier))
 		if err2 != nil {
-			log.Printf("oidc callback from %s: code exchange failed: %v", clientIP, err2)
+			logging.Errorf("oidc callback from %s: code exchange failed: %v", clientIP, err2)
 			writeError(w, "Could not complete login with provider", http.StatusBadGateway)
 			return
 		}
@@ -752,7 +752,7 @@ func oidcCallback(w http.ResponseWriter, r *http.Request) {
 		}
 		idToken, err2 := discovered.Verifier(&oidc.Config{ClientID: p.ClientID}).Verify(r.Context(), rawIDToken)
 		if err2 != nil {
-			log.Printf("oidc callback from %s: id_token verification failed: %v", clientIP, err2)
+			logging.Warnf("oidc callback from %s: id_token verification failed: %v", clientIP, err2)
 			writeError(w, "Invalid ID token", http.StatusBadGateway)
 			return
 		}
@@ -861,7 +861,7 @@ func oidcRedeemInvite(w http.ResponseWriter, r *http.Request, inviteToken, issue
 		return
 	}
 
-	log.Printf("oidc: new user id=%d (role=%s) registered via invite id=%d, issuer=%s", userID, invite.Role, invite.ID, issuer)
+	logging.Infof("oidc: new user id=%d (role=%s) registered via invite id=%d, issuer=%s", userID, invite.Role, invite.ID, issuer)
 
 	issueSessionResponse(w, r, http.StatusCreated, int(userID), "", invite.Role, func() {
 		w.WriteHeader(http.StatusCreated)
@@ -897,7 +897,7 @@ func oidcLinkIdentity(w http.ResponseWriter, r *http.Request, userID int, issuer
 		writeInternalError(w, err)
 		return
 	}
-	log.Printf("oidc: user %d linked identity issuer=%s", userID, issuer)
+	logging.Infof("oidc: user %d linked identity issuer=%s", userID, issuer)
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"status": "linked"})
 }

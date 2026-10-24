@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net"
 	"net/http"
 	"net/url"
@@ -79,7 +79,7 @@ func certAuthSession(cfg *Config, r *http.Request) *SessionUser {
 	}
 	su, err := lookupAdminUser(cfg, cn)
 	if err != nil {
-		log.Printf("cert auth: socket error: %v", err)
+		logging.Errorf("cert auth: socket error: %v", err)
 		return nil
 	}
 	return su
@@ -235,7 +235,7 @@ func requireLogin(cfg *Config, next http.HandlerFunc) http.HandlerFunc {
 		// read-only and left unchecked, same scope as dansal_web's own check
 		// (which only wraps POST/PUT/DELETE routes).
 		if r.Method != http.MethodGet && r.Method != http.MethodHead && !checkOrigin(r) {
-			log.Printf("dansal-webmin: CSRF_BLOCK ip=%s origin=%q referer=%q", webcommon.ClientIP(r), r.Header.Get("Origin"), r.Header.Get("Referer"))
+			logging.Warnf("dansal-webmin: CSRF_BLOCK ip=%s origin=%q referer=%q", webcommon.ClientIP(r), r.Header.Get("Origin"), r.Header.Get("Referer"))
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
@@ -340,7 +340,7 @@ func loginPostHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 
 		lr, err := apiLogin(r, cfg.DansalURL, email, password)
 		if err != nil {
-			log.Printf("webmin login failed for %q: %v", email, err)
+			logging.Warnf("webmin login failed for %q: %v", email, err)
 			renderTemplate(w, tmpls.login, tmplData(r, cfg, "Login", map[string]string{
 				"Error": "Invalid email or password.",
 				"Email": email,
@@ -350,7 +350,7 @@ func loginPostHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 		}
 
 		if lr.User.Role != "admin" {
-			log.Printf("webmin login rejected: %q has role %q", email, lr.User.Role)
+			logging.Warnf("webmin login rejected: %q has role %q", email, lr.User.Role)
 			renderTemplate(w, tmpls.login, tmplData(r, cfg, "Login", map[string]string{
 				"Error": "Admin access required.",
 				"Email": email,

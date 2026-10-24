@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"strings"
 )
@@ -38,7 +38,7 @@ func adminDanceCreateHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 		name := strings.TrimSpace(r.FormValue("name"))
 		if name != "" {
 			if _, err := client.CreateDance(r.Context(), name, getSessionToken(r)); err != nil {
-				log.Printf("create dance %q: %v", name, err)
+				logging.Errorf("create dance %q: %v", name, err)
 			}
 		}
 		http.Redirect(w, r, "/admin/dances", http.StatusSeeOther)
@@ -67,7 +67,7 @@ func adminDanceEditHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		description := strings.TrimSpace(r.FormValue("description"))
 		if name != "" {
 			if _, err := client.UpdateDance(r.Context(), id, name, description, getSessionToken(r)); err != nil {
-				log.Printf("update dance %d: %v", id, err)
+				logging.Errorf("update dance %d: %v", id, err)
 			}
 		}
 		http.Redirect(w, r, "/admin/dances", http.StatusSeeOther)
@@ -85,7 +85,7 @@ func adminDanceDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 			return
 		}
 		if err := client.DeleteDance(r.Context(), id, getSessionToken(r)); err != nil {
-			log.Printf("delete dance %d: %v", id, err)
+			logging.Errorf("delete dance %d: %v", id, err)
 		}
 		http.Redirect(w, r, "/admin/dances", http.StatusSeeOther)
 	}

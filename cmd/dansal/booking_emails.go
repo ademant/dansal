@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"strings"
 )
@@ -124,7 +124,7 @@ func sendBookingConfirmedEmail(name, email, title, base, qrToken string, loc boo
 	checkinURL := base + "/checkin/" + qrToken
 	body := fmt.Sprintf(loc.ConfirmedBody, name, title, checkinURL)
 	if _, err := sendEmailWithConfig(cfg, email, loc.ConfirmedSubject, body, false); err != nil {
-		log.Printf("bookings: confirmed email failed for %s: %v", email, err)
+		logging.Errorf("bookings: confirmed email failed for %s: %v", email, err)
 	}
 }
 
@@ -133,6 +133,6 @@ func sendBookingApprovedEmail(name, email, title, base, qrToken string, loc book
 	checkinURL := base + "/checkin/" + qrToken
 	body := fmt.Sprintf(loc.ApprovedBody, name, title, checkinURL)
 	if _, err := sendEmailWithConfig(cfg, email, loc.ApprovedSubject, body, true); err != nil {
-		log.Printf("bookings: approved email failed for %s: %v", email, err)
+		logging.Errorf("bookings: approved email failed for %s: %v", email, err)
 	}
 }

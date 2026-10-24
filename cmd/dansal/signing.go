@@ -12,6 +12,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"io"
 	"log"
 	"net/http"
@@ -46,7 +47,7 @@ const signingEncPrefix = "v1:"
 func initSigningKey() {
 	v := os.Getenv(signingKeyEnvVar)
 	if v == "" {
-		log.Printf("warning: %s is not set — publisher signing secrets stored in plaintext in DB; set this env var to enable encryption at rest", signingKeyEnvVar)
+		logging.Warnf("%s is not set — publisher signing secrets stored in plaintext in DB; set this env var to enable encryption at rest", signingKeyEnvVar)
 		return
 	}
 	key, err := hex.DecodeString(v)

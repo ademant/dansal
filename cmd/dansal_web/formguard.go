@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"log"
 	"net/http"
 	"strconv"
@@ -135,10 +136,10 @@ func guardFormSubmit(w http.ResponseWriter, r *http.Request, cfg *Config, ip str
 // keeps acting on the separate PUBLIC_BLOCK / HONEYPOT ip= lines.
 func logFormReject(r *http.Request, reason, ip string, err error) {
 	if err != nil {
-		log.Printf("dansal-web: FORM_REJECT reason=%s ip_hash=%s path=%s err=%v", reason, hashIP(ip), r.URL.Path, err)
+		logging.Warnf("dansal-web: FORM_REJECT reason=%s ip_hash=%s path=%s err=%v", reason, hashIP(ip), r.URL.Path, err)
 		return
 	}
-	log.Printf("dansal-web: FORM_REJECT reason=%s ip_hash=%s path=%s", reason, hashIP(ip), r.URL.Path)
+	logging.Warnf("dansal-web: FORM_REJECT reason=%s ip_hash=%s path=%s", reason, hashIP(ip), r.URL.Path)
 }
 
 // ── One-time form tokens ──────────────────────────────────────────────────────

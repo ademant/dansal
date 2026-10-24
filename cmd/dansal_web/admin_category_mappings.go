@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"strings"
 )
@@ -31,11 +31,11 @@ func adminCategoryMappingsHandler(cfg *Config, tmpls *Templates, client *DansalC
 		}
 		aliases, err := client.GetCategoryAliases(r.Context())
 		if err != nil {
-			log.Printf("admin category mappings: %v", err)
+			logging.Errorf("admin category mappings: %v", err)
 		}
 		tags, err := client.GetTags(r.Context())
 		if err != nil {
-			log.Printf("admin category mappings: could not load tags: %v", err)
+			logging.Errorf("admin category mappings: could not load tags: %v", err)
 		}
 		title := i18n.T(r, "admin_category_mappings_title")
 		renderTemplate(w, tmpls.adminCategoryMappings, tmplData(r, cfg, i18n, title, AdminCategoryMappingsData{
@@ -59,7 +59,7 @@ func adminCategoryMappingCreateHandler(cfg *Config, client *DansalClient) http.H
 		tagSlug := strings.TrimSpace(r.FormValue("tag_slug"))
 		if category != "" && tagSlug != "" {
 			if err := client.CreateCategoryAlias(r.Context(), category, tagSlug, getSessionToken(r)); err != nil {
-				log.Printf("create category alias %q -> %q: %v", category, tagSlug, err)
+				logging.Errorf("create category alias %q -> %q: %v", category, tagSlug, err)
 			}
 		}
 		http.Redirect(w, r, "/admin/category-mappings", http.StatusSeeOther)
@@ -82,7 +82,7 @@ func adminCategoryMappingDeleteHandler(cfg *Config, client *DansalClient) http.H
 			return
 		}
 		if err := client.DeleteCategoryAlias(r.Context(), category, getSessionToken(r)); err != nil {
-			log.Printf("delete category alias %q: %v", category, err)
+			logging.Errorf("delete category alias %q: %v", category, err)
 		}
 		http.Redirect(w, r, "/admin/category-mappings", http.StatusSeeOther)
 	}

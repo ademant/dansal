@@ -18,6 +18,7 @@ const defaultConfigPath = "/etc/dansal/webmin.yaml"
 
 type Config struct {
 	Listen                string `yaml:"listen"`
+	LogLevel              string `yaml:"log_level"` // debug | info (default) | warning | error (#1645)
 	DansalURL             string `yaml:"dansal_url"`
 	AdminSocket           string `yaml:"admin_socket"`
 	SiteName              string `yaml:"site_name"`

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"net/url"
 	"sort"
@@ -124,7 +124,7 @@ func festivalsPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 				var err error
 				orgs, err = client.GetOrganizations(r.Context())
 				if err != nil {
-					log.Printf("festivals: could not load organizations: %v", err)
+					logging.Errorf("festivals: could not load organizations: %v", err)
 				}
 				return nil
 			},
@@ -132,7 +132,7 @@ func festivalsPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 				var err error
 				tagMap, err = client.GetTagMap(r.Context())
 				if err != nil {
-					log.Printf("festivals: could not load tag map: %v", err)
+					logging.Errorf("festivals: could not load tag map: %v", err)
 				}
 				return nil
 			},

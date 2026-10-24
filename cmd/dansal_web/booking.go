@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"strconv"
 )
@@ -22,7 +22,7 @@ func redirectBookingError(w http.ResponseWriter, r *http.Request, eventID int, e
 func redirectBookingErrorKey(w http.ResponseWriter, r *http.Request, eventID int, key string, err error) {
 	tok := flashToken(err)
 	if err != nil {
-		log.Printf("dansal-web: booking error error_id=%s path=%s err=%v", tok, r.URL.Path, err)
+		logging.Errorf("dansal-web: booking error error_id=%s path=%s err=%v", tok, r.URL.Path, err)
 	}
 	flashRedirect(w, r, fmt.Sprintf("/events/%d", eventID), tok, FlashMsg{
 		BookingError:    key,
@@ -40,7 +40,7 @@ func bookingPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http.Hand
 		}
 		ip := getClientIP(r)
 		if publicThrottle.isBlocked(ip + "|" + r.UserAgent()) {
-			log.Printf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
+			logging.Warnf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
 			redirectBookingError(w, r, eventID, nil)
 			return
 		}
@@ -49,7 +49,7 @@ func bookingPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http.Hand
 			redirectBookingError(w, r, eventID, nil)
 			return
 		case formGuardHoneypot:
-			log.Printf("dansal-web: HONEYPOT ip=%s path=%s", ip, r.URL.Path)
+			logging.Warnf("dansal-web: HONEYPOT ip=%s path=%s", ip, r.URL.Path)
 			flashRedirect(w, r, fmt.Sprintf("/events/%d", eventID), flashToken(nil), FlashMsg{BookingOK: true})
 			return
 		case formGuardBadToken:

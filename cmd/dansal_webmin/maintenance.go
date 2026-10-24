@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"net/url"
 	"strings"
@@ -56,7 +56,7 @@ func maintenancePruneImagesHandler(cfg *Config) http.HandlerFunc {
 			FreedBytes int64 `json:"freed_bytes"`
 		}
 		if err := json.Unmarshal(resp.Data, &result); err != nil {
-			log.Printf("prune-images: decode result: %v", err)
+			logging.Errorf("prune-images: decode result: %v", err)
 		}
 		msg := fmt.Sprintf("Removed %d orphaned image(s), freed %s", result.Removed, fmtBytes(result.FreedBytes))
 		http.Redirect(w, r, "/maintenance?flash="+url.QueryEscape(msg), http.StatusSeeOther)
@@ -76,7 +76,7 @@ func maintenanceFetchAllHandler(cfg *Config) http.HandlerFunc {
 			Error  string `json:"error,omitempty"`
 		}
 		if err := json.Unmarshal(resp.Data, &results); err != nil {
-			log.Printf("fetch-all: decode results: %v", err)
+			logging.Errorf("fetch-all: decode results: %v", err)
 		}
 		total, errCount := 0, 0
 		for _, r := range results {
@@ -133,7 +133,7 @@ func maintenanceRestoreHandler(cfg *Config) http.HandlerFunc {
 			Images int  `json:"images"`
 		}
 		if err := json.Unmarshal(resp2.Data, &result); err != nil {
-			log.Printf("restore: decode result: %v", err)
+			logging.Errorf("restore: decode result: %v", err)
 		}
 		msg := fmt.Sprintf("Restore complete — DB: %v, config: %v, images: %d", result.DB, result.Config, result.Images)
 		http.Redirect(w, r, "/maintenance?flash="+url.QueryEscape(msg), http.StatusSeeOther)
@@ -156,7 +156,7 @@ func maintenanceBackupHandler(cfg *Config) http.HandlerFunc {
 			Size int64  `json:"size"`
 		}
 		if err := json.Unmarshal(resp.Data, &result); err != nil {
-			log.Printf("backup: decode result: %v", err)
+			logging.Errorf("backup: decode result: %v", err)
 		}
 		msg := fmt.Sprintf("Backup written to %s (%s)", result.Path, fmtBytes(result.Size))
 		http.Redirect(w, r, "/maintenance?flash="+url.QueryEscape(msg), http.StatusSeeOther)

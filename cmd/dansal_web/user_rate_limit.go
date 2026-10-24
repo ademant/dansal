@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"net/url"
 	"strings"
@@ -211,7 +211,7 @@ func checkAdminOrigin(r *http.Request) bool {
 func adminRateLimit(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if adminAllowedHost != "" && !checkAdminOrigin(r) {
-			log.Printf("dansal-web: CSRF_BLOCK ip=%s origin=%q referer=%q", getClientIP(r), r.Header.Get("Origin"), r.Header.Get("Referer"))
+			logging.Warnf("dansal-web: CSRF_BLOCK ip=%s origin=%q referer=%q", getClientIP(r), r.Header.Get("Origin"), r.Header.Get("Referer"))
 			htmlError(w, r, http.StatusForbidden)
 			return
 		}
@@ -222,7 +222,7 @@ func adminRateLimit(next http.HandlerFunc) http.HandlerFunc {
 				endpoint = r.Pattern
 			}
 			if !userRateLimiter.Check(su.ID, endpoint) {
-				log.Printf("dansal-web: USER_RATE_LIMIT user=%d action=%s ip=%s", su.ID, endpoint, getClientIP(r))
+				logging.Warnf("dansal-web: USER_RATE_LIMIT user=%d action=%s ip=%s", su.ID, endpoint, getClientIP(r))
 				http.Error(w, "Rate limit exceeded. Please slow down.", http.StatusTooManyRequests)
 				return
 			}

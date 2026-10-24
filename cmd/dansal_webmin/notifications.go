@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -210,7 +210,7 @@ func notificationsSMTPSaveHandler(cfg *Config) http.HandlerFunc {
 		}
 		msg, err := smtpSaveAndMaybePassword(cfg, r)
 		if err != nil {
-			log.Printf("SMTP error: %v", err)
+			logging.Errorf("SMTP error: %v", err)
 			http.Redirect(w, r, "/notifications?flash="+url.QueryEscape("SMTP error: "+msg), http.StatusSeeOther)
 			return
 		}

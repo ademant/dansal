@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"github.com/ademant/dansal/internal/logging"
 	"io"
-	"log"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -134,11 +134,11 @@ func adminImportEventsHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 		token := getSessionToken(r)
 		events, err := client.PreviewEvents(r.Context(), &buf, mw.FormDataContentType(), token)
 		if err != nil {
-			log.Printf("import: source=%q size=%d type=%s result=error caller=%d err=%v", source, size, feedType, su.ID, err)
+			logging.Errorf("import: source=%q size=%d type=%s result=error caller=%d err=%v", source, size, feedType, su.ID, err)
 			renderErr(err.Error(), feedURL, feedType)
 			return
 		}
-		log.Printf("import: source=%q size=%d type=%s result=ok events=%d caller=%d", source, size, feedType, len(events), su.ID)
+		logging.Infof("import: source=%q size=%d type=%s result=ok events=%d caller=%d", source, size, feedType, len(events), su.ID)
 
 		if len(events) == 0 {
 			renderErr(i18n.T(r, "admin_import_none_found"), feedURL, feedType)
@@ -209,7 +209,7 @@ func adminImportEventsHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 		// future fetch — see fetchurl.go's TemplateID/TemplateMode).
 		templates, err := listTemplates(db, su.ID, orgIDsForTemplates(r, client, su))
 		if err != nil {
-			log.Printf("admin import: could not load templates: %v", err)
+			logging.Errorf("admin import: could not load templates: %v", err)
 		}
 
 		// Build a name→location map so we can auto-match feed locations to
@@ -266,11 +266,11 @@ func adminImportEventsHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 		// has an admin-configured alias, otherwise offered a picker.
 		tags, err := client.GetTags(r.Context())
 		if err != nil {
-			log.Printf("admin import: could not load tags: %v", err)
+			logging.Errorf("admin import: could not load tags: %v", err)
 		}
 		catAliases, err := client.GetCategoryAliases(r.Context())
 		if err != nil {
-			log.Printf("admin import: could not load category aliases: %v", err)
+			logging.Errorf("admin import: could not load category aliases: %v", err)
 		}
 		tagBySlug := make(map[string]Tag, len(tags))
 		for _, t := range tags {

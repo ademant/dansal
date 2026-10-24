@@ -7,6 +7,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"html/template"
 	"io"
 	"log"
@@ -442,7 +443,7 @@ func nearbyHint(ctx context.Context, client *DansalClient, lat, lon float64, lab
 	to := time.Now().AddDate(0, locationNearbyMonths, 0).Format("2006-01-02")
 	nc, err := client.GetNearbyCounts(ctx, lat, lon, from, to)
 	if err != nil {
-		log.Printf("nearbyHint(%s): could not load nearby counts: %v", label, err)
+		logging.Errorf("nearbyHint(%s): could not load nearby counts: %v", label, err)
 		return nil
 	}
 	for _, radius := range nc.RadiiKm {
@@ -1032,7 +1033,7 @@ func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClien
 				var err error
 				orgs, err = client.GetOrganizations(r.Context())
 				if err != nil {
-					log.Printf("index: could not load organizations: %v", err)
+					logging.Errorf("index: could not load organizations: %v", err)
 				}
 				return nil
 			},
@@ -1040,7 +1041,7 @@ func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClien
 				var err error
 				dances, err = client.GetDances(r.Context())
 				if err != nil {
-					log.Printf("index: could not load dances: %v", err)
+					logging.Errorf("index: could not load dances: %v", err)
 				}
 				return nil
 			},
@@ -1048,7 +1049,7 @@ func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClien
 				var err error
 				tagMap, err = client.GetTagMap(r.Context())
 				if err != nil {
-					log.Printf("index: could not load tag map: %v", err)
+					logging.Errorf("index: could not load tag map: %v", err)
 				}
 				return nil
 			},
@@ -1456,7 +1457,7 @@ func locationPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 		// "is this venue still active" signal).
 		pastEvents, pastTotal, pErr := client.GetPastEventsByLocationWithTotal(r.Context(), id, locationPastEventsLimit)
 		if pErr != nil {
-			log.Printf("location %d: could not load past events: %v", id, pErr)
+			logging.Errorf("location %d: could not load past events: %v", id, pErr)
 		}
 
 		// #1436: when there's nothing upcoming, offer the nearest radius
@@ -1504,7 +1505,7 @@ func orgsHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient
 				var err error
 				statMap, err = client.GetOrgStats(r.Context())
 				if err != nil {
-					log.Printf("orgs: could not load stats: %v", err)
+					logging.Errorf("orgs: could not load stats: %v", err)
 				}
 				return nil
 			},
@@ -1512,7 +1513,7 @@ func orgsHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient
 				var err error
 				locs, err = client.GetLocations(r.Context())
 				if err != nil {
-					log.Printf("orgs: could not load locations: %v", err)
+					logging.Errorf("orgs: could not load locations: %v", err)
 				}
 				return nil
 			},
@@ -1524,7 +1525,7 @@ func orgsHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient
 
 		actorSlugs, aErr := listOrgActorSlugs(db)
 		if aErr != nil {
-			log.Printf("orgs: could not load actor slugs: %v", aErr)
+			logging.Errorf("orgs: could not load actor slugs: %v", aErr)
 		}
 
 		orgSlugMap := make(map[int]string, len(orgs))

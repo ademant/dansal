@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"html/template"
 	"io"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -98,7 +98,7 @@ func uploadInstructorAvatar(cfg *Config, client *DansalClient, r *http.Request, 
 		data, _ := io.ReadAll(file)
 		file.Close()
 		if uerr := client.UploadInstructorAvatar(r.Context(), id, data, header.Filename, getSessionToken(r)); uerr != nil {
-			log.Printf("upload instructor avatar error: %v", uerr)
+			logging.Errorf("upload instructor avatar error: %v", uerr)
 			flash = imageUploadErrorFlash("avatar", uerr)
 		}
 	}

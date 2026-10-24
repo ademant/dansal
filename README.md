@@ -132,7 +132,7 @@ dansal helps dance communities organize, publish, and discover events — from b
 
 ```bash
 # 1. Build
-go version   # must be 1.26+
+go version   # must be 1.27+
 make build
 
 # 2. Set up a new instance (interactive — asks for ports, domain, SMTP, …)
@@ -161,6 +161,17 @@ See [Admin Guide](ADMIN_GUIDE.md) for full installation and configuration instru
 Two SQLite databases: `dansal`'s `calendar.db` (events, locations, organizations, musicians, users — the source of truth) and `dansal-web`'s own `web.db` (ActivityPub state, runtime site settings, caches). Uploaded images (events, organizations, musicians, venues) live under one shared directory tree, separate from `dansal-web`'s own tiny directory for instance branding (logo/banner/favicon).
 
 Config: `/etc/dansal/<instance>/{config,web,webmin,doc}.yaml`
+
+### Logs
+
+Every service logs to journald. Each entry carries a priority that matches its level, so you can filter by severity:
+
+```bash
+journalctl -u dansal@dev -p err        # errors only
+journalctl -u dansal@dev -p warning    # warnings and errors
+```
+
+Set `log_level` (`debug`, `info` (default), `warning` or `error`) at the top of `config.yaml`, `web.yaml`, `webmin.yaml` or `doc.yaml` to choose the minimum level written. See the [Admin Guide](ADMIN_GUIDE.md) for details.
 
 ## 📞 Support & Community
 

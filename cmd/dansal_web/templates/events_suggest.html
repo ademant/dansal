@@ -55,6 +55,17 @@
   {{end}}
   {{end}}
 
+  {{if and (not $.Data.ManageToken) (not $.Data.IsImportMode) (not $.Data.Error) (not $.Data.IsNextSuggestion)}}
+  <style nonce="{{$.Nonce}}">.suggest-draft-banner{border:2px solid #1a6eb5;border-radius:8px;padding:.6rem .9rem;margin:0 0 1rem;background:#f0f7ff}.suggest-draft-banner p{margin:.25rem 0}</style>
+  <div id="suggest-draft-banner" class="suggest-draft-banner" role="status" hidden>
+    <p><strong id="suggest-draft-found" data-msg="{{$.Strings.T "suggest_draft_found"}}"></strong>
+    <span id="suggest-draft-image" hidden>{{$.Strings.T "suggest_draft_image_hint"}}</span></p>
+    <p>
+      <button type="button" class="btn-primary" data-fn="suggestDraftRestore" data-args="[]">{{$.Strings.T "suggest_draft_restore"}}</button>
+      <button type="button" class="btn-secondary" data-fn="suggestDraftDiscard" data-args="[]">{{$.Strings.T "suggest_draft_discard"}}</button>
+    </p>
+  </div>
+  {{end}}
   <div id="tab-manual" class="tab-panel">
   <form method="post" action="{{if .ManageToken}}/events/suggest/manage/{{.ManageToken}}{{else}}/events/suggest/submit{{end}}" id="wiz-form"{{if or $.Data.ManageToken $.Data.CanUploadImageNow}} enctype="multipart/form-data"{{end}}>
     {{if not .ManageToken}}<input type="hidden" name="_form_token" value="{{$.Data.FormToken}}">{{end}}
@@ -597,24 +608,24 @@ function sgTogglePricing() {
   document.getElementById('sg-pricing-single').hidden = (v !== 'single' && v !== 'donation');
   document.getElementById('sg-pricing-multiple').hidden = (v !== 'multiple');
 }
+// sgAppendPricingRow appends one empty price row. The last row grows the table.
+function sgAppendPricingRow(tbody) {
+  var row = document.createElement('tr');
+  row.innerHTML = '<td><input type="text" name="pl_label" data-on=\'input\' data-fn=\'sgGrowPricingTable\' data-args=\'["@this"]\'></td>' +
+    '<td><input type="number" name="pl_amount" min="0" step="0.01"></td>';
+  tbody.appendChild(row);
+}
 function sgGrowPricingTable(el) {
   var tbody = document.getElementById('sg-pricing-body');
   var rows = tbody.querySelectorAll('tr');
   var last = rows[rows.length - 1];
-  if (el.closest('tr') === last && el.value.trim() !== '') {
-    var row = document.createElement('tr');
-    row.innerHTML = '<td><input type="text" name="pl_label" data-on=\'input\' data-fn=\'sgGrowPricingTable\' data-args=\'["@this"]\'></td>' +
-      '<td><input type="number" name="pl_amount" min="0" step="0.01"></td>';
-    tbody.appendChild(row);
-  }
+  if (el.closest('tr') === last && el.value.trim() !== '') sgAppendPricingRow(tbody);
 }
 
 // ── Timetable ───────────────────────────────────────────────────────────────
-function sgGrowTTTable(el) {
-  var tbody = document.getElementById('sg-tt-body');
-  var rows = tbody.querySelectorAll('.sg-tt-row');
-  var last = rows[rows.length - 1];
-  if (el.closest('.sg-tt-row') === last && el.value.trim() !== '') {
+// sgAppendTTRow appends one timetable entry: its main row and its detail row.
+function sgAppendTTRow(tbody) {
+  {
     var row1 = document.createElement('tr');
     row1.className = 'sg-tt-row';
     row1.innerHTML = '<td><input type="time" name="tt_start"></td>' +
@@ -629,6 +640,12 @@ function sgGrowTTTable(el) {
     tbody.appendChild(row1);
     tbody.appendChild(row2);
   }
+}
+function sgGrowTTTable(el) {
+  var tbody = document.getElementById('sg-tt-body');
+  var rows = tbody.querySelectorAll('.sg-tt-row');
+  var last = rows[rows.length - 1];
+  if (el.closest('.sg-tt-row') === last && el.value.trim() !== '') sgAppendTTRow(tbody);
 }
 
 // ── ⓘ help buttons (#1418): toggle the inline help text. Capture phase +
@@ -1581,6 +1598,145 @@ document.addEventListener('DOMContentLoaded', function(){
     } catch (e) {}
   });
 })();
+// ── Draft autosave (#1649) ─────────────────────────────────────────────────
+// The wizard is saved to localStorage as the visitor types, so a visit to
+// /login or /register (which leaves this page) does not lose it. Restoring is
+// the visitor's choice: a banner offers it, nothing is filled in silently.
+// Only a plain new suggestion gets the banner (see the template above).
+(function(){
+  var banner = document.getElementById('suggest-draft-banner');
+  var form = document.getElementById('wiz-form');
+  if (!banner || !form) return;
+  var KEY = 'dansal_suggest_draft';
+  var MAX_AGE = 7 * 24 * 3600 * 1000;
+  var SKIP = {_form_token: 1, geo_token: 1, dansal_phone2: 1};
+  var timer = null;
+
+  function store(v) {
+    try {
+      if (v === null) localStorage.removeItem(KEY);
+      else localStorage.setItem(KEY, JSON.stringify(v));
+    } catch (e) {}
+  }
+  function load() {
+    try {
+      var d = JSON.parse(localStorage.getItem(KEY) || 'null');
+      if (!d || d.v !== 1) return null;
+      if (!d.saved_at || Date.now() - d.saved_at > MAX_AGE) { store(null); return null; }
+      return d;
+    } catch (e) { return null; }
+  }
+  // capture reads the form. Checkboxes and radios are kept by name as the
+  // checked values; every other field as an ordered list per name, so repeated
+  // rows (timetable, prices) come back in order. Files are never stored.
+  function capture() {
+    var checks = {}, values = {}, ids = {}, imageChosen = false, step = '';
+    var shown = form.querySelector('.wiz-step:not([hidden])');
+    if (shown) step = shown.getAttribute('data-step') || '';
+    Array.prototype.forEach.call(form.elements, function(el){
+      if (el.type === 'file') { if (el.files && el.files.length) imageChosen = true; return; }
+      if (!el.name || SKIP[el.name] || el.type === 'button' || el.type === 'submit') return;
+      if (el.type === 'checkbox' || el.type === 'radio') {
+        if (!checks[el.name]) checks[el.name] = [];
+        if (el.checked) checks[el.name].push(el.value);
+        return;
+      }
+      (values[el.name] = values[el.name] || []).push(el.value);
+    });
+    Array.prototype.forEach.call(form.querySelectorAll('input[id^="sg-"], select[id^="sg-"], textarea[id^="sg-"]'), function(el){
+      if (el.type !== 'file' && el.type !== 'checkbox' && el.type !== 'radio') ids[el.id] = el.value;
+    });
+    return {v: 1, saved_at: Date.now(), step: step, checks: checks, values: values, ids: ids, image_chosen: imageChosen};
+  }
+  function save() {
+    try { store(capture()); } catch (e) {}
+  }
+  function schedule() {
+    clearTimeout(timer);
+    timer = setTimeout(save, 1000);
+  }
+  function restore(d) {
+    // Rebuild the repeated rows first, so every saved value has a row to land in.
+    var pl = Math.max((d.values.pl_label || []).length, (d.values.pl_amount || []).length);
+    var pbody = document.getElementById('sg-pricing-body');
+    if (pl && pbody) {
+      pbody.innerHTML = '';
+      for (var i = 0; i < pl; i++) sgAppendPricingRow(pbody);
+      sgAppendPricingRow(pbody);
+    }
+    var tt = Math.max((d.values.tt_start || []).length, (d.values.tt_end || []).length,
+                      (d.values.tt_title || []).length, (d.values.tt_room || []).length);
+    var ttBody = document.getElementById('sg-tt-body');
+    if (tt && ttBody) {
+      ttBody.innerHTML = '';
+      for (var j = 0; j < tt; j++) sgAppendTTRow(ttBody);
+      sgAppendTTRow(ttBody);
+    }
+    var touched = [];
+    Object.keys(d.values).forEach(function(name){
+      Array.prototype.forEach.call(form.querySelectorAll('[name="' + name + '"]'), function(el, k){
+        if (el.type === 'file' || k >= d.values[name].length) return;
+        el.value = d.values[name][k];
+        touched.push(el);
+      });
+    });
+    Object.keys(d.checks).forEach(function(name){
+      Array.prototype.forEach.call(form.querySelectorAll('[name="' + name + '"]'), function(el){
+        el.checked = d.checks[name].indexOf(el.value) !== -1;
+        touched.push(el);
+      });
+    });
+    Object.keys(d.ids).forEach(function(id){
+      var el = document.getElementById(id);
+      if (el) { el.value = d.ids[id]; touched.push(el); }
+    });
+    // Let the wizard's own listeners recompute what depends on these fields
+    // (dates, musician chips, the venue, the pricing and timetable tables).
+    touched.forEach(function(el){
+      el.dispatchEvent(new Event('input', {bubbles: true}));
+      el.dispatchEvent(new Event('change', {bubbles: true}));
+    });
+    if (d.step && window.suggestWizGoTo) window.suggestWizGoTo(parseInt(d.step, 10));
+    schedule();
+  }
+  function hasContent() {
+    var t = document.getElementById('wiz-title');
+    var de = form.querySelector('[name="description"]');
+    return !!((t && t.value.trim()) || (de && de.value.trim()));
+  }
+  function showBanner(d) {
+    var msg = document.getElementById('suggest-draft-found');
+    if (msg) {
+      var when = new Date(d.saved_at).toLocaleString();
+      msg.textContent = (msg.getAttribute('data-msg') || '%s').replace('%s', when);
+    }
+    if (d.image_chosen) {
+      var hint = document.getElementById('suggest-draft-image');
+      if (hint) hint.hidden = false;
+    }
+    banner.hidden = false;
+  }
+
+  window.suggestDraftRestore = function(){
+    var d = load();
+    if (d) restore(d);
+    banner.hidden = true;
+  };
+  window.suggestDraftDiscard = function(){
+    store(null);
+    banner.hidden = true;
+  };
+
+  form.addEventListener('input', schedule);
+  form.addEventListener('change', schedule);
+  // A submitted suggestion is no longer a draft. A rejected one comes back as
+  // the error page with the values filled in again.
+  form.addEventListener('submit', function(){ clearTimeout(timer); store(null); });
+
+  var d = load();
+  if (d && !hasContent()) showBanner(d);
+})();
+
 // ── Import auto-prefill + picker ──────────────────────────────────────────
 {{if .Data.IsImportMode}}
 document.addEventListener('DOMContentLoaded', function(){
@@ -1648,6 +1804,7 @@ document.addEventListener('DOMContentLoaded', function(){
   });
   backBtn.addEventListener('click', function() { goTo(current - 1); });
 
+  window.suggestWizGoTo = goTo; // #1649: the draft restore returns to the saved step
   // Arrow clicks — allow jumping to any already-visited step; forward jumps
   // go only one step at a time (same validation as Next button).
   arrowBtns.forEach(function(btn){

@@ -43,6 +43,7 @@ type ServerConfig struct {
 	WriteTimeoutSecs              int    `yaml:"write_timeout_secs"`
 	IdleTimeoutSecs               int    `yaml:"idle_timeout_secs"`
 	MaxConnsPerIP                 int    `yaml:"max_conns_per_ip"`
+	LogLevel                      string `yaml:"log_level"` // debug | info (default) | warning | error (#1645)
 	ImagesDir                     string `yaml:"images_dir"`
 	ImageXMax                     int    `yaml:"image_x_max"`
 	ImageYMax                     int    `yaml:"image_y_max"`
@@ -293,6 +294,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.MaxConnsPerIP == 0 {
 		cfg.Server.MaxConnsPerIP = 10
+	}
+	if cfg.Server.LogLevel == "" {
+		cfg.Server.LogLevel = "info"
 	}
 	if cfg.Server.ImagesDir == "" {
 		cfg.Server.ImagesDir = "./images"

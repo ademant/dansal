@@ -9,7 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"log/syslog"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -4654,10 +4654,7 @@ func main() {
 	if inst := instance.FromConfigArg(); inst != "" {
 		tag = "dansal@" + inst
 	}
-	if w, err := syslog.New(syslog.LOG_INFO|syslog.LOG_DAEMON, tag); err == nil {
-		log.SetOutput(w)
-		log.SetFlags(0)
-	}
+	setupLogging(tag)
 
 	var err error
 
@@ -4668,6 +4665,16 @@ func main() {
 		config = &Config{}
 	}
 	applyDefaults(config)
+
+	// #1645: a bad server.log_level stops startup here, on stderr, because the
+	// level filter would hide a Fatal message written through the logger.
+	lvl, err := parseLogLevel(config.Server.LogLevel)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	logLevel.Set(lvl)
+	slog.Info("log level set", "level", lvl.String())
 
 	// #1394: server.timezone is the authoritative instance-wide zone every
 	// timezone-less event input is parsed in and every stored epoch is

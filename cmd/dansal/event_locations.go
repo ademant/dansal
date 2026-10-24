@@ -37,7 +37,7 @@ func addEventExtraLocation(w http.ResponseWriter, r *http.Request) {
 	db.QueryRow("SELECT location_id FROM events WHERE id=?", eventID).Scan(&current)
 	if !current.Valid {
 		db.Exec("UPDATE events SET location_id=? WHERE id=?", locationID, eventID)
-		syncEventLocationGeohash(eventID)
+		syncEventLocationGeohash(db, eventID)
 	}
 	touchEvent(eventID, callerID)
 	w.WriteHeader(http.StatusNoContent)
@@ -100,7 +100,7 @@ func setEventExtraLocationPrimary(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err)
 		return
 	}
-	syncEventLocationGeohash(eventID)
+	syncEventLocationGeohash(db, eventID)
 	touchEvent(eventID, callerID)
 	w.WriteHeader(http.StatusNoContent)
 }

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"sort"
 	"strings"
@@ -310,7 +310,7 @@ func notifyReviewersPendingEdit(eventID int) {
 	var title string
 	var orgID sql.NullInt64
 	if err := db.QueryRow("SELECT title, organization_id FROM events WHERE id=?", eventID).Scan(&title, &orgID); err != nil {
-		log.Printf("pending-edit: notify: %v", err)
+		logging.Errorf("pending-edit: notify: %v", err)
 		return
 	}
 	editPath := fmt.Sprintf("/admin/events/%d/edit", eventID)
@@ -498,7 +498,7 @@ func handlePendingEdit(w http.ResponseWriter, r *http.Request, approve bool) {
 			writeInternalError(w, err)
 			return
 		}
-		log.Printf("pending-edit: rejected event %d (title=%q) — reason=%q", id, eventTitle, reason)
+		logging.Infof("pending-edit: rejected event %d (title=%q) — reason=%q", id, eventTitle, reason)
 		sendDeclineNotice(suggesterEmail, "Your suggested edit was not applied",
 			"Your suggested edit was reviewed and not applied.", reason)
 	}

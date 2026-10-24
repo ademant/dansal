@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 )
 
@@ -236,10 +236,10 @@ func approveFetchSuggestionHandler(w http.ResponseWriter, r *http.Request) {
 	allEvents, counts, fetchErr := importFromSource(r.Context(), src)
 	if fetchErr != nil {
 		recordFetchResult(src, 0, fetchErr)
-		log.Printf("fetchurl-suggestion: approved id=%d source_id=%d url=%q result=fetch-error caller=%d err=%v", id, sourceID, row.FeedURL, callerID, fetchErr)
+		logging.Errorf("fetchurl-suggestion: approved id=%d source_id=%d url=%q result=fetch-error caller=%d err=%v", id, sourceID, row.FeedURL, callerID, fetchErr)
 	} else {
 		recordFetchResult(src, len(allEvents), nil)
-		log.Printf("fetchurl-suggestion: approved id=%d source_id=%d url=%q result=ok events=%d caller=%d", id, sourceID, row.FeedURL, len(allEvents), callerID)
+		logging.Infof("fetchurl-suggestion: approved id=%d source_id=%d url=%q result=ok events=%d caller=%d", id, sourceID, row.FeedURL, len(allEvents), callerID)
 	}
 
 	writeJSONStatus(w, http.StatusOK, map[string]any{

@@ -4,6 +4,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"html/template"
 	"log"
 	"net/http"
@@ -100,6 +101,6 @@ func tmplData(r *http.Request, cfg *Config, title string, data any) TemplateData
 func renderTemplate(w http.ResponseWriter, t *template.Template, data TemplateData) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := t.Execute(w, data); err != nil {
-		log.Printf("template error: %v", err)
+		logging.Errorf("template error: %v", err)
 	}
 }

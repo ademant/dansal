@@ -3,8 +3,8 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"github.com/ademant/dansal/internal/logging"
 	"io"
-	"log"
 	"net/http"
 )
 
@@ -40,7 +40,7 @@ type SettingsData struct {
 // verify, verify-telegram, and verify-matrix handlers.
 func settingsThrottleCheck(w http.ResponseWriter, r *http.Request, ip, path string) bool {
 	if authThrottle.isBlocked(ip) {
-		log.Printf("%s ip=%s path=%s", authBlock, ip, path)
+		logging.Warnf("%s ip=%s path=%s", authBlock, ip, path)
 		http.Redirect(w, r, "/settings", http.StatusSeeOther)
 		return true
 	}
@@ -348,7 +348,7 @@ func settingsDeleteAccountHandler(cfg *Config, tmpls *Templates, client *DansalC
 			return
 		}
 		if err := client.DeleteOwnAccount(r.Context(), token); err != nil {
-			log.Printf("delete account user %d: %v", su.ID, err)
+			logging.Errorf("delete account user %d: %v", su.ID, err)
 			title := i18n.T(r, "settings_title")
 			keys, _ := client.ListAPIKeys(r.Context(), token)
 			sessions, _ := client.GetSessions(r.Context(), token)
@@ -518,7 +518,7 @@ func settingsTOTPSetupHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		}
 		info, err := client.TOTPSetup(r.Context(), token)
 		if err != nil {
-			log.Printf("totp setup: %v", err)
+			logging.Errorf("totp setup: %v", err)
 			flashRedirect(w, r, "/settings", flashToken(err), FlashMsg{SettingsErrorKey: "settings_totp_setup_failed"})
 			return
 		}

@@ -8,8 +8,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"io"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -229,7 +229,7 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
-		log.Printf("getUsers: db query: %v", err)
+		logging.Errorf("getUsers: db query: %v", err)
 		writeError(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -239,7 +239,7 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		user, err := scanUser(rows)
 		if err != nil {
-			log.Printf("getUsers: scan: %v", err)
+			logging.Errorf("getUsers: scan: %v", err)
 			writeError(w, "internal error", http.StatusInternalServerError)
 			return
 		}
@@ -264,7 +264,7 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("getUser: scan: %v", err)
+		logging.Errorf("getUser: scan: %v", err)
 		writeError(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -472,7 +472,7 @@ func getMe(w http.ResponseWriter, r *http.Request) {
 	}
 	user, err := getUserByID(callerID)
 	if err != nil {
-		log.Printf("getMe: %v", err)
+		logging.Errorf("getMe: %v", err)
 		writeError(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -513,7 +513,7 @@ func getMeExport(w http.ResponseWriter, r *http.Request) {
 	}
 	data, err := userexport.Export(db, int64(callerID))
 	if err != nil {
-		log.Printf("getMeExport: %v", err)
+		logging.Errorf("getMeExport: %v", err)
 		writeError(w, "internal error", http.StatusInternalServerError)
 		return
 	}

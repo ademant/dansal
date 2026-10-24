@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"mime/multipart"
 	"sync"
 	"time"
@@ -65,7 +65,7 @@ func refreshExternalOverlay(cfg *Config, client *DansalClient) {
 	for _, src := range cfg.ExternalOverlaySources {
 		fetched, err := fetchExternalOverlaySource(cfg, client, src)
 		if err != nil {
-			log.Printf("external overlay: fetch %s: %v", src.Name, err)
+			logging.Errorf("external overlay: fetch %s: %v", src.Name, err)
 			continue
 		}
 		pins = append(pins, fetched...)
@@ -83,7 +83,7 @@ func refreshExternalOverlay(cfg *Config, client *DansalClient) {
 	}
 	b, err := json.Marshal(pins)
 	if err != nil {
-		log.Printf("external overlay: marshal: %v", err)
+		logging.Errorf("external overlay: marshal: %v", err)
 		return
 	}
 	externalOverlayMu.Lock()

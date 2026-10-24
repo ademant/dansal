@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
+	"github.com/ademant/dansal/internal/logging"
 	"html/template"
-	"log"
 	"net/http"
 )
 
@@ -202,7 +202,7 @@ func (e *adminEntity[E]) Delete(cfg *Config, client *DansalClient) http.HandlerF
 			return
 		}
 		if err := e.deleteFn(r.Context(), client, id, getSessionToken(r)); err != nil {
-			log.Printf("delete %s %d: %v", e.name, id, err)
+			logging.Errorf("delete %s %d: %v", e.name, id, err)
 		}
 		http.Redirect(w, r, e.listPath, http.StatusSeeOther)
 	}
@@ -227,7 +227,7 @@ func adminSubResourceDeleteHandler(
 			return
 		}
 		if err := deleteFn(r.Context(), id, getSessionToken(r)); err != nil {
-			log.Printf(logFmt, id, err)
+			logging.Errorf(logFmt, id, err)
 		}
 		http.Redirect(w, r, editPath(id), http.StatusSeeOther)
 	}

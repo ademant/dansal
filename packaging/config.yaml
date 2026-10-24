@@ -2,6 +2,14 @@ server:
   # TCP port the API listens on.
   port: 8000
 
+  # Minimum level written to the journal (journald priorities, #1645):
+  #   debug    everything, including debug detail
+  #   info     info, warning and error (default)
+  #   warning  warning and error only
+  #   error    errors only
+  # Read the output with `journalctl -u dansal@<instance> -p warning`.
+  log_level: info
+
   # Address the API server binds to. Defaults to "127.0.0.1:<port>" — the
   # API is reachable only from this host (nginx/dansal-web proxy locally).
   # For multi-host deployments where dansal-web runs on a different host

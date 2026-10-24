@@ -3,7 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -80,7 +80,7 @@ func suggestURLDatesHandler(cfg *Config, client *DansalClient) http.HandlerFunc 
 		mw.Close()
 		events, err := client.SuggestEventPreview(r.Context(), &body, mw.FormDataContentType())
 		if err != nil {
-			log.Printf("suggest url-dates: %v", err)
+			logging.Errorf("suggest url-dates: %v", err)
 			respond(urlDatesStatus(err), []string{})
 			return
 		}

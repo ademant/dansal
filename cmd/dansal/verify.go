@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -131,7 +131,7 @@ func sendVerification(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		deepLink := "https://t.me/" + botName + "?start=" + token
-		log.Printf("verify: generated telegram deep link for user %d (%s)", targetID, user.Email)
+		logging.Infof("verify: generated telegram deep link for user %d (%s)", targetID, user.Email)
 		writeJSON(w, map[string]string{"deep_link": deepLink})
 		return
 	}
@@ -153,10 +153,10 @@ func sendVerification(w http.ResponseWriter, r *http.Request) {
 		}
 		if sendErr != nil {
 			db.Exec("DELETE FROM verification_tokens WHERE token=?", token)
-			log.Printf("verify: send failed for user %d channel %s: %v", targetID, req.Channel, sendErr)
+			logging.Errorf("verify: send failed for user %d channel %s: %v", targetID, req.Channel, sendErr)
 			return
 		}
-		log.Printf("verify: sent %s verification to user %d (%s)", req.Channel, targetID, user.Email)
+		logging.Infof("verify: sent %s verification to user %d (%s)", req.Channel, targetID, user.Email)
 	}()
 
 	w.WriteHeader(http.StatusNoContent)
@@ -195,7 +195,7 @@ func consumeVerification(w http.ResponseWriter, r *http.Request) {
 
 	db.Exec(fmt.Sprintf("UPDATE users SET %s=1 WHERE id=?", col), userID)
 	db.Exec("DELETE FROM verification_tokens WHERE id=?", id)
-	log.Printf("verify: %s verified for user %d", channel, userID)
+	logging.Infof("verify: %s verified for user %d", channel, userID)
 
 	json.NewEncoder(w).Encode(map[string]string{"channel": channel, "status": "verified"})
 }

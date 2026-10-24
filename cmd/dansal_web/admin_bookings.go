@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"strconv"
 )
@@ -118,7 +118,7 @@ func adminBookingApproveHandler(cfg *Config, client *DansalClient) http.HandlerF
 			return
 		}
 		if err := client.UpdateBookingStatus(r.Context(), bookingID, "approved", token); err != nil {
-			log.Printf("approve booking %d: %v", bookingID, err)
+			logging.Errorf("approve booking %d: %v", bookingID, err)
 		}
 		http.Redirect(w, r, "/admin/events/"+eventID+"/bookings", http.StatusSeeOther)
 	}
@@ -142,7 +142,7 @@ func adminBookingCancelHandler(cfg *Config, client *DansalClient) http.HandlerFu
 			return
 		}
 		if err := client.UpdateBookingStatus(r.Context(), bookingID, "cancelled", token); err != nil {
-			log.Printf("cancel booking %d: %v", bookingID, err)
+			logging.Errorf("cancel booking %d: %v", bookingID, err)
 		}
 		http.Redirect(w, r, "/admin/events/"+eventID+"/bookings", http.StatusSeeOther)
 	}
@@ -166,7 +166,7 @@ func adminBookingDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFu
 			return
 		}
 		if err := client.DeleteBooking(r.Context(), bookingID, token); err != nil {
-			log.Printf("delete booking %d: %v", bookingID, err)
+			logging.Errorf("delete booking %d: %v", bookingID, err)
 		}
 		http.Redirect(w, r, "/admin/events/"+eventID+"/bookings", http.StatusSeeOther)
 	}

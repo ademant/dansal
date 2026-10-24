@@ -3,8 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"io"
-	"log"
 	"net/http"
 )
 
@@ -60,7 +60,7 @@ func adminTimetablePageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 				var err error
 				allLocs, err = client.GetLocations(ctx)
 				if err != nil {
-					log.Printf("timetable: could not load locations: %v", err)
+					logging.Errorf("timetable: could not load locations: %v", err)
 				}
 				return nil
 			},
@@ -68,7 +68,7 @@ func adminTimetablePageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 				var err error
 				musicians, err = client.GetMusicians(ctx)
 				if err != nil {
-					log.Printf("timetable: could not load musicians: %v", err)
+					logging.Errorf("timetable: could not load musicians: %v", err)
 				}
 				return nil
 			},
@@ -76,7 +76,7 @@ func adminTimetablePageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 				var err error
 				instructors, err = client.GetInstructors(ctx)
 				if err != nil {
-					log.Printf("timetable: could not load instructors: %v", err)
+					logging.Errorf("timetable: could not load instructors: %v", err)
 				}
 				return nil
 			},
@@ -127,7 +127,7 @@ func adminTimetablePageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 			}
 			l, err := client.GetLocation(ctx, id)
 			if err != nil {
-				log.Printf("timetable: resolve location %d: %v", id, err)
+				logging.Errorf("timetable: resolve location %d: %v", id, err)
 				return Location{}
 			}
 			return l

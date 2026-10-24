@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -445,7 +445,7 @@ func suggestHandler(w http.ResponseWriter, r *http.Request) {
 				manageURL,
 			)
 			if _, err := SendEmail(req.Email, subject, msg, false); err != nil {
-				log.Printf("suggest: send manage email: %v", err)
+				logging.Errorf("suggest: send manage email: %v", err)
 			}
 		}()
 	}

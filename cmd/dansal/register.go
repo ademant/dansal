@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"strconv"
 	"strings"
@@ -257,7 +257,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		channel, req.Telegram, verifiedInitial, expiresAt,
 	).Scan(&pendingID)
 	if dbErr != nil {
-		log.Printf("register: db error: %v", dbErr)
+		logging.Errorf("register: db error: %v", dbErr)
 		writeError(w, "db error", http.StatusInternalServerError)
 		return
 	}
@@ -284,7 +284,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 				verifyURL,
 			)
 			if msgID, err := SendEmail(req.Email, "Confirm your registration", msg, false); err != nil {
-				log.Printf("register: send verify email: %v", err)
+				logging.Errorf("register: send verify email: %v", err)
 			} else {
 				db.Exec("UPDATE pending_registrations SET message_id=? WHERE verification_token=?", msgID, sha256Hex(verificationToken))
 			}
@@ -408,7 +408,7 @@ func registerResendHandler(w http.ResponseWriter, r *http.Request) {
 				verifyURL,
 			)
 			if _, err := SendEmail(email, "Confirm your registration", msg, false); err != nil {
-				log.Printf("register resend: send verify email: %v", err)
+				logging.Errorf("register resend: send verify email: %v", err)
 			}
 		}()
 	}
@@ -550,7 +550,7 @@ func registerPasswordHandler(w http.ResponseWriter, r *http.Request) {
 	userID, _ := result.LastInsertId()
 	db.Exec("UPDATE pending_registrations SET user_id=? WHERE id=?", userID, pr.ID)
 
-	log.Printf("register: password set for pending registration %d (user_id=%d)", pr.ID, userID)
+	logging.Infof("register: password set for pending registration %d (user_id=%d)", pr.ID, userID)
 	go notifyApprovers(pr.ID)
 
 	writeJSONStatus(w, http.StatusCreated, map[string]string{"status": "password_set"})
@@ -714,7 +714,7 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		log.Printf("register: approved pending registration %d — enabled user %d (role=%s, passkey=%v)", id, userID, role, hasPasskey)
+		logging.Infof("register: approved pending registration %d — enabled user %d (role=%s, passkey=%v)", id, userID, role, hasPasskey)
 
 		signInHint := "You can now sign in with the password you set."
 		if hasPasskey {
@@ -790,7 +790,7 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("register: approved pending registration %d — invite sent to %q (role=%s)", id, pr.Email, role)
+	logging.Infof("register: approved pending registration %d — invite sent to %q (role=%s)", id, pr.Email, role)
 
 	go notifyUser(pr.TelegramChatID, "", false, pr.Email, "Your registration was approved",
 		fmt.Sprintf("Your registration has been approved.\n\nUse the link below to complete your account setup. The setup page will guide you through choosing how you want to sign in.\n\n%s\n\nThe link is valid for %d hours.", setupURL, config.Server.InviteExpiryHours))
@@ -848,7 +848,7 @@ func rejectRegHandler(w http.ResponseWriter, r *http.Request) {
 	if pr.UserID.Valid {
 		deleteUserByID(db, pr.UserID.Int64)
 	}
-	log.Printf("register: rejected pending registration %d — reason=%q", id, strings.TrimSpace(body.Reason))
+	logging.Infof("register: rejected pending registration %d — reason=%q", id, strings.TrimSpace(body.Reason))
 
 	if pr.Verified == 1 {
 		rejectMsg := "Your registration request was not approved."

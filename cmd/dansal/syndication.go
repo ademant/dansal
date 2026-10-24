@@ -9,8 +9,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"io"
-	"log"
 	"net/http"
 	"time"
 )
@@ -341,7 +341,7 @@ func publishToEventbrite(eventID int, event Event, cfg *EventbriteCfg) {
 	defer cancel()
 
 	fail := func(msg string) {
-		log.Printf("eventbrite sync event %d: %s", eventID, msg)
+		logging.Infof("eventbrite sync event %d: %s", eventID, msg)
 		sync, _ := loadEventSync(eventID)
 		if sync == nil {
 			sync = &ExternalSync{}
@@ -444,7 +444,7 @@ func publishToEventbrite(eventID int, event Event, cfg *EventbriteCfg) {
 		SyncedAt:   time.Now().UTC().Format(time.RFC3339),
 	}
 	saveEventSync(eventID, sync)
-	log.Printf("eventbrite sync event %d: created %s (status=%s)", eventID, created.ID, status)
+	logging.Infof("eventbrite sync event %d: created %s (status=%s)", eventID, created.ID, status)
 }
 
 // ── social-dance.today integration ───────────────────────────────────────────
@@ -456,7 +456,7 @@ func pushToSocialDanceToday(eventID int, event Event, cfg *SocialDanceTodayCfg) 
 	defer cancel()
 
 	fail := func(msg string) {
-		log.Printf("social-dance.today sync event %d: %s", eventID, msg)
+		logging.Infof("social-dance.today sync event %d: %s", eventID, msg)
 		sync, _ := loadEventSync(eventID)
 		if sync == nil {
 			sync = &ExternalSync{}
@@ -531,5 +531,5 @@ func pushToSocialDanceToday(eventID int, event Event, cfg *SocialDanceTodayCfg) 
 		SyncedAt:   time.Now().UTC().Format(time.RFC3339),
 	}
 	saveEventSync(eventID, sync)
-	log.Printf("social-dance.today sync event %d: synced (external_id=%s)", eventID, result.ID)
+	logging.Infof("social-dance.today sync event %d: synced (external_id=%s)", eventID, result.ID)
 }

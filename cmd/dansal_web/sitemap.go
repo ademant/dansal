@@ -4,7 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/xml"
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"strconv"
 	"sync"
@@ -116,7 +116,7 @@ func buildSitemap(r *http.Request, cfg *Config, client *DansalClient) ([]byte, e
 	ctx := r.Context()
 	events, err := client.GetAllEvents(ctx)
 	if err != nil {
-		log.Printf("sitemap: could not load events: %v", err)
+		logging.Errorf("sitemap: could not load events: %v", err)
 	}
 	epoch := time.Unix(0, 0)
 	for _, e := range events {
@@ -146,7 +146,7 @@ func buildSitemap(r *http.Request, cfg *Config, client *DansalClient) ([]byte, e
 	// Locations
 	locs, err := client.GetLocations(ctx)
 	if err != nil {
-		log.Printf("sitemap: could not load locations: %v", err)
+		logging.Errorf("sitemap: could not load locations: %v", err)
 	}
 	for _, l := range locs {
 		lastMod := ""
@@ -166,7 +166,7 @@ func buildSitemap(r *http.Request, cfg *Config, client *DansalClient) ([]byte, e
 	// Tags — category landing pages for long-tail search traffic.
 	tags, err := client.GetTags(ctx)
 	if err != nil {
-		log.Printf("sitemap: could not load tags: %v", err)
+		logging.Errorf("sitemap: could not load tags: %v", err)
 	}
 	for _, t := range tags {
 		urls = append(urls, sitemapURL{
@@ -179,7 +179,7 @@ func buildSitemap(r *http.Request, cfg *Config, client *DansalClient) ([]byte, e
 	// Cities — hub pages for each town with upcoming events.
 	cities, err := client.GetCities(ctx, false)
 	if err != nil {
-		log.Printf("sitemap: could not load cities: %v", err)
+		logging.Errorf("sitemap: could not load cities: %v", err)
 	}
 	for _, c := range cities {
 		urls = append(urls, sitemapURL{
@@ -193,7 +193,7 @@ func buildSitemap(r *http.Request, cfg *Config, client *DansalClient) ([]byte, e
 	// whether or not it has an explicit ActorName.
 	orgs, err := client.GetOrganizations(ctx)
 	if err != nil {
-		log.Printf("sitemap: could not load organizations: %v", err)
+		logging.Errorf("sitemap: could not load organizations: %v", err)
 	}
 	for _, o := range orgs {
 		urls = append(urls, sitemapURL{
@@ -206,7 +206,7 @@ func buildSitemap(r *http.Request, cfg *Config, client *DansalClient) ([]byte, e
 	// Musicians
 	musicians, err := client.GetMusicians(ctx)
 	if err != nil {
-		log.Printf("sitemap: could not load musicians: %v", err)
+		logging.Errorf("sitemap: could not load musicians: %v", err)
 	}
 	for _, m := range musicians {
 		urls = append(urls, sitemapURL{
@@ -219,7 +219,7 @@ func buildSitemap(r *http.Request, cfg *Config, client *DansalClient) ([]byte, e
 	// Instructors
 	instructors, err := client.GetInstructors(ctx)
 	if err != nil {
-		log.Printf("sitemap: could not load instructors: %v", err)
+		logging.Errorf("sitemap: could not load instructors: %v", err)
 	}
 	for _, ins := range instructors {
 		urls = append(urls, sitemapURL{

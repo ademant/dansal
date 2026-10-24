@@ -3,7 +3,7 @@ package main
 import (
 	"database/sql"
 	_ "embed"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"os"
 	"regexp"
 	"strings"
@@ -62,31 +62,31 @@ func seedDefaultTags(db *sql.DB, overridePath string) {
 		if raw, err := os.ReadFile(overridePath); err == nil {
 			data = raw
 		} else {
-			log.Printf("seedDefaultTags: could not read tags_file %q, using built-in default: %v", overridePath, err)
+			logging.Warnf("seedDefaultTags: could not read tags_file %q, using built-in default: %v", overridePath, err)
 		}
 	}
 	var f tagSeedFile
 	if err := yaml.Unmarshal(data, &f); err != nil || len(f.Tags) == 0 {
-		log.Printf("seedDefaultTags: invalid or empty tags seed (%v), falling back to the built-in default", err)
+		logging.Warnf("seedDefaultTags: invalid or empty tags seed (%v), falling back to the built-in default", err)
 		f = tagSeedFile{}
 		if err := yaml.Unmarshal(defaultTagsYAML, &f); err != nil {
-			log.Printf("seedDefaultTags: embedded default tags.yaml is invalid: %v", err)
+			logging.Errorf("seedDefaultTags: embedded default tags.yaml is invalid: %v", err)
 			return
 		}
 	}
 	for i, t := range f.Tags {
 		slug := strings.TrimSpace(t.Slug)
 		if slug == "" || !tagSeedSlugRe.MatchString(slug) {
-			log.Printf("seedDefaultTags: skipping tag with invalid slug %q", t.Slug)
+			logging.Warnf("seedDefaultTags: skipping tag with invalid slug %q", t.Slug)
 			continue
 		}
 		if !validTagCategories[t.Category] {
-			log.Printf("seedDefaultTags: skipping tag %q with unknown category %q", slug, t.Category)
+			logging.Warnf("seedDefaultTags: skipping tag %q with unknown category %q", slug, t.Category)
 			continue
 		}
 		homeGroup := strings.TrimSpace(t.HomeGroup)
 		if homeGroup != "" && !tagSeedSlugRe.MatchString(homeGroup) {
-			log.Printf("seedDefaultTags: skipping tag %q with invalid home_group %q", slug, t.HomeGroup)
+			logging.Warnf("seedDefaultTags: skipping tag %q with invalid home_group %q", slug, t.HomeGroup)
 			continue
 		}
 		if _, err := db.Exec(`INSERT INTO tags (slug, name, category, emoji, home_group, color, sort_order)
@@ -97,7 +97,7 @@ func seedDefaultTags(db *sql.DB, overridePath string) {
 				color=excluded.color, sort_order=excluded.sort_order`,
 			slug, t.Name, t.Category, t.Emoji, homeGroup, t.Color, i,
 		); err != nil {
-			log.Printf("seedDefaultTags: upserting tag %q: %v", slug, err)
+			logging.Errorf("seedDefaultTags: upserting tag %q: %v", slug, err)
 		}
 	}
 }

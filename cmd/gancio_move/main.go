@@ -20,6 +20,7 @@ import (
 	"encoding/pem"
 	"flag"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"io"
 	"log"
 	"net/http"
@@ -74,7 +75,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("parse key: %v", err)
 	}
-	log.Printf("loaded private key for %s", oldKeyID)
+	logging.Infof("loaded private key for %s", oldKeyID)
 
 	client := &http.Client{Timeout: 15 * time.Second}
 	ctx := context.Background()
@@ -84,7 +85,7 @@ func main() {
 	for _, followerURL := range followers {
 		inbox := resolveInbox(ctx, client, followerURL)
 		if inbox == "" {
-			log.Printf("WARN: could not resolve inbox for %s, skipping", followerURL)
+			logging.Warnf("could not resolve inbox for %s, skipping", followerURL)
 			continue
 		}
 		inboxTargets[inbox] = true
@@ -95,17 +96,17 @@ func main() {
 	if err != nil {
 		log.Fatalf("marshal: %v", err)
 	}
-	log.Printf("Move activity:\n%s", string(body))
+	logging.Debugf("Move activity:\n%s", string(body))
 
 	for inbox := range inboxTargets {
 		if *dryRun {
-			log.Printf("[dry-run] would POST to %s", inbox)
+			logging.Infof("[dry-run] would POST to %s", inbox)
 			continue
 		}
 		if err := postSigned(ctx, client, inbox, body, privKey); err != nil {
-			log.Printf("ERROR posting to %s: %v", inbox, err)
+			logging.Errorf("posting to %s: %v", inbox, err)
 		} else {
-			log.Printf("OK: posted Move to %s", inbox)
+			logging.Infof("OK: posted Move to %s", inbox)
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
@@ -144,7 +145,7 @@ func resolveInbox(ctx context.Context, client *http.Client, actorURL string) str
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		log.Printf("fetch %s: HTTP %d", actorURL, resp.StatusCode)
+		logging.Warnf("fetch %s: HTTP %d", actorURL, resp.StatusCode)
 		return ""
 	}
 	var actor struct {

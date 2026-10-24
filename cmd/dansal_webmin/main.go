@@ -6,8 +6,8 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"log"
-	"log/syslog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -40,12 +40,14 @@ func main() {
 	if inst := instance.FromConfigArg(); inst != "" {
 		tag = "dansal-webmin@" + inst
 	}
-	if w, err := syslog.New(syslog.LOG_INFO|syslog.LOG_DAEMON, tag); err == nil {
-		log.SetOutput(w)
-		log.SetFlags(0)
-	}
+	logging.Setup(tag)
 
 	cfg := loadConfig()
+	if err := logging.SetLevel(cfg.LogLevel); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	logging.Infof("log level set: %s", cfg.LogLevel)
 
 	if *printVersion {
 		fmt.Printf("dansal-webmin %s (built %s)\n", Version, BuildTime)
@@ -109,11 +111,11 @@ func main() {
 		signal.Notify(sig, syscall.SIGHUP)
 		for range sig {
 			live.store(buildHandler(loadConfigFrom(cfg.configPath)))
-			log.Print("configuration reloaded")
+			logging.Infof("configuration reloaded")
 		}
 	}()
 
-	log.Printf("dansal-webmin %s listening on %s (timeouts: read=%ds write=%ds idle=%ds)",
+	logging.Infof("dansal-webmin %s listening on %s (timeouts: read=%ds write=%ds idle=%ds)",
 		Version, cfg.Listen, cfg.ReadTimeoutSecs, cfg.WriteTimeoutSecs, cfg.IdleTimeoutSecs)
 	srv := &http.Server{
 		Addr:              cfg.Listen,
@@ -135,13 +137,13 @@ func main() {
 
 	<-ctx.Done()
 	stop()
-	log.Println("dansal-webmin shutting down...")
+	logging.Infof("dansal-webmin shutting down...")
 	shutCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutCtx); err != nil {
-		log.Printf("dansal-webmin shutdown error: %v", err)
+		logging.Errorf("dansal-webmin shutdown error: %v", err)
 	}
-	log.Println("dansal-webmin stopped")
+	logging.Infof("dansal-webmin stopped")
 }
 
 // webminCSP builds the per-request CSP header. #1141/#1147: every <script>

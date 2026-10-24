@@ -7,8 +7,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -87,7 +87,7 @@ func Sync(ctx context.Context, db *sql.DB, client *http.Client, baseURL string, 
 	syncMu.Lock()
 	defer syncMu.Unlock()
 	if err := EnsureSchema(db); err != nil {
-		log.Printf("places: schema: %v", err)
+		logging.Errorf("places: schema: %v", err)
 		return
 	}
 	keep := map[string]bool{}
@@ -124,14 +124,14 @@ func Sync(ctx context.Context, db *sql.DB, client *http.Client, baseURL string, 
 		var err error
 		admin1, err = loadAdmin1(ctx, client, baseURL)
 		if err != nil {
-			log.Printf("places: state names unavailable, importing without them: %v", err)
+			logging.Warnf("places: state names unavailable, importing without them: %v", err)
 		}
 	}
 	for _, c := range todo {
 		setStatus(db, c, "running", 0, 0, "")
 		n, err := importCountry(ctx, db, client, baseURL, c, admin1)
 		if err != nil {
-			log.Printf("places: import %s: %v", c, err)
+			logging.Errorf("places: import %s: %v", c, err)
 			setStatus(db, c, "error", 0, 0, err.Error())
 			continue
 		}
@@ -142,19 +142,19 @@ func Sync(ctx context.Context, db *sql.DB, client *http.Client, baseURL string, 
 		// retrying a country with no dump on every future run (#1476).
 		pn, pErr := importPostcodes(ctx, db, client, ZipBaseURL(baseURL), c)
 		if pErr != nil {
-			log.Printf("places: postcode import %s: %v (place import still ok)", c, pErr)
+			logging.Warnf("places: postcode import %s: %v (place import still ok)", c, pErr)
 			pn = -1
 		}
-		log.Printf("places: imported %s: %d places, %d postcodes", c, n, pn)
+		logging.Infof("places: imported %s: %d places, %d postcodes", c, n, pn)
 		setStatus(db, c, "ok", n, pn, "")
 	}
 	for _, c := range postcodesOnly {
 		pn, pErr := importPostcodes(ctx, db, client, ZipBaseURL(baseURL), c)
 		if pErr != nil {
-			log.Printf("places: postcode import %s: %v", c, pErr)
+			logging.Errorf("places: postcode import %s: %v", c, pErr)
 			pn = -1
 		}
-		log.Printf("places: imported %s: %d postcodes (places already ok, unchanged)", c, pn)
+		logging.Infof("places: imported %s: %d postcodes (places already ok, unchanged)", c, pn)
 		db.Exec("UPDATE places_import SET postcode_count = ? WHERE country = ?", pn, c)
 	}
 }

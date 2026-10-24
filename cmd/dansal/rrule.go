@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"sort"
 	"strconv"
 	"strings"
@@ -96,7 +96,7 @@ func expandRRuleOccurrences(vevent *ics.VEvent, baseStart, baseEnd time.Time) ([
 		if p := vevent.GetProperty(ics.ComponentPropertyUniqueId); p != nil {
 			uid = p.Value
 		}
-		log.Printf("ical import: %s expands to more than %d occurrences; stopped at the cap", uid, icalMaxOccurrences)
+		logging.Infof("ical import: %s expands to more than %d occurrences; stopped at the cap", uid, icalMaxOccurrences)
 	}
 	return result, nil
 }

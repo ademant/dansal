@@ -11,7 +11,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"strconv"
 	"time"
@@ -106,7 +106,7 @@ func tagInboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.Handler
 func sendTagAccept(cfg *Config, db *sql.DB, tagSlug string, followActivity map[string]any, followerURI, inboxURL string) {
 	relayActor, err := getActorBySlug(db, cfg.RelayActorName)
 	if err != nil {
-		log.Printf("sendTagAccept: load relay actor: %v", err)
+		logging.Errorf("sendTagAccept: load relay actor: %v", err)
 		return
 	}
 
@@ -121,7 +121,7 @@ func sendTagAccept(cfg *Config, db *sql.DB, tagSlug string, followActivity map[s
 	}
 	body, err := json.Marshal(accept)
 	if err != nil {
-		log.Printf("sendTagAccept marshal: %v", err)
+		logging.Errorf("sendTagAccept marshal: %v", err)
 		return
 	}
 
@@ -134,6 +134,6 @@ func sendTagAccept(cfg *Config, db *sql.DB, tagSlug string, followActivity map[s
 	// signing key belongs to the Accept's actor may reject this; a per-tag key
 	// pair would be needed for full compliance.
 	if err := postToInbox(ctx, inboxURL, actorKeyID(cfg, relayActor.OrgSlug), relayActor.PrivateKeyPEM, body); err != nil {
-		log.Printf("sendTagAccept post: %v", err)
+		logging.Errorf("sendTagAccept post: %v", err)
 	}
 }

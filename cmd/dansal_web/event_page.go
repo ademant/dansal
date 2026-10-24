@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"strconv"
 	"strings"
@@ -247,7 +247,7 @@ func loadEventPageData(r *http.Request, client *DansalClient, event Event, su *S
 	}
 	wg.Wait()
 	for _, e := range errs {
-		log.Printf("event page: %s", e)
+		logging.Errorf("event page: %s", e)
 	}
 	if eventOver {
 		data.orgUpcomingCount = orgTotal

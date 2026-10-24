@@ -7,18 +7,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"io"
-	"log"
 	"net/http"
 	"runtime/debug"
 	"slices"
 	"strconv"
 )
 
+// writeError answers with a JSON error. Server errors are logged once by
+// ErrorIDMiddleware (#1646), so this does not log them again.
 func writeError(w http.ResponseWriter, msg string, code int) {
-	if code >= 500 {
-		log.Printf("error %d: %s", code, msg)
-	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	json.NewEncoder(w).Encode(map[string]string{"error": msg})
@@ -34,9 +33,6 @@ func writeError(w http.ResponseWriter, msg string, code int) {
 // token, not a machine code, so it cannot be reused for this — the two
 // fields coexist in the same JSON body without conflict.
 func writeErrorCode(w http.ResponseWriter, code string, msg string, status int) {
-	if status >= 500 {
-		log.Printf("error %d: %s", status, msg)
-	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(map[string]string{"error": msg, "error_code": code})
@@ -45,7 +41,7 @@ func writeErrorCode(w http.ResponseWriter, code string, msg string, status int) 
 // writeInternalError logs the raw error detail server-side and sends a generic
 // 500 message to the client, preventing internal DB/system details from leaking.
 func writeInternalError(w http.ResponseWriter, err error) {
-	log.Printf("internal error: %v", err)
+	logging.Errorf("internal error: %v", err)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusInternalServerError)
 	json.NewEncoder(w).Encode(map[string]string{"error": "Internal server error"})
@@ -241,11 +237,25 @@ func (e *errorIDWriter) flush() {
 	// exact error message.
 	msg, _ := v["error"].(string)
 	userID, _ := strconv.Atoi(e.req.Header.Get("X-User-ID"))
-	if userID > 0 {
-		log.Printf("error_id=%s status=%d method=%s path=%s user_id=%d msg=%q",
+	// Server errors are Error, rate limits Warn, other client errors Debug (#1646).
+	switch {
+	case e.code >= 500 && userID > 0:
+		logging.Errorf("error_id=%s status=%d method=%s path=%s user_id=%d msg=%q",
 			errorID, e.code, e.req.Method, e.req.URL.Path, userID, msg)
-	} else {
-		log.Printf("error_id=%s status=%d method=%s path=%s msg=%q",
+	case e.code >= 500:
+		logging.Errorf("error_id=%s status=%d method=%s path=%s msg=%q",
+			errorID, e.code, e.req.Method, e.req.URL.Path, msg)
+	case e.code == 429 && userID > 0:
+		logging.Warnf("error_id=%s status=%d method=%s path=%s user_id=%d msg=%q",
+			errorID, e.code, e.req.Method, e.req.URL.Path, userID, msg)
+	case e.code == 429:
+		logging.Warnf("error_id=%s status=%d method=%s path=%s msg=%q",
+			errorID, e.code, e.req.Method, e.req.URL.Path, msg)
+	case userID > 0:
+		logging.Debugf("error_id=%s status=%d method=%s path=%s user_id=%d msg=%q",
+			errorID, e.code, e.req.Method, e.req.URL.Path, userID, msg)
+	default:
+		logging.Debugf("error_id=%s status=%d method=%s path=%s msg=%q",
 			errorID, e.code, e.req.Method, e.req.URL.Path, msg)
 	}
 
@@ -273,7 +283,7 @@ func PanicRecoveryMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if rec := recover(); rec != nil {
-				log.Printf("panic: %v method=%s path=%s\n%s", rec, r.Method, r.URL.Path, debug.Stack())
+				logging.Errorf("panic: %v method=%s path=%s\n%s", rec, r.Method, r.URL.Path, debug.Stack())
 				writeError(w, "Internal server error", http.StatusInternalServerError)
 			}
 		}()

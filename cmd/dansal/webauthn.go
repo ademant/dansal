@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"net/url"
 	"strings"
@@ -58,7 +58,7 @@ func initWebAuthn() {
 	}
 	u, err := url.Parse(config.Server.BaseURL)
 	if err != nil {
-		log.Printf("webauthn: cannot parse base_url: %v", err)
+		logging.Errorf("webauthn: cannot parse base_url: %v", err)
 		return
 	}
 	name := config.Server.WebAuthnRPName
@@ -71,7 +71,7 @@ func initWebAuthn() {
 		RPOrigins:     []string{strings.TrimRight(config.Server.BaseURL, "/")},
 	})
 	if err != nil {
-		log.Printf("webauthn: init failed: %v", err)
+		logging.Errorf("webauthn: init failed: %v", err)
 		wauthn = nil
 	}
 }
@@ -377,7 +377,7 @@ func webauthnInviteFinish(w http.ResponseWriter, r *http.Request) {
 	if identifier == "" {
 		identifier = stored.DisplayName
 	}
-	log.Printf("webauthn: new user %q (role=%s) registered via invite id=%d", identifier, invite.Role, invite.ID)
+	logging.Infof("webauthn: new user %q (role=%s) registered via invite id=%d", identifier, invite.Role, invite.ID)
 
 	issueSessionResponse(w, r, http.StatusCreated, stored.UserID, stored.Email, invite.Role, func() {
 		w.WriteHeader(http.StatusCreated)
@@ -514,7 +514,7 @@ func webauthnLoginFinish(w http.ResponseWriter, r *http.Request) {
 		}
 		_, credential, err := wauthn.FinishPasskeyLogin(discHandler, stored.Session, r)
 		if err != nil {
-			log.Printf("webauthn: discoverable login failed: %v", err)
+			logging.Warnf("webauthn: discoverable login failed: %v", err)
 			writeError(w, "WebAuthn verification failed", http.StatusUnauthorized)
 			return
 		}
@@ -572,7 +572,7 @@ func webauthnLoginFinish(w http.ResponseWriter, r *http.Request) {
 
 	credential, err := wauthn.ValidateLogin(user, loginSession, parsedResponse)
 	if err != nil {
-		log.Printf("webauthn: login validation failed for user %d: %v", stored.UserID, err)
+		logging.Warnf("webauthn: login validation failed for user %d: %v", stored.UserID, err)
 		writeError(w, "WebAuthn verification failed", http.StatusUnauthorized)
 		return
 	}
@@ -619,7 +619,7 @@ func webauthnTOTPChallenge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !totpCheckAndMark(pending.UserID, totpSecret, req.TotpCode, time.Now()) {
-		log.Printf("webauthn: invalid or replayed TOTP for user %d (%s)", pending.UserID, pending.Email)
+		logging.Warnf("webauthn: invalid or replayed TOTP for user %d (%s)", pending.UserID, pending.Email)
 		writeError(w, "Invalid TOTP code", http.StatusUnauthorized)
 		return
 	}
@@ -730,7 +730,7 @@ func webauthnUserRegisterFinish(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Could not store credential", http.StatusInternalServerError)
 		return
 	}
-	log.Printf("webauthn: user %d added a new passkey", callerID)
+	logging.Infof("webauthn: user %d added a new passkey", callerID)
 	writeJSONStatus(w, http.StatusCreated, map[string]any{"status": "created"})
 }
 
@@ -933,7 +933,7 @@ func webauthnRegFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("webauthn: passkey bound to pending registration %d (user_id=%d)", stored.PendingID, stored.UserID)
+	logging.Infof("webauthn: passkey bound to pending registration %d (user_id=%d)", stored.PendingID, stored.UserID)
 	// Onboarding complete -- notify admins the registration is ready for
 	// review (#1223). Mirrors registerPasswordHandler's password-track call.
 	go notifyApprovers(stored.PendingID)

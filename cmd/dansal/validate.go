@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net"
 	"regexp"
 	"strings"
@@ -49,14 +49,14 @@ func validateEmailDomain(ctx context.Context, email string) error {
 		return nil
 	}
 	if mxErr != nil {
-		log.Printf("validateEmailDomain: MX lookup %q: %v (allowing)", domain, mxErr)
+		logging.Warnf("validateEmailDomain: MX lookup %q: %v (allowing)", domain, mxErr)
 		return nil
 	}
 
 	// MX returned cleanly empty — try A/AAAA fallback.
 	addrs, aErr := r.LookupHost(ctx, domain)
 	if aErr != nil {
-		log.Printf("validateEmailDomain: A lookup %q: %v (allowing)", domain, aErr)
+		logging.Warnf("validateEmailDomain: A lookup %q: %v (allowing)", domain, aErr)
 		return nil
 	}
 	if len(addrs) == 0 {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"io"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -24,7 +24,7 @@ func redirectBoardError(w http.ResponseWriter, r *http.Request, eventID int, key
 	// #1422: web-side rejections already logged their reason (PUBLIC_BLOCK /
 	// FORM_REJECT); only an API error adds information here.
 	if err != nil {
-		log.Printf("dansal-web: board error error_id=%s key=%s path=%s err=%v", tok, key, r.URL.Path, err)
+		logging.Errorf("dansal-web: board error error_id=%s key=%s path=%s err=%v", tok, key, r.URL.Path, err)
 	}
 	flashRedirect(w, r, fmt.Sprintf("/events/%d", eventID), tok, FlashMsg{
 		BoardError:    key,
@@ -57,7 +57,7 @@ func contactBoardPostHandler(cfg *Config, db *sql.DB, client *DansalClient, i18n
 		}
 		ip := getClientIP(r)
 		if publicThrottle.isBlocked(ip + "|" + r.UserAgent()) {
-			log.Printf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
+			logging.Warnf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
 			boardErrorRedirect(w, r, eventID, "board_throttled")
 			return
 		}
@@ -66,7 +66,7 @@ func contactBoardPostHandler(cfg *Config, db *sql.DB, client *DansalClient, i18n
 			boardErrorRedirect(w, r, eventID, "board_form_error")
 			return
 		case formGuardHoneypot:
-			log.Printf("dansal-web: HONEYPOT ip=%s path=%s", ip, r.URL.Path)
+			logging.Warnf("dansal-web: HONEYPOT ip=%s path=%s", ip, r.URL.Path)
 			boardSuccessRedirect(w, r, eventID, FlashMsg{BoardPosted: true})
 			return
 		case formGuardBadToken:
@@ -112,7 +112,7 @@ func contactBoardPostHandler(cfg *Config, db *sql.DB, client *DansalClient, i18n
 		globalEmailSendRate.record()
 		tgURL, firstPost, err := client.CreateContactPost(r.Context(), eventID, post, cfg.publicBaseURL(), getSessionToken(r), getBoardSessionToken(r))
 		if err != nil {
-			log.Printf("dansal-web: board post failed ip_hash=%s path=%s type=%q city=%q message_len=%d err=%v",
+			logging.Errorf("dansal-web: board post failed ip_hash=%s path=%s type=%q city=%q message_len=%d err=%v",
 				hashIP(ip), r.URL.Path, r.FormValue("type"), r.FormValue("city"), len(r.FormValue("message")), err)
 			clearPendingSubmission(ip, r.UserAgent(), pendingScope)
 			redirectBoardError(w, r, eventID, "board_post_error", err)
@@ -170,7 +170,7 @@ func contactBoardDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFu
 		token := getSessionToken(r)
 
 		if err := client.DeleteContactPost(r.Context(), postID, token); err != nil {
-			log.Printf("dansal-web: board delete failed post_id=%d path=%s err=%v", postID, r.URL.Path, err)
+			logging.Errorf("dansal-web: board delete failed post_id=%d path=%s err=%v", postID, r.URL.Path, err)
 			redirectBoardError(w, r, eventID, "board_delete_error", err)
 			return
 		}
@@ -191,7 +191,7 @@ func contactBoardContactHandler(cfg *Config, client *DansalClient) http.HandlerF
 		}
 		ip := getClientIP(r)
 		if publicThrottle.isBlocked(ip + "|" + r.UserAgent()) {
-			log.Printf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
+			logging.Warnf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
 			boardErrorRedirect(w, r, eventID, "board_throttled")
 			return
 		}
@@ -200,7 +200,7 @@ func contactBoardContactHandler(cfg *Config, client *DansalClient) http.HandlerF
 			boardErrorRedirect(w, r, eventID, "board_form_error")
 			return
 		case formGuardHoneypot:
-			log.Printf("dansal-web: HONEYPOT ip=%s path=%s", ip, r.URL.Path)
+			logging.Warnf("dansal-web: HONEYPOT ip=%s path=%s", ip, r.URL.Path)
 			boardSuccessRedirect(w, r, eventID, FlashMsg{BoardContacted: true})
 			return
 		case formGuardBadToken:
@@ -216,7 +216,7 @@ func contactBoardContactHandler(cfg *Config, client *DansalClient) http.HandlerF
 		globalEmailSendRate.record()
 		tgURL, err := client.ContactPoster(r.Context(), postID, email, telegram, message, cfg.publicBaseURL(), getSessionToken(r))
 		if err != nil {
-			log.Printf("dansal-web: board contact failed post_id=%d ip_hash=%s path=%s err=%v", postID, hashIP(ip), r.URL.Path, err)
+			logging.Errorf("dansal-web: board contact failed post_id=%d ip_hash=%s path=%s err=%v", postID, hashIP(ip), r.URL.Path, err)
 			redirectBoardError(w, r, eventID, "board_contact_error", err)
 			return
 		}
@@ -333,7 +333,7 @@ func contactManagePostHandler(cfg *Config, client *DansalClient, i18n *I18n) htt
 
 		if r.FormValue("_action") == "delete" {
 			if err := client.DeleteContactPostByManageToken(r.Context(), token); err != nil {
-				log.Printf("dansal-web: manage delete failed path=%s err=%v", r.URL.Path, err)
+				logging.Errorf("dansal-web: manage delete failed path=%s err=%v", r.URL.Path, err)
 				http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
 				return
 			}
@@ -359,7 +359,7 @@ func contactManagePostHandler(cfg *Config, client *DansalClient, i18n *I18n) htt
 			"nickname": r.FormValue("nickname"),
 		}
 		if err := client.UpdateContactPost(r.Context(), postID, token, fields); err != nil {
-			log.Printf("dansal-web: manage update failed path=%s err=%v", r.URL.Path, err)
+			logging.Errorf("dansal-web: manage update failed path=%s err=%v", r.URL.Path, err)
 			http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
 			return
 		}
@@ -395,7 +395,7 @@ func contactManageImageUploadHandler(client *DansalClient) http.HandlerFunc {
 			return
 		}
 		if _, uerr := client.UploadContactPostImage(r.Context(), post.ID, token, imgData, fh.Filename); uerr != nil {
-			log.Printf("dansal-web: manage image upload failed post_id=%d err=%v", post.ID, uerr)
+			logging.Errorf("dansal-web: manage image upload failed post_id=%d err=%v", post.ID, uerr)
 			manageRedirect(w, r, token, flashToken(uerr), imageUploadErrorFlash("image", uerr))
 			return
 		}
@@ -419,7 +419,7 @@ func contactManageImageDeleteHandler(client *DansalClient) http.HandlerFunc {
 			return
 		}
 		if err := client.DeleteContactPostImage(r.Context(), post.ID, imgID, token); err != nil {
-			log.Printf("dansal-web: manage image delete failed post_id=%d img_id=%d err=%v", post.ID, imgID, err)
+			logging.Errorf("dansal-web: manage image delete failed post_id=%d img_id=%d err=%v", post.ID, imgID, err)
 		}
 		http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
 	}
@@ -433,7 +433,7 @@ func boardResendManageHandler(cfg *Config, client *DansalClient, i18n *I18n) htt
 	return func(w http.ResponseWriter, r *http.Request) {
 		ip := getClientIP(r)
 		if publicThrottle.isBlocked(ip + "|" + r.UserAgent()) {
-			log.Printf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
+			logging.Warnf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
 			http.Redirect(w, r, "/board?resend=1", http.StatusSeeOther)
 			return
 		}
@@ -442,7 +442,7 @@ func boardResendManageHandler(cfg *Config, client *DansalClient, i18n *I18n) htt
 			http.Redirect(w, r, "/board", http.StatusSeeOther)
 			return
 		case formGuardHoneypot:
-			log.Printf("dansal-web: HONEYPOT ip=%s path=%s", ip, r.URL.Path)
+			logging.Warnf("dansal-web: HONEYPOT ip=%s path=%s", ip, r.URL.Path)
 			http.Redirect(w, r, "/board?resend=1", http.StatusSeeOther)
 			return
 		case formGuardBadToken:
@@ -455,7 +455,7 @@ func boardResendManageHandler(cfg *Config, client *DansalClient, i18n *I18n) htt
 		globalEmailSendRate.record()
 
 		if err := client.ResendManage(r.Context(), email, cfg.publicBaseURL()); err != nil {
-			log.Printf("dansal-web: resend-manage failed ip_hash=%s err=%v", hashIP(ip), err)
+			logging.Errorf("dansal-web: resend-manage failed ip_hash=%s err=%v", hashIP(ip), err)
 		}
 		http.Redirect(w, r, "/board?resend=1", http.StatusSeeOther)
 	}
@@ -479,7 +479,7 @@ func contactManageRememberHandler(cfg *Config, client *DansalClient) http.Handle
 
 		bsRaw, expiresAtStr, err := client.CreateBoardSession(r.Context(), token)
 		if err != nil {
-			log.Printf("dansal-web: board session create failed path=%s err=%v", r.URL.Path, err)
+			logging.Errorf("dansal-web: board session create failed path=%s err=%v", r.URL.Path, err)
 			http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
 			return
 		}
@@ -506,7 +506,7 @@ func contactManageForgetHandler(cfg *Config, client *DansalClient) http.HandlerF
 
 		if bsToken := getBoardSessionToken(r); bsToken != "" {
 			if err := client.DeleteBoardSession(r.Context(), bsToken); err != nil {
-				log.Printf("dansal-web: board session delete failed path=%s err=%v", r.URL.Path, err)
+				logging.Errorf("dansal-web: board session delete failed path=%s err=%v", r.URL.Path, err)
 			}
 		}
 		clearBoardSessionCookie(w)
@@ -520,7 +520,7 @@ func boardRenewRequestHandler(cfg *Config, client *DansalClient) http.HandlerFun
 	return func(w http.ResponseWriter, r *http.Request) {
 		ip := getClientIP(r)
 		if publicThrottle.isBlocked(ip + "|" + r.UserAgent()) {
-			log.Printf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
+			logging.Warnf("%s ip=%s path=%s", publicBlock, ip, r.URL.Path)
 			http.Redirect(w, r, "/board?renew=1", http.StatusSeeOther)
 			return
 		}
@@ -529,7 +529,7 @@ func boardRenewRequestHandler(cfg *Config, client *DansalClient) http.HandlerFun
 			http.Redirect(w, r, "/board", http.StatusSeeOther)
 			return
 		case formGuardHoneypot:
-			log.Printf("dansal-web: HONEYPOT ip=%s path=%s", ip, r.URL.Path)
+			logging.Warnf("dansal-web: HONEYPOT ip=%s path=%s", ip, r.URL.Path)
 			http.Redirect(w, r, "/board?renew=1", http.StatusSeeOther)
 			return
 		case formGuardBadToken:
@@ -542,7 +542,7 @@ func boardRenewRequestHandler(cfg *Config, client *DansalClient) http.HandlerFun
 		globalEmailSendRate.record()
 
 		if err := client.RequestBoardSessionRenew(r.Context(), email, cfg.publicBaseURL()); err != nil {
-			log.Printf("dansal-web: board session renew-request failed ip_hash=%s err=%v", hashIP(ip), err)
+			logging.Errorf("dansal-web: board session renew-request failed ip_hash=%s err=%v", hashIP(ip), err)
 		}
 		http.Redirect(w, r, "/board?renew=1", http.StatusSeeOther)
 	}

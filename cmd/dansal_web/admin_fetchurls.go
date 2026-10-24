@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -129,7 +129,7 @@ func kuferConfigFromForm(r *http.Request) string {
 	}
 	b, err := json.Marshal(cfg)
 	if err != nil {
-		log.Printf("could not marshal kufer config: %v", err)
+		logging.Errorf("could not marshal kufer config: %v", err)
 		return ""
 	}
 	return string(b)
@@ -143,7 +143,7 @@ func adminFetchurlNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, clie
 		}
 		orgs, err := client.GetOrganizations(r.Context())
 		if err != nil {
-			log.Printf("admin fetchurl: could not load organizations: %v", err)
+			logging.Errorf("admin fetchurl: could not load organizations: %v", err)
 		}
 		if su.Role != "admin" {
 			userOrgSet := memberOrgSet(r, client, su)
@@ -160,7 +160,7 @@ func adminFetchurlNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, clie
 		orgIDs := orgIDsForTemplates(r, client, su)
 		templates, err := listTemplates(db, su.ID, orgIDs)
 		if err != nil {
-			log.Printf("admin fetchurl: could not load templates: %v", err)
+			logging.Errorf("admin fetchurl: could not load templates: %v", err)
 		}
 		title := i18n.T(r, "fetch_new_title")
 		renderTemplate(w, tmpls.adminFetchurlNew, tmplData(r, cfg, i18n, title, AdminFetchurlNewData{
@@ -442,7 +442,7 @@ func adminFetchurlDeleteHandler(cfg *Config, client *DansalClient) http.HandlerF
 			}
 		}
 		if err := client.DeleteFetchSource(r.Context(), id, token); err != nil {
-			log.Printf("delete fetch source %d: %v", id, err)
+			logging.Errorf("delete fetch source %d: %v", id, err)
 		}
 		http.Redirect(w, r, "/admin/fetchurls", http.StatusSeeOther)
 	}
@@ -552,7 +552,7 @@ func adminFetchurlBulkHandler(cfg *Config, client *DansalClient) http.HandlerFun
 				return
 			}
 			if err := client.BulkDeleteFetchSources(r.Context(), ids, token); err != nil {
-				log.Printf("bulk delete fetch sources: %v", err)
+				logging.Errorf("bulk delete fetch sources: %v", err)
 			}
 		case "run":
 			runIDs := ids
@@ -560,7 +560,7 @@ func adminFetchurlBulkHandler(cfg *Config, client *DansalClient) http.HandlerFun
 				runIDs = filterFetchSourceIDsByOrg(r, client, memberOrgSet(r, client, user), ids, token)
 			}
 			if err := client.BulkRunFetchSources(r.Context(), runIDs, token); err != nil {
-				log.Printf("bulk run fetch sources: %v", err)
+				logging.Errorf("bulk run fetch sources: %v", err)
 			}
 		case "assign-org":
 			if user.Role != "admin" {
@@ -568,7 +568,7 @@ func adminFetchurlBulkHandler(cfg *Config, client *DansalClient) http.HandlerFun
 				return
 			}
 			if err := client.BulkAssignFetchSourceOrg(r.Context(), ids, parseFormOptionalInt(r.Form, "organization_id"), token); err != nil {
-				log.Printf("bulk assign fetch source org: %v", err)
+				logging.Errorf("bulk assign fetch source org: %v", err)
 			}
 		case "add-tag":
 			newTag := strings.TrimSpace(r.FormValue("new_tag"))
@@ -614,7 +614,7 @@ func adminFetchurlBulkHandler(cfg *Config, client *DansalClient) http.HandlerFun
 								OptOut:       src.OptOut,
 							}
 							if err := client.UpdateFetchSource(r.Context(), src.ID, update, token); err != nil {
-								log.Printf("bulk add tag %q to fetch source %d: %v", newTag, src.ID, err)
+								logging.Errorf("bulk add tag %q to fetch source %d: %v", newTag, src.ID, err)
 							}
 						}
 					}
@@ -651,7 +651,7 @@ func adminFetchurlRobotsAckHandler(cfg *Config, client *DansalClient) http.Handl
 			}
 		}
 		if err := client.AckRobotsFetchSource(r.Context(), id, robotsAckReasonAdmin, token); err != nil {
-			log.Printf("robots-ack fetchurl %d: %v", id, err)
+			logging.Errorf("robots-ack fetchurl %d: %v", id, err)
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/fetchurls/%d/edit", id), http.StatusSeeOther)
 	}

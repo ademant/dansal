@@ -7,10 +7,10 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"image"
 	_ "image/png"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -70,12 +70,12 @@ func getOrCreateTileToken(db *sql.DB) string {
 	}
 	buf := make([]byte, 24)
 	if _, err := rand.Read(buf); err != nil {
-		log.Printf("getOrCreateTileToken: rand.Read: %v", err)
+		logging.Errorf("getOrCreateTileToken: rand.Read: %v", err)
 		return ""
 	}
 	tok := hex.EncodeToString(buf)
 	if err := setSiteSetting(db, "tile_token", tok); err != nil {
-		log.Printf("getOrCreateTileToken: persist: %v", err)
+		logging.Errorf("getOrCreateTileToken: persist: %v", err)
 	}
 	return tok
 }
@@ -268,7 +268,7 @@ func tileProxyHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		req.Header.Set("User-Agent", tileUserAgent)
 		resp, err := tileHTTPClient.Do(req)
 		if err != nil {
-			log.Printf("tiles: upstream fetch failed url=%s err=%v", upstreamURL, err)
+			logging.Errorf("tiles: upstream fetch failed url=%s err=%v", upstreamURL, err)
 			http.Error(w, "tile fetch error", http.StatusBadGateway)
 			return
 		}
@@ -284,9 +284,9 @@ func tileProxyHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		}
 
 		if err := os.MkdirAll(filepath.Dir(pngPath), 0755); err != nil {
-			log.Printf("tiles: mkdir cache dir failed path=%s err=%v", filepath.Dir(pngPath), err)
+			logging.Warnf("tiles: mkdir cache dir failed path=%s err=%v", filepath.Dir(pngPath), err)
 		} else if err := os.WriteFile(pngPath, data, 0644); err != nil {
-			log.Printf("tiles: write cache failed path=%s err=%v", pngPath, err)
+			logging.Warnf("tiles: write cache failed path=%s err=%v", pngPath, err)
 		}
 
 		// AVIF conversion is best-effort: any failure (corrupt/unexpected
@@ -295,9 +295,9 @@ func tileProxyHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		// never blocks the response.
 		avifData, encErr := encodeTileAVIF(data)
 		if encErr != nil {
-			log.Printf("tiles: avif encode failed url=%s err=%v -- serving PNG", upstreamURL, encErr)
+			logging.Warnf("tiles: avif encode failed url=%s err=%v -- serving PNG", upstreamURL, encErr)
 		} else if err := os.WriteFile(avifPath, avifData, 0644); err != nil {
-			log.Printf("tiles: write avif cache failed path=%s err=%v", avifPath, err)
+			logging.Warnf("tiles: write avif cache failed path=%s err=%v", avifPath, err)
 		}
 
 		if wantsAVIF && encErr == nil {
@@ -360,7 +360,7 @@ func backfillTileAVIF(dir string) (converted, skipped, failed int) {
 	warmAVIFEncoder()
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			log.Printf("tiles backfill: walk error at %s: %v", path, err)
+			logging.Warnf("tiles backfill: walk error at %s: %v", path, err)
 			return nil
 		}
 		if info.IsDir() || !strings.HasSuffix(path, ".png") {
@@ -373,18 +373,18 @@ func backfillTileAVIF(dir string) (converted, skipped, failed int) {
 		}
 		data, err := os.ReadFile(path)
 		if err != nil {
-			log.Printf("tiles backfill: read %s: %v", path, err)
+			logging.Warnf("tiles backfill: read %s: %v", path, err)
 			failed++
 			return nil
 		}
 		avifData, err := encodeTileAVIF(data)
 		if err != nil {
-			log.Printf("tiles backfill: encode %s: %v", path, err)
+			logging.Warnf("tiles backfill: encode %s: %v", path, err)
 			failed++
 			return nil
 		}
 		if err := os.WriteFile(avifPath, avifData, 0644); err != nil {
-			log.Printf("tiles backfill: write %s: %v", avifPath, err)
+			logging.Warnf("tiles backfill: write %s: %v", avifPath, err)
 			failed++
 			return nil
 		}
@@ -392,7 +392,7 @@ func backfillTileAVIF(dir string) (converted, skipped, failed int) {
 		return nil
 	})
 	if err != nil {
-		log.Printf("tiles backfill: %v", err)
+		logging.Warnf("tiles backfill: %v", err)
 	}
 	return converted, skipped, failed
 }

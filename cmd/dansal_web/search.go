@@ -1,8 +1,8 @@
 package main
 
 import (
+	"github.com/ademant/dansal/internal/logging"
 	"html/template"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -87,7 +87,7 @@ func searchPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 				var err error
 				dances, err = client.GetDances(r.Context())
 				if err != nil {
-					log.Printf("search: could not load dances: %v", err)
+					logging.Errorf("search: could not load dances: %v", err)
 				}
 				return nil
 			},
@@ -95,7 +95,7 @@ func searchPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 				var err error
 				locs, err = client.GetLocations(r.Context())
 				if err != nil {
-					log.Printf("search: could not load locations: %v", err)
+					logging.Errorf("search: could not load locations: %v", err)
 				}
 				return nil
 			},

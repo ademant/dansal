@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"strings"
 	"time"
@@ -495,7 +495,7 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("invite: new user %q (role=%s) registered via invite link id=%d", req.Email, invite.Role, invite.ID)
+	logging.Infof("invite: new user %q (role=%s) registered via invite link id=%d", req.Email, invite.Role, invite.ID)
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(User{
@@ -633,7 +633,7 @@ func redeemPublisherInvite(w http.ResponseWriter, r *http.Request) {
 	var orgName, actorName string
 	db.QueryRow("SELECT name, COALESCE(actor_name,'') FROM organizations WHERE id=?", orgID).Scan(&orgName, &actorName)
 
-	log.Printf("invite: publisher %q (user_id=%d) created via invite link id=%d for org %d", name, userID, invite.ID, orgID)
+	logging.Infof("invite: publisher %q (user_id=%d) created via invite link id=%d for org %d", name, userID, invite.ID, orgID)
 
 	resp := map[string]any{
 		"user_id":  int(userID),
@@ -738,7 +738,7 @@ func redeemPublisherReconnectInvite(w http.ResponseWriter, invite inviteRecord, 
 	var orgName, actorName string
 	db.QueryRow("SELECT name, COALESCE(actor_name,'') FROM organizations WHERE id=?", orgID).Scan(&orgName, &actorName)
 
-	log.Printf("invite: publisher %q (user_id=%d) reconnected via invite link id=%d for org %d", name, userID, invite.ID, orgID)
+	logging.Infof("invite: publisher %q (user_id=%d) reconnected via invite link id=%d for org %d", name, userID, invite.ID, orgID)
 
 	resp := map[string]any{
 		"user_id":  userID,

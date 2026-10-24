@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net"
 	"net/url"
 	"time"
@@ -27,7 +27,7 @@ func validateURLDomain(ctx context.Context, rawURL string) error {
 
 	addrs, err := net.DefaultResolver.LookupHost(ctx, host)
 	if err != nil {
-		log.Printf("validateURLDomain: lookup %q: %v (allowing)", host, err)
+		logging.Warnf("validateURLDomain: lookup %q: %v (allowing)", host, err)
 		return nil
 	}
 	if len(addrs) == 0 {

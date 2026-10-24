@@ -6,7 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"strconv"
 	"time"
@@ -52,7 +52,7 @@ func deliveryBackoff(attempts int) int64 {
 func retryFailedDeliveries(cfg *Config, db *sql.DB) {
 	failures, err := pendingDeliveryFailures(db, time.Now().Unix())
 	if err != nil {
-		log.Printf("delivery retry: list pending: %v", err)
+		logging.Errorf("delivery retry: list pending: %v", err)
 		return
 	}
 	for _, f := range failures {
@@ -64,7 +64,7 @@ func retryFailedDeliveries(cfg *Config, db *sql.DB) {
 			// must still count toward give-up like any other failure;
 			// `continue`ing here left such a row's attempts/next_attempt_at
 			// frozen forever, so it was never swept.
-			log.Printf("delivery retry: get actor org %d: %v", f.OrgID, actorErr)
+			logging.Errorf("delivery retry: get actor org %d: %v", f.OrgID, actorErr)
 			postErr = actorErr
 		} else {
 			keyID := actorKeyID(cfg, actor.OrgSlug)
@@ -73,7 +73,7 @@ func retryFailedDeliveries(cfg *Config, db *sql.DB) {
 		if postErr != nil {
 			newAttempts := f.Attempts + 1
 			if newAttempts > maxDeliveryAttempts {
-				log.Printf("delivery retry: giving up on %s after %d attempts: %v", f.InboxURL, f.Attempts, postErr)
+				logging.Warnf("delivery retry: giving up on %s after %d attempts: %v", f.InboxURL, f.Attempts, postErr)
 				deleteDeliveryFailure(db, f.ActivityID, f.OrgID, f.InboxURL)
 				// #1490 (G12): a give-up here means this inbox has failed
 				// maxDeliveryAttempts times in a row; count it toward
@@ -81,24 +81,24 @@ func retryFailedDeliveries(cfg *Config, db *sql.DB) {
 				// actor_uri/inbox_url indefinitely.
 				removed, bumpErr := bumpFollowerFailCount(db, f.OrgID, f.InboxURL, cfg.FollowerMaxFailures)
 				if bumpErr != nil {
-					log.Printf("delivery retry: bump follower fail count for %s: %v", f.InboxURL, bumpErr)
+					logging.Errorf("delivery retry: bump follower fail count for %s: %v", f.InboxURL, bumpErr)
 				} else if removed {
-					log.Printf("delivery retry: removed follower %s after %d give-ups", f.InboxURL, cfg.FollowerMaxFailures)
+					logging.Warnf("delivery retry: removed follower %s after %d give-ups", f.InboxURL, cfg.FollowerMaxFailures)
 				}
 			} else {
 				nextAttempt := time.Now().Unix() + deliveryBackoff(newAttempts)
 				if dbErr := updateDeliveryFailure(db, f.ActivityID, f.OrgID, f.InboxURL, postErr.Error(), newAttempts, nextAttempt); dbErr != nil {
-					log.Printf("delivery retry: update record: %v", dbErr)
+					logging.Errorf("delivery retry: update record: %v", dbErr)
 				}
 			}
 		} else {
-			log.Printf("delivery retry: succeeded to %s (activity %s)", f.InboxURL, f.ActivityID)
+			logging.Debugf("delivery retry: succeeded to %s (activity %s)", f.InboxURL, f.ActivityID)
 			deleteDeliveryFailure(db, f.ActivityID, f.OrgID, f.InboxURL)
 			// #1490 (G12): a successful retry means this inbox is alive
 			// again — don't let fail_count accumulate across unrelated
 			// outages toward removal.
 			if err := resetFollowerFailCount(db, f.OrgID, f.InboxURL); err != nil {
-				log.Printf("delivery retry: reset follower fail count for %s: %v", f.InboxURL, err)
+				logging.Errorf("delivery retry: reset follower fail count for %s: %v", f.InboxURL, err)
 			}
 		}
 	}
@@ -113,7 +113,7 @@ func pollAndDeliver(cfg *Config, db *sql.DB, client *DansalClient, relayActor *A
 
 	events, err := client.GetEvents(ctx, after)
 	if err != nil {
-		log.Printf("delivery poll: %v", err)
+		logging.Errorf("delivery poll: %v", err)
 		return
 	}
 
@@ -146,10 +146,10 @@ func pollAndDeliver(cfg *Config, db *sql.DB, client *DansalClient, relayActor *A
 		if actorErr == nil && !isDelivered(db, e.ID, orgID) {
 			activity := buildCreateActivity(cfg, actor.OrgSlug, e)
 			if err := deliverActivityToFollowers(cfg, db, actor, activity); err != nil {
-				log.Printf("delivery event %d org %d: %v", e.ID, orgID, err)
+				logging.Errorf("delivery event %d org %d: %v", e.ID, orgID, err)
 			} else {
 				if err := markDelivered(db, e.ID, orgID, false); err != nil {
-					log.Printf("mark delivered event %d org %d: %v", e.ID, orgID, err)
+					logging.Errorf("mark delivered event %d org %d: %v", e.ID, orgID, err)
 				}
 			}
 		}
@@ -159,10 +159,10 @@ func pollAndDeliver(cfg *Config, db *sql.DB, client *DansalClient, relayActor *A
 		if relayActor != nil && actorErr == nil && !isDelivered(db, e.ID, 0) {
 			activity := buildAnnounceActivity(cfg, relayActor.OrgSlug, actor.OrgSlug, e)
 			if err := deliverActivityToFollowers(cfg, db, relayActor, activity); err != nil {
-				log.Printf("relay delivery event %d: %v", e.ID, err)
+				logging.Errorf("relay delivery event %d: %v", e.ID, err)
 			} else {
 				if err := markDelivered(db, e.ID, 0, false); err != nil {
-					log.Printf("mark relay delivered event %d: %v", e.ID, err)
+					logging.Errorf("mark relay delivered event %d: %v", e.ID, err)
 				}
 			}
 		}
@@ -172,10 +172,10 @@ func pollAndDeliver(cfg *Config, db *sql.DB, client *DansalClient, relayActor *A
 		// in the delivered table so each event is delivered at most once.
 		if relayActor != nil && len(e.Tags) > 0 && !isDelivered(db, e.ID, -1) {
 			if err := deliverEventToTagFollowers(cfg, db, relayActor, e); err != nil {
-				log.Printf("tag delivery event %d: %v", e.ID, err)
+				logging.Errorf("tag delivery event %d: %v", e.ID, err)
 			} else {
 				if err := markDelivered(db, e.ID, -1, false); err != nil {
-					log.Printf("mark tag delivered event %d: %v", e.ID, err)
+					logging.Errorf("mark tag delivered event %d: %v", e.ID, err)
 				}
 			}
 		}
@@ -206,15 +206,15 @@ func deliverActivityToFollowers(cfg *Config, db *sql.DB, actor *ActorRecord, act
 
 	for _, f := range followers {
 		if err := postToInbox(context.Background(), f.InboxURL, keyID, actor.PrivateKeyPEM, body); err != nil {
-			log.Printf("deliver to %s: %v", f.InboxURL, err)
+			logging.Errorf("deliver to %s: %v", f.InboxURL, err)
 			nextAttempt := now + deliveryBackoff(1)
 			if dbErr := insertDeliveryFailure(db, activity.ID, actor.OrgID, f.InboxURL, string(body), err.Error(), nextAttempt); dbErr != nil {
-				log.Printf("delivery: record failure for %s: %v", f.InboxURL, dbErr)
+				logging.Errorf("delivery: record failure for %s: %v", f.InboxURL, dbErr)
 			}
 		} else {
 			deleteDeliveryFailure(db, activity.ID, actor.OrgID, f.InboxURL)
 			if dbErr := resetFollowerFailCount(db, actor.OrgID, f.InboxURL); dbErr != nil {
-				log.Printf("delivery: reset follower fail count for %s: %v", f.InboxURL, dbErr)
+				logging.Errorf("delivery: reset follower fail count for %s: %v", f.InboxURL, dbErr)
 			}
 		}
 	}
@@ -232,7 +232,7 @@ func deliverEventToTagFollowers(cfg *Config, db *sql.DB, relayActor *ActorRecord
 	for _, tag := range event.Tags {
 		fs, err := listTagFollowers(db, tag)
 		if err != nil {
-			log.Printf("tag delivery: list followers for %s: %v", tag, err)
+			logging.Errorf("tag delivery: list followers for %s: %v", tag, err)
 			continue
 		}
 		for _, f := range fs {
@@ -259,7 +259,7 @@ func deliverEventToTagFollowers(cfg *Config, db *sql.DB, relayActor *ActorRecord
 
 	for _, t := range targets {
 		if err := postToInbox(context.Background(), t.InboxURL, keyID, relayActor.PrivateKeyPEM, body); err != nil {
-			log.Printf("tag delivery event %d to %s: %v", event.ID, t.InboxURL, err)
+			logging.Errorf("tag delivery event %d to %s: %v", event.ID, t.InboxURL, err)
 		}
 	}
 	return nil
@@ -270,7 +270,7 @@ func deliverEventToTagFollowers(cfg *Config, db *sql.DB, relayActor *ActorRecord
 func deliverRelayProfileUpdate(cfg *Config, db *sql.DB) {
 	actor, err := ensureRelayActor(db, cfg.RelayActorName)
 	if err != nil {
-		log.Printf("relay profile update: load actor: %v", err)
+		logging.Errorf("relay profile update: load actor: %v", err)
 		return
 	}
 	base := actorURL(cfg, actor.OrgSlug)
@@ -283,7 +283,7 @@ func deliverRelayProfileUpdate(cfg *Config, db *sql.DB) {
 		CC:     []string{base + "/followers"},
 	}
 	if err := deliverActivityToFollowers(cfg, db, actor, activity); err != nil {
-		log.Printf("relay profile update: %v", err)
+		logging.Errorf("relay profile update: %v", err)
 	}
 }
 
@@ -314,7 +314,7 @@ func deliverUpdateToFollowers(cfg *Config, db *sql.DB, client *DansalClient, eve
 	// Check if organization changed by looking at delivery history
 	history, err := getEventDeliveryHistory(db, eventID)
 	if err != nil {
-		log.Printf("check event history for transfer: %v", err)
+		logging.Errorf("check event history for transfer: %v", err)
 	}
 
 	// Detect organization transfer
@@ -342,7 +342,7 @@ func deliverUpdateToFollowers(cfg *Config, db *sql.DB, client *DansalClient, eve
 	}
 	activity := buildUpdateActivity(cfg, actor.OrgSlug, event)
 	if err := deliverActivityToFollowers(cfg, db, actor, activity); err != nil {
-		log.Printf("deliver update event %d: %v", eventID, err)
+		logging.Errorf("deliver update event %d: %v", eventID, err)
 	}
 }
 
@@ -355,7 +355,7 @@ func deliverBoardOpenNote(cfg *Config, db *sql.DB, orgID, eventID int, eventTitl
 	}
 	activity := buildBoardOpenActivity(cfg, actor.OrgSlug, eventID, eventTitle)
 	if err := deliverActivityToFollowers(cfg, db, actor, activity); err != nil {
-		log.Printf("board open note delivery event %d org %d: %v", eventID, orgID, err)
+		logging.Errorf("board open note delivery event %d org %d: %v", eventID, orgID, err)
 	}
 }
 
@@ -390,7 +390,7 @@ func deliverDeleteToFollowers(cfg *Config, db *sql.DB, eventID, orgID int) {
 	}
 	activity := buildDeleteActivity(cfg, actor.OrgSlug, eventID)
 	if err := deliverActivityToFollowers(cfg, db, actor, activity); err != nil {
-		log.Printf("deliver delete event %d: %v", eventID, err)
+		logging.Errorf("deliver delete event %d: %v", eventID, err)
 	}
 }
 
@@ -422,11 +422,11 @@ func handleEventTransfer(cfg *Config, db *sql.DB, client *DansalClient, eventID,
 	// Get current event data
 	event, err := client.GetEvent(ctx, eventID)
 	if err != nil {
-		log.Printf("event transfer: failed to get event %d: %v", eventID, err)
+		logging.Errorf("event transfer: failed to get event %d: %v", eventID, err)
 		return
 	}
 
-	log.Printf("transferring event %d from org %d to org %d", eventID, oldOrgID, newOrgID)
+	logging.Infof("transferring event %d from org %d to org %d", eventID, oldOrgID, newOrgID)
 
 	// 1. Notify old organization's followers about the transfer
 	deliverTransferNotification(cfg, db, event, oldOrgID, newOrgID)
@@ -443,13 +443,13 @@ func handleEventTransfer(cfg *Config, db *sql.DB, client *DansalClient, eventID,
 func deliverTransferNotification(cfg *Config, db *sql.DB, event Event, oldOrgID, newOrgID int) {
 	oldActor, err := getActorByOrgID(db, oldOrgID)
 	if err != nil {
-		log.Printf("transfer notification: failed to get old actor for org %d: %v", oldOrgID, err)
+		logging.Errorf("transfer notification: failed to get old actor for org %d: %v", oldOrgID, err)
 		return
 	}
 
 	newActor, err := getActorByOrgID(db, newOrgID)
 	if err != nil {
-		log.Printf("transfer notification: failed to get new actor for org %d: %v", newOrgID, err)
+		logging.Errorf("transfer notification: failed to get new actor for org %d: %v", newOrgID, err)
 		return
 	}
 
@@ -471,7 +471,7 @@ func deliverTransferNotification(cfg *Config, db *sql.DB, event Event, oldOrgID,
 	// deliverActivityToFollowers records per-follower failures in
 	// delivery_failures so Move posts that fail get retried like any other.
 	if err := deliverActivityToFollowers(cfg, db, oldActor, moveActivity); err != nil {
-		log.Printf("transfer notification: %v", err)
+		logging.Errorf("transfer notification: %v", err)
 	}
 }
 
@@ -479,7 +479,7 @@ func deliverTransferNotification(cfg *Config, db *sql.DB, event Event, oldOrgID,
 func deliverToNewOrganization(cfg *Config, db *sql.DB, event Event, newOrgID int) {
 	actor, err := getActorByOrgID(db, newOrgID)
 	if err != nil {
-		log.Printf("deliver to new org: failed to get actor for org %d: %v", newOrgID, err)
+		logging.Errorf("deliver to new org: failed to get actor for org %d: %v", newOrgID, err)
 		return
 	}
 
@@ -488,7 +488,7 @@ func deliverToNewOrganization(cfg *Config, db *sql.DB, event Event, newOrgID int
 
 	// Deliver to new organization's followers
 	if err := deliverActivityToFollowers(cfg, db, actor, activity); err != nil {
-		log.Printf("deliver transferred event to new org %d: %v", newOrgID, err)
+		logging.Errorf("deliver transferred event to new org %d: %v", newOrgID, err)
 	}
 }
 

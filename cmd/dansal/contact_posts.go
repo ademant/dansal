@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"strconv"
 	"strings"
@@ -515,7 +515,7 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		id, _ := result.LastInsertId()
-		log.Printf("contact_posts: logged-in user %d created verified post %d", callerID, id)
+		logging.Infof("contact_posts: logged-in user %d created verified post %d", callerID, id)
 		base := buildBaseURL(r)
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]any{
@@ -544,7 +544,7 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		id, _ := result.LastInsertId()
-		log.Printf("contact_posts: board-session post %d created verified (session %d)", id, bsID)
+		logging.Infof("contact_posts: board-session post %d created verified (session %d)", id, bsID)
 		base := buildBaseURL(r)
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]any{
@@ -582,7 +582,7 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 	if useTelegram {
 		if openPosting {
 			// Post is already live; send manage link only.
-			log.Printf("contact_posts: anonymous open-posting created post %d", id)
+			logging.Infof("contact_posts: anonymous open-posting created post %d", id)
 			w.WriteHeader(http.StatusCreated)
 			json.NewEncoder(w).Encode(map[string]any{
 				"id":         id,
@@ -619,7 +619,7 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 	}
 	go func() {
 		if _, err := SendEmail(req.Email, emailSubject, emailBody, false); err != nil {
-			log.Printf("contact_posts: manage email failed for post %d: %v", id, err)
+			logging.Errorf("contact_posts: manage email failed for post %d: %v", id, err)
 		}
 	}()
 
@@ -665,7 +665,7 @@ func getContactPostByToken(w http.ResponseWriter, r *http.Request) {
 		emailVerified = 1
 		justVerified = true
 		firstPost = isFirstLiveBoardPost(eventID, id)
-		log.Printf("contact_posts: manage-page verified post %d (first=%v)", id, firstPost)
+		logging.Infof("contact_posts: manage-page verified post %d (first=%v)", id, firstPost)
 	}
 
 	images := contactPostImagesForPost(id)
@@ -782,7 +782,7 @@ func putContactPost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "failed to update post", http.StatusInternalServerError)
 		return
 	}
-	log.Printf("contact_posts: replaced post %d via manage token", postID)
+	logging.Infof("contact_posts: replaced post %d via manage token", postID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -864,7 +864,7 @@ func updateContactPost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "failed to update post", http.StatusInternalServerError)
 		return
 	}
-	log.Printf("contact_posts: updated post %d via manage token", postID)
+	logging.Debugf("contact_posts: updated post %d via manage token", postID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -890,7 +890,7 @@ func deleteContactPostByManageToken(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err)
 		return
 	}
-	log.Printf("contact_posts: self-deleted post %d via manage token", id)
+	logging.Infof("contact_posts: self-deleted post %d via manage token", id)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -919,7 +919,7 @@ func deleteContactPost(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err)
 		return
 	}
-	log.Printf("contact_posts: admin/org deleted post %d by user %d", postID, callerID)
+	logging.Infof("contact_posts: admin/org deleted post %d by user %d", postID, callerID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -988,7 +988,7 @@ func contactPoster(w http.ResponseWriter, r *http.Request) {
 			msg := fmt.Sprintf("Someone replied to your board post!\n\nMessage:\n%s\n\nContact them at: %s", req.Message, senderContact)
 			go func() {
 				if err := sendTelegramMessage(posterChatID, msg); err != nil {
-					log.Printf("contact_posts: telegram forward (logged-in) failed for post %d: %v", postID, err)
+					logging.Errorf("contact_posts: telegram forward (logged-in) failed for post %d: %v", postID, err)
 				}
 			}()
 		} else if posterEmail != "" {
@@ -998,11 +998,11 @@ func contactPoster(w http.ResponseWriter, r *http.Request) {
 			)
 			go func() {
 				if _, err := SendEmail(posterEmail, "Someone wants to contact you (dansal board)", body, true); err != nil {
-					log.Printf("contact_posts: email forward (logged-in) failed for post %d: %v", postID, err)
+					logging.Errorf("contact_posts: email forward (logged-in) failed for post %d: %v", postID, err)
 				}
 			}()
 		}
-		log.Printf("contact_posts: logged-in user %d directly contacted poster of post %d", callerID, postID)
+		logging.Debugf("contact_posts: logged-in user %d directly contacted poster of post %d", callerID, postID)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -1072,11 +1072,11 @@ func contactPoster(w http.ResponseWriter, r *http.Request) {
 	)
 	go func() {
 		if _, err := SendEmail(req.Email, "Confirm your message (dansal board)", emailBody, false); err != nil {
-			log.Printf("contact_posts: contact request verify email failed for post %d: %v", postID, err)
+			logging.Errorf("contact_posts: contact request verify email failed for post %d: %v", postID, err)
 		}
 	}()
 
-	log.Printf("contact_posts: created contact request for post %d", postID)
+	logging.Infof("contact_posts: created contact request for post %d", postID)
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(map[string]any{
 		"message": "A confirmation email has been sent.",
@@ -1112,7 +1112,7 @@ func verifyContactRequest(w http.ResponseWriter, r *http.Request) {
 	).Scan(&posterEmail, &posterNick, &posterChatID)
 
 	db.Exec("UPDATE contact_requests SET verify_token=NULL WHERE id=?", reqID)
-	log.Printf("contact_requests: verified request %d for post %d", reqID, postID)
+	logging.Infof("contact_requests: verified request %d for post %d", reqID, postID)
 
 	senderContact := senderEmail
 	if senderTelegram != "" {
@@ -1123,7 +1123,7 @@ func verifyContactRequest(w http.ResponseWriter, r *http.Request) {
 		msg := fmt.Sprintf("Someone replied to your board post!\n\nMessage:\n%s\n\nContact them at: %s", message, senderContact)
 		go func() {
 			if err := sendTelegramMessage(posterChatID, msg); err != nil {
-				log.Printf("contact_requests: telegram forward failed for post %d: %v", postID, err)
+				logging.Errorf("contact_requests: telegram forward failed for post %d: %v", postID, err)
 			}
 		}()
 	} else if posterEmail != "" {
@@ -1133,7 +1133,7 @@ func verifyContactRequest(w http.ResponseWriter, r *http.Request) {
 		)
 		go func() {
 			if _, err := SendEmail(posterEmail, "Someone wants to contact you (dansal board)", body, true); err != nil {
-				log.Printf("contact_requests: email forward failed for post %d: %v", postID, err)
+				logging.Errorf("contact_requests: email forward failed for post %d: %v", postID, err)
 			}
 		}()
 	}
@@ -1290,7 +1290,7 @@ func resendContactManage(w http.ResponseWriter, r *http.Request) {
 		req.Email, time.Now().UTC().Unix(),
 	)
 	if err != nil {
-		log.Printf("contact_posts: resend-manage query error email_hash=%s: %v", sha256Hex(req.Email)[:8], err)
+		logging.Errorf("contact_posts: resend-manage query error email_hash=%s: %v", sha256Hex(req.Email)[:8], err)
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -1320,11 +1320,11 @@ func resendContactManage(w http.ResponseWriter, r *http.Request) {
 				))
 			}
 			if _, err := SendEmail(req.Email, "Your board post manage links", sb.String(), false); err != nil {
-				log.Printf("contact_posts: resend-manage email failed email_hash=%s: %v", sha256Hex(req.Email)[:8], err)
+				logging.Errorf("contact_posts: resend-manage email failed email_hash=%s: %v", sha256Hex(req.Email)[:8], err)
 			}
 		}()
 	}
 
-	log.Printf("contact_posts: resend-manage email_hash=%s posts=%d", sha256Hex(req.Email)[:8], len(posts))
+	logging.Debugf("contact_posts: resend-manage email_hash=%s posts=%d", sha256Hex(req.Email)[:8], len(posts))
 	w.WriteHeader(http.StatusOK)
 }

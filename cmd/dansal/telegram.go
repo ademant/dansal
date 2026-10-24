@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"strings"
 	"time"
@@ -119,7 +119,7 @@ func telegramWebhookHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		db.Exec("UPDATE pending_registrations SET verified=1, telegram_chat_id=? WHERE id=?", chatIDStr, regID)
-		log.Printf("telegram webhook: verified pending registration %d via Telegram", regID)
+		logging.Debugf("telegram webhook: verified pending registration %d via Telegram", regID)
 		go func() {
 			_ = sendTelegramMessage(chatIDStr, "✓ Verified! Your registration is now awaiting admin approval.")
 		}()
@@ -169,7 +169,7 @@ func telegramWebhookHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			db.Exec("UPDATE contact_posts SET email_verified=1, verify_token=NULL, poster_telegram_chat_id=? WHERE id=?", chatIDStr, postID)
-			log.Printf("telegram webhook: verified contact post %d", postID)
+			logging.Debugf("telegram webhook: verified contact post %d", postID)
 			go func() {
 				_ = sendTelegramMessage(chatIDStr, "✓ Your contact board post has been confirmed and is now visible!")
 			}()
@@ -177,7 +177,7 @@ func telegramWebhookHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err2 != nil && err2 != sql.ErrNoRows {
-			log.Printf("telegram webhook: db error checking contact post: %v", err2)
+			logging.Errorf("telegram webhook: db error checking contact post: %v", err2)
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -197,7 +197,7 @@ func telegramWebhookHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err3 != nil {
-			log.Printf("telegram webhook: db error checking contact request: %v", err3)
+			logging.Errorf("telegram webhook: db error checking contact request: %v", err3)
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -213,7 +213,7 @@ func telegramWebhookHandler(w http.ResponseWriter, r *http.Request) {
 			"SELECT email, nickname, COALESCE(poster_telegram_chat_id,'') FROM contact_posts WHERE id=?", crPostID,
 		).Scan(&posterEmail, &posterNick, &posterChatID)
 		db.Exec("UPDATE contact_requests SET verify_token=NULL WHERE id=?", crID)
-		log.Printf("telegram webhook: verified contact request %d for post %d", crID, crPostID)
+		logging.Debugf("telegram webhook: verified contact request %d for post %d", crID, crPostID)
 		senderContact := crSenderEmail
 		if crSenderTelegram != "" {
 			senderContact = "@" + crSenderTelegram
@@ -235,7 +235,7 @@ func telegramWebhookHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("telegram webhook: db error: %v", err)
+		logging.Errorf("telegram webhook: db error: %v", err)
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -254,7 +254,7 @@ func telegramWebhookHandler(w http.ResponseWriter, r *http.Request) {
 	// Mark verified and store chat_id.
 	db.Exec("UPDATE users SET telegram_verified=1, telegram_chat_id=? WHERE id=?", chatIDStr, userID)
 	db.Exec("DELETE FROM verification_tokens WHERE id=?", tokenID)
-	log.Printf("telegram webhook: verified user %d, chat_id=%s", userID, chatIDStr)
+	logging.Debugf("telegram webhook: verified user %d, chat_id=%s", userID, chatIDStr)
 
 	go func() { _ = sendTelegramMessage(chatIDStr, "✓ Your Telegram account has been verified!") }()
 	w.WriteHeader(http.StatusOK)
@@ -293,10 +293,10 @@ func sendTelegramMessageToUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := sendTelegramMessage(chatID, req.Text); err != nil {
-		log.Printf("telegram send to user %d: %v", id, err)
+		logging.Errorf("telegram send to user %d: %v", id, err)
 		writeError(w, "failed to send message: "+err.Error(), http.StatusBadGateway)
 		return
 	}
-	log.Printf("telegram: admin sent message to user %d (chat_id=%s)", id, chatID)
+	logging.Debugf("telegram: admin sent message to user %d (chat_id=%s)", id, chatID)
 	w.WriteHeader(http.StatusNoContent)
 }

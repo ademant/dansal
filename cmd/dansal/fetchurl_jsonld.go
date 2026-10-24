@@ -14,7 +14,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"strconv"
 	"strings"
 	"time"
@@ -407,7 +407,7 @@ func parseJSONLDBody(body []byte, src FetchSource, rep *icalParseReport) ([]Even
 // FetchSource.ImportedOnce.
 func markFetchSourceImportedOnce(id int) {
 	if _, err := db.Exec("UPDATE fetch_sources SET imported_once=1 WHERE id=?", id); err != nil {
-		log.Printf("jsonld: mark source %d imported_once: %v", id, err)
+		logging.Errorf("jsonld: mark source %d imported_once: %v", id, err)
 	}
 }
 

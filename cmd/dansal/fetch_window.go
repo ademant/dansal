@@ -2,7 +2,7 @@ package main
 
 import (
 	"errors"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"time"
 )
 
@@ -72,7 +72,7 @@ func filterEntriesToWindow[T any](src FetchSource, entries []T, reqOf func(T) Ev
 		dropped++
 	}
 	if dropped > 0 {
-		log.Printf("fetch source %d: %d entries outside the import window dropped", src.ID, dropped)
+		logging.Infof("fetch source %d: %d entries outside the import window dropped", src.ID, dropped)
 	}
 	return kept
 }

@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"flag"
+	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"html/template"
 	"log"
 	"net/http"
@@ -22,6 +24,7 @@ var BuildTime = "unknown"
 
 type Config struct {
 	Listen                string `yaml:"listen"`
+	LogLevel              string `yaml:"log_level"` // debug | info (default) | warning | error (#1645)
 	Domain                string `yaml:"domain"`
 	BaseURL               string `yaml:"base_url"`
 	ContentDir            string `yaml:"content_dir"`
@@ -91,7 +94,13 @@ type App struct {
 }
 
 func main() {
+	logging.Setup("dansal-doc")
 	cfg := loadConfig()
+	if err := logging.SetLevel(cfg.LogLevel); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	logging.Infof("log level set: %s", cfg.LogLevel)
 	app, err := newApp(cfg)
 	if err != nil {
 		log.Fatalf("load docs: %v", err)
@@ -115,7 +124,7 @@ func main() {
 		IdleTimeout:       duration(cfg.IdleTimeoutSecs, 60),
 	}
 
-	log.Printf("dansal-doc %s listening on %s content=%s", Version, cfg.Listen, cfg.ContentDir)
+	logging.Infof("dansal-doc %s listening on %s content=%s", Version, cfg.Listen, cfg.ContentDir)
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
@@ -312,7 +321,7 @@ func (app *App) handlePage(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := pageTemplate.Execute(w, model); err != nil {
-		log.Printf("render template: %v", err)
+		logging.Errorf("render template: %v", err)
 	}
 }
 

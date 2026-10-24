@@ -3,7 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"strconv"
 	"strings"
 	"sync"
@@ -158,7 +158,7 @@ func parseDanceIDs(raw string) []int {
 	}
 	var ids []int
 	if err := json.Unmarshal([]byte(raw), &ids); err != nil {
-		log.Printf("could not parse default_dance_ids %q: %v", raw, err)
+		logging.Warnf("could not parse default_dance_ids %q: %v", raw, err)
 		return nil
 	}
 	return ids

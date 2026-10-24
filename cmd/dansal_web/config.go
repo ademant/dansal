@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"github.com/ademant/dansal/internal/logging"
 	"log"
 	"os"
 	"path/filepath"
@@ -22,7 +23,8 @@ type ExternalOverlaySource struct {
 type Config struct {
 	Listen    string `yaml:"listen"`
 	Domain    string `yaml:"domain"`
-	BaseURL   string `yaml:"base_url"` // optional; defaults to https://{domain}
+	LogLevel  string `yaml:"log_level"` // debug | info (default) | warning | error (#1645)
+	BaseURL   string `yaml:"base_url"`  // optional; defaults to https://{domain}
 	DansalURL string `yaml:"dansal_url"`
 
 	// InternalSharedSecret is sent as X-Dansal-Internal on every backend call
@@ -401,17 +403,17 @@ func reloadConfig(path string) *Config {
 	if path != "" {
 		data, err := os.ReadFile(path)
 		if err != nil {
-			log.Printf("reload: read %s: %v", path, err)
+			logging.Errorf("reload: read %s: %v", path, err)
 			return nil
 		}
 		if err := yaml.Unmarshal(data, cfg); err != nil {
-			log.Printf("reload: parse %s: %v", path, err)
+			logging.Errorf("reload: parse %s: %v", path, err)
 			return nil
 		}
 	}
 	applyWebEnvOverrides(cfg)
 	if cfg.Domain == "" || cfg.DansalURL == "" {
-		log.Print("reload: domain and dansal_url are required; keeping current config")
+		logging.Warnf("reload: domain and dansal_url are required; keeping current config")
 		return nil
 	}
 	if cfg.TileCacheDir == "" {

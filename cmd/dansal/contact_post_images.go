@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -193,7 +193,7 @@ func uploadContactPostImage(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, errNotImage) {
 			writeError(w, "file is not an image", http.StatusUnsupportedMediaType)
 		} else {
-			log.Printf("contact_post_images: save failed post_id=%d img_id=%d: %v", postID, imgID, err)
+			logging.Errorf("contact_post_images: save failed post_id=%d img_id=%d: %v", postID, imgID, err)
 			writeInternalError(w, err)
 		}
 		return

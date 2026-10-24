@@ -10,7 +10,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"os"
 	"strings"
 	"time"
@@ -79,7 +79,7 @@ func loadOrGenerateInviteSigningKey() error {
 	if err := os.WriteFile(path, pem.EncodeToMemory(block), 0o600); err != nil {
 		return fmt.Errorf("writing invite signing key %s: %w", path, err)
 	}
-	log.Printf("invite: generated new signing key at %s", path)
+	logging.Infof("invite: generated new signing key at %s", path)
 
 	inviteSigningKey = key
 	inviteSigningKeyID = inviteKeyID(&key.PublicKey)

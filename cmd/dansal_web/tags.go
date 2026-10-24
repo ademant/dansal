@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"html/template"
-	"log"
 	"net/http"
 	"strings"
 )
@@ -163,7 +163,7 @@ func serveTagCollection(w http.ResponseWriter, r *http.Request, cfg *Config, cli
 
 	orgs, err := client.GetOrganizations(r.Context())
 	if err != nil {
-		log.Printf("tag collection: could not load organizations: %v", err)
+		logging.Errorf("tag collection: could not load organizations: %v", err)
 	}
 	slugByOrgID := make(map[int]string, len(orgs))
 	for _, o := range orgs {

@@ -8,7 +8,7 @@ package webcommon
 import (
 	"context"
 	"database/sql"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net"
 	"net/http"
 	"strings"
@@ -128,7 +128,7 @@ func GetSiteSetting(db *sql.DB, key string) string {
 	err := db.QueryRow("SELECT value FROM site_settings WHERE key = ?", key).Scan(&v)
 	if err != nil {
 		if err != sql.ErrNoRows && !strings.Contains(err.Error(), "no such table") {
-			log.Printf("get site setting %s: %v", key, err)
+			logging.Errorf("get site setting %s: %v", key, err)
 		}
 		return ""
 	}
@@ -144,7 +144,7 @@ func SetSiteSetting(db *sql.DB, key, value string) {
 	if _, err := db.Exec(
 		"INSERT INTO site_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
 		key, value); err != nil {
-		log.Printf("set site setting %s: %v", key, err)
+		logging.Errorf("set site setting %s: %v", key, err)
 	}
 }
 
@@ -187,7 +187,7 @@ cs: "%s je komunitní kalendář akcí bal-folk, fest-noz a dalších tradiční
 func ParseLangYAML(raw string) map[string]string {
 	m := map[string]string{}
 	if err := yaml.Unmarshal([]byte(raw), &m); err != nil {
-		log.Printf("parse lang-YAML default: %v", err)
+		logging.Errorf("parse lang-YAML default: %v", err)
 	}
 	return m
 }
@@ -217,5 +217,5 @@ func MigrateLegacyLangBlob(db *sql.DB, key string, langs []string) {
 	// Clear the old blob now that it's been split out, so this function is
 	// a true no-op on every future startup instead of re-parsing it forever.
 	SetSiteSetting(db, key, "")
-	log.Printf("migrated legacy %s site setting into per-language keys", key)
+	logging.Infof("migrated legacy %s site setting into per-language keys", key)
 }

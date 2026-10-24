@@ -38,3 +38,6 @@ site_name: "Dansal Webmin"
 # in. Recommended for the strongest admin-console posture. Can also be set
 # via the DANSAL_WEBMIN_CERT_ONLY env var.
 # cert_only: false
+
+# Minimum level written to the journal (#1645): debug | info (default) | warning | error.
+log_level: info

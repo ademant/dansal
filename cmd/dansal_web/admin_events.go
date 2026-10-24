@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"sort"
@@ -306,7 +306,7 @@ func adminEventDeleteHandler(cfg *Config, db *sql.DB, client *DansalClient) http
 		}
 		event, fetchErr := client.GetEvent(r.Context(), id)
 		if err := client.DeleteEvent(r.Context(), id, getSessionToken(r)); err != nil {
-			log.Printf("delete event %d: %v", id, err)
+			logging.Errorf("delete event %d: %v", id, err)
 		}
 		invalidateAPEventCache(id) // #1471
 		if fetchErr == nil && event.OrganizationID != nil {
@@ -335,7 +335,7 @@ func adminEventDeclineHandler(client *DansalClient) http.HandlerFunc {
 		}
 		reason := strings.TrimSpace(r.FormValue("reason"))
 		if err := client.DeclineEvent(r.Context(), id, getSessionToken(r), reason); err != nil {
-			log.Printf("decline event %d: %v", id, err)
+			logging.Errorf("decline event %d: %v", id, err)
 		}
 		http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
 	}
@@ -410,7 +410,7 @@ func adminEventBulkRecheckSourceHandler(cfg *Config, client *DansalClient) http.
 				continue
 			}
 			if _, err := client.RecheckEventSource(r.Context(), id, token); err != nil {
-				log.Printf("recheck source for event %d: %v", id, err)
+				logging.Errorf("recheck source for event %d: %v", id, err)
 			}
 		}
 		http.Redirect(w, r, safeReferer(r, "/admin/events"), http.StatusSeeOther)
@@ -432,7 +432,7 @@ func adminEventBulkDeleteHandler(cfg *Config, db *sql.DB, client *DansalClient) 
 			if id, err := strconv.Atoi(s); err == nil {
 				event, fetchErr := client.GetEvent(r.Context(), id)
 				if err := client.DeleteEvent(r.Context(), id, token); err != nil {
-					log.Printf("bulk delete event %d: %v", id, err)
+					logging.Errorf("bulk delete event %d: %v", id, err)
 				}
 				invalidateAPEventCache(id) // #1471
 				if fetchErr == nil && event.OrganizationID != nil {
@@ -462,7 +462,7 @@ func adminEventAssignSeriesHandler(cfg *Config, client *DansalClient) http.Handl
 		token := getSessionToken(r)
 		if seriesID > 0 {
 			if err := client.AssignEventsToSeries(r.Context(), seriesID, []int{id}, token); err != nil {
-				log.Printf("assign event %d to series %d: %v", id, seriesID, err)
+				logging.Errorf("assign event %d to series %d: %v", id, seriesID, err)
 			}
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/events/%d/edit", id), http.StatusSeeOther)
@@ -481,7 +481,7 @@ func adminEventRemoveFromSeriesHandler(cfg *Config, client *DansalClient) http.H
 		}
 		token := getSessionToken(r)
 		if err := client.RemoveEventFromSeries(r.Context(), id, token); err != nil {
-			log.Printf("remove event %d from series: %v", id, err)
+			logging.Errorf("remove event %d from series: %v", id, err)
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/events/%d/edit", id), http.StatusSeeOther)
 	}
@@ -510,7 +510,7 @@ func adminEventBulkAssignLocationHandler(cfg *Config, client *DansalClient) http
 		}
 		if len(ids) > 0 {
 			if err := client.BulkSetEventLocation(r.Context(), ids, locationID, getSessionToken(r)); err != nil {
-				log.Printf("bulk assign location %d to %d events: %v", locationID, len(ids), err)
+				logging.Errorf("bulk assign location %d to %d events: %v", locationID, len(ids), err)
 			}
 		}
 		http.Redirect(w, r, safeReferer(r, "/admin/events"), http.StatusSeeOther)
@@ -541,7 +541,7 @@ func adminEventBulkSetTimeHandler(cfg *Config, client *DansalClient) http.Handle
 		}
 		if len(ids) > 0 {
 			if err := client.BulkSetEventTime(r.Context(), ids, startTime, endTime, getSessionToken(r)); err != nil {
-				log.Printf("bulk set time on %d events: %v", len(ids), err)
+				logging.Errorf("bulk set time on %d events: %v", len(ids), err)
 			}
 		}
 		http.Redirect(w, r, safeReferer(r, "/admin/events"), http.StatusSeeOther)
@@ -576,7 +576,7 @@ func adminEventBulkAssignSeriesHandler(cfg *Config, tmpls *Templates, client *Da
 		if seriesID > 0 {
 			// Path A: assign to existing series
 			if err := client.AssignEventsToSeries(r.Context(), seriesID, ids, token); err != nil {
-				log.Printf("bulk assign %d events to series %d: %v", len(ids), seriesID, err)
+				logging.Errorf("bulk assign %d events to series %d: %v", len(ids), seriesID, err)
 			}
 			http.Redirect(w, r, safeReferer(r, "/admin/events"), http.StatusSeeOther)
 			return
@@ -652,14 +652,14 @@ func adminEventBulkSetAttributesHandler(cfg *Config, client *DansalClient) http.
 		if v := r.FormValue("location_id"); v != "" {
 			if locID, err := strconv.Atoi(v); err == nil && locID > 0 {
 				if err := client.BulkSetEventLocation(r.Context(), ids, locID, token); err != nil {
-					log.Printf("bulk assign location %d to %d events: %v", locID, len(ids), err)
+					logging.Errorf("bulk assign location %d to %d events: %v", locID, len(ids), err)
 				}
 			}
 		}
 		if v := r.FormValue("series_id"); v != "" {
 			if seriesID, err := strconv.Atoi(v); err == nil && seriesID > 0 {
 				if err := client.AssignEventsToSeries(r.Context(), seriesID, ids, token); err != nil {
-					log.Printf("bulk assign %d events to series %d: %v", len(ids), seriesID, err)
+					logging.Errorf("bulk assign %d events to series %d: %v", len(ids), seriesID, err)
 				}
 			}
 		}
@@ -742,7 +742,7 @@ func adminEventBulkSetAttributesHandler(cfg *Config, client *DansalClient) http.
 			payload["pricing_type"] = v
 		}
 		if err := client.BulkSetEventAttributes(r.Context(), payload, token); err != nil {
-			log.Printf("bulk set attributes on %d events: %v", len(ids), err)
+			logging.Errorf("bulk set attributes on %d events: %v", len(ids), err)
 		}
 		http.Redirect(w, r, safeReferer(r, "/admin/events"), http.StatusSeeOther)
 	}
@@ -804,7 +804,7 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 		for _, id := range ids {
 			ev, err := client.GetEventAuthed(ctx, id, token)
 			if err != nil {
-				log.Printf("Event merge: failed to get event %d: %v", id, err)
+				logging.Errorf("Event merge: failed to get event %d: %v", id, err)
 				continue
 			}
 			evMetas = append(evMetas, evMeta{
@@ -940,12 +940,12 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 			qargs...)
 		var danceIDs []int
 		if qErr != nil {
-			log.Printf("admin event save: could not query dance ids: %v", qErr)
+			logging.Errorf("admin event save: could not query dance ids: %v", qErr)
 		} else if drows != nil {
 			for drows.Next() {
 				var did int
 				if err := drows.Scan(&did); err != nil {
-					log.Printf("admin event save: could not scan dance id: %v", err)
+					logging.Errorf("admin event save: could not scan dance id: %v", err)
 					continue
 				}
 				danceIDs = append(danceIDs, did)
@@ -982,22 +982,22 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 			Dances:             danceIDs,
 		}
 		if _, err := client.UpdateEvent(ctx, baseID, req, token); err != nil {
-			log.Printf("merge events: update base %d: %v", baseID, err)
+			logging.Errorf("merge events: update base %d: %v", baseID, err)
 		}
 		if keepSeriesID != nil {
 			if err := client.AssignEventsToSeries(ctx, *keepSeriesID, []int{baseID}, token); err != nil {
-				log.Printf("merge events: keep series %d on %d: %v", *keepSeriesID, baseID, err)
+				logging.Errorf("merge events: keep series %d on %d: %v", *keepSeriesID, baseID, err)
 			}
 		}
 
 		for _, id := range ids {
 			if id != baseID {
 				if err := client.CreateEntityRedirect(ctx, "event", id, baseID, token); err != nil {
-					log.Printf("merge events: record redirect %d -> %d: %v", id, baseID, err)
+					logging.Errorf("merge events: record redirect %d -> %d: %v", id, baseID, err)
 					continue
 				}
 				if err := client.DeleteEvent(ctx, id, token); err != nil {
-					log.Printf("merge events: delete %d: %v", id, err)
+					logging.Errorf("merge events: delete %d: %v", id, err)
 				}
 			}
 		}
@@ -1042,7 +1042,7 @@ func adminEventImageDeleteHandler(cfg *Config, client *DansalClient) http.Handle
 			return
 		}
 		if err := client.DeleteEventImage(r.Context(), id, getSessionToken(r)); err != nil {
-			log.Printf("delete event image %d: %v", id, err)
+			logging.Errorf("delete event image %d: %v", id, err)
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/events/%d/edit", id), http.StatusSeeOther)
 	}
@@ -2128,7 +2128,7 @@ func adminTemplateCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, clien
 			return
 		}
 		if _, err := saveTemplate(db, su.ID, res.OrgID, nil, nil, res.Name, res.DataJSON); err != nil {
-			log.Printf("save template error: %v", err)
+			logging.Errorf("save template error: %v", err)
 			renderErr(adminSaveError(err))
 			return
 		}
@@ -2165,7 +2165,7 @@ func adminTemplateEditPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, cli
 
 		var td templateEventData
 		if err := json.Unmarshal([]byte(tpl.Data), &td); err != nil {
-			log.Printf("admin template edit: bad stored data for template %d: %v", id, err)
+			logging.Errorf("admin template edit: bad stored data for template %d: %v", id, err)
 		}
 
 		bundle := client.FetchRefBundle(r.Context())
@@ -2247,7 +2247,7 @@ func adminTemplateEditSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, cli
 			return
 		}
 		if err := updateTemplate(db, id, su.ID, su.Role == "admin", res.OrgID, res.Name, res.DataJSON); err != nil {
-			log.Printf("update template error: %v", err)
+			logging.Errorf("update template error: %v", err)
 			renderErr(adminSaveError(err))
 			return
 		}
@@ -2468,7 +2468,7 @@ func parseTimetableEntryReqs(r *http.Request, client *DansalClient) []TimetableE
 				if m, merr := client.CreateMusician(r.Context(), Musician{Bandname: name}, getSessionToken(r)); merr == nil {
 					entry.MusicianID = &m.ID
 				} else {
-					log.Printf("create musician %q: %v", name, merr)
+					logging.Errorf("create musician %q: %v", name, merr)
 				}
 			}
 		}
@@ -2482,7 +2482,7 @@ func parseTimetableEntryReqs(r *http.Request, client *DansalClient) []TimetableE
 				if ins, ierr := client.CreateInstructor(r.Context(), Instructor{Name: name}, getSessionToken(r)); ierr == nil {
 					entry.InstructorID = &ins.ID
 				} else {
-					log.Printf("create instructor %q: %v", name, ierr)
+					logging.Errorf("create instructor %q: %v", name, ierr)
 				}
 			}
 		}
@@ -2701,7 +2701,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 				})
 				return
 			}
-			log.Printf("create event error: %v", err)
+			logging.Errorf("create event error: %v", err)
 			renderErrFull(adminSaveError(err))
 			return
 		}
@@ -2722,11 +2722,11 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			if created, lerr := client.CreateLocation(r.Context(), newLoc, getSessionToken(r)); lerr == nil {
 				if orgID != nil {
 					if err := client.BulkAssignLocationOrg(r.Context(), []int{created.ID}, orgID, getSessionToken(r)); err != nil {
-						log.Printf("assign org %d to new location %d: %v", *orgID, created.ID, err)
+						logging.Errorf("assign org %d to new location %d: %v", *orgID, created.ID, err)
 					}
 				}
 			} else {
-				log.Printf("create standalone location error: %v", lerr)
+				logging.Errorf("create standalone location error: %v", lerr)
 			}
 		}
 
@@ -2741,7 +2741,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			data, rerr := io.ReadAll(file)
 			if rerr == nil {
 				if uerr := client.UploadEventImage(r.Context(), event.ID, data, header.Filename, getSessionToken(r)); uerr != nil {
-					log.Printf("upload image error: %v", uerr)
+					logging.Errorf("upload image error: %v", uerr)
 					flash = imageUploadErrorFlash("image", uerr)
 				}
 			}
@@ -2750,7 +2750,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 		ttEntries := parseTimetableEntryReqs(r, client)
 		if len(ttEntries) > 0 {
 			if terr := client.AddTimetableEntries(r.Context(), event.ID, ttEntries, getSessionToken(r)); terr != nil {
-				log.Printf("add timetable error: %v", terr)
+				logging.Errorf("add timetable error: %v", terr)
 			}
 		}
 
@@ -2777,7 +2777,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 				}
 				if saved, gerr := client.GetEvent(r.Context(), event.ID); gerr == nil {
 					if _, terr := saveEventAsTemplate(db, su.ID, tplOrgID, name, saved); terr != nil {
-						log.Printf("save as template error: %v", terr)
+						logging.Errorf("save as template error: %v", terr)
 					}
 				}
 			}
@@ -3076,7 +3076,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		renderErr := func(se SaveError) {
 			event, gerr := client.GetEventAuthed(r.Context(), id, saveTok)
 			if gerr != nil {
-				log.Printf("reload event %d after save error: %v", id, gerr)
+				logging.Errorf("reload event %d after save error: %v", id, gerr)
 				http.Error(w, "could not reload event", http.StatusBadGateway)
 				return
 			}
@@ -3163,7 +3163,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		renderErrFull := func(se SaveError) {
 			event, gerr := client.GetEventAuthed(r.Context(), id, saveTok)
 			if gerr != nil {
-				log.Printf("reload event %d after save error: %v", id, gerr)
+				logging.Errorf("reload event %d after save error: %v", id, gerr)
 				http.Error(w, "could not reload event", http.StatusBadGateway)
 				return
 			}
@@ -3212,7 +3212,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		}
 
 		if _, err := client.UpdateEvent(r.Context(), id, req, saveTok); err != nil {
-			log.Printf("update event error: %v", err)
+			logging.Errorf("update event error: %v", err)
 			renderErrFull(adminSaveError(err))
 			return
 		}
@@ -3226,7 +3226,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			data, rerr := io.ReadAll(file)
 			if rerr == nil {
 				if uerr := client.UploadEventImage(r.Context(), id, data, header.Filename, getSessionToken(r)); uerr != nil {
-					log.Printf("upload image error: %v", uerr)
+					logging.Errorf("upload image error: %v", uerr)
 					imgFlash = imageUploadErrorFlash("image", uerr)
 				}
 			}
@@ -3259,7 +3259,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 				ttEntries = []TimetableEntryReq{}
 			}
 			if err := client.ReplaceTimetable(r.Context(), id, ttEntries, getSessionToken(r)); err != nil {
-				log.Printf("replace timetable error: %v", err)
+				logging.Errorf("replace timetable error: %v", err)
 				ttError = err.Error()
 			}
 		}
@@ -3300,7 +3300,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 				}
 				if saved, gerr := client.GetEvent(r.Context(), id); gerr == nil {
 					if _, terr := saveEventAsTemplate(db, su.ID, tplOrgID, name, saved); terr != nil {
-						log.Printf("save as template error: %v", terr)
+						logging.Errorf("save as template error: %v", terr)
 					}
 				}
 			}
@@ -3308,13 +3308,13 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		case "assign-series":
 			if seriesID, serr := strconv.Atoi(r.FormValue("series_id")); serr == nil && seriesID > 0 {
 				if err := client.AssignEventsToSeries(r.Context(), seriesID, []int{id}, getSessionToken(r)); err != nil {
-					log.Printf("assign event %d to series %d: %v", id, seriesID, err)
+					logging.Errorf("assign event %d to series %d: %v", id, seriesID, err)
 				}
 			}
 			http.Redirect(w, r, editRedirect, http.StatusSeeOther)
 		case "remove-series":
 			if err := client.RemoveEventFromSeries(r.Context(), id, getSessionToken(r)); err != nil {
-				log.Printf("remove event %d from series: %v", id, err)
+				logging.Errorf("remove event %d from series: %v", id, err)
 			}
 			http.Redirect(w, r, editRedirect, http.StatusSeeOther)
 		case "create-series":
@@ -3704,26 +3704,26 @@ func adminLocationDashboardHandler(cfg *Config, tmpls *Templates, client *Dansal
 
 		locs, err := client.GetLocations(r.Context())
 		if err != nil {
-			log.Printf("admin location: could not load locations: %v", err)
+			logging.Errorf("admin location: could not load locations: %v", err)
 		}
 		dances, err := client.GetDances(r.Context())
 		if err != nil {
-			log.Printf("admin location: could not load dances: %v", err)
+			logging.Errorf("admin location: could not load dances: %v", err)
 		}
 		allTags, err := client.GetTags(r.Context())
 		if err != nil {
-			log.Printf("admin location: could not load tags: %v", err)
+			logging.Errorf("admin location: could not load tags: %v", err)
 		}
 		series, err := client.GetSeriesList(r.Context(), token)
 		if err != nil {
-			log.Printf("admin location: could not load series: %v", err)
+			logging.Errorf("admin location: could not load series: %v", err)
 		}
 
 		var roomEventCounts map[int]int
 		if len(loc.Children) > 0 {
 			roomEventCounts, err = client.GetLocationEventCounts(r.Context(), token)
 			if err != nil {
-				log.Printf("admin location: could not load room event counts: %v", err)
+				logging.Errorf("admin location: could not load room event counts: %v", err)
 			}
 		}
 

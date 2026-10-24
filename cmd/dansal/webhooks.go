@@ -10,8 +10,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -317,7 +317,7 @@ func dispatchEventWebhooks(eventID int, orgID *int, action string, actorID int) 
 		 JOIN organization_members om ON om.user_id = w.publisher_id
 		 WHERE w.active = 1 AND om.organization_id = ?`, *orgID)
 	if err != nil {
-		log.Printf("webhooks: recipient lookup: %v", err)
+		logging.Errorf("webhooks: recipient lookup: %v", err)
 		return
 	}
 	defer rows.Close()

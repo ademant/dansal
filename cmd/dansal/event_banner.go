@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"image"
 	"image/color"
 	"image/draw"
@@ -134,7 +135,7 @@ func getEventBannerImage(w http.ResponseWriter, r *http.Request) {
 	cachePath := eventBannerCachePath(id, tier)
 	if _, err := os.Stat(cachePath); err != nil {
 		if err := generateEventBannerImage(event, tier, cachePath); err != nil {
-			log.Printf("event-banner %d: generate: %v", id, err)
+			logging.Errorf("event-banner %d: generate: %v", id, err)
 			writeError(w, "Banner generation failed", http.StatusInternalServerError)
 			return
 		}

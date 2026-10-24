@@ -3,7 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"sort"
 )
@@ -303,7 +303,7 @@ func loadFediLive(webDBPath string) *fediLiveSnapshot {
 	}
 	db, err := openReadonlyDB(webDBPath)
 	if err != nil {
-		log.Printf("fedi live: open web.db: %v", err)
+		logging.Errorf("fedi live: open web.db: %v", err)
 		return nil
 	}
 	defer db.Close()
@@ -312,24 +312,24 @@ func loadFediLive(webDBPath string) *fediLiveSnapshot {
 
 	// Total followers.
 	if err := db.QueryRow("SELECT COUNT(*) FROM followers").Scan(&snap.TotalFollowers); err != nil {
-		log.Printf("fedi live: count followers: %v", err)
+		logging.Errorf("fedi live: count followers: %v", err)
 	}
 
 	// Pending delivery failures.
 	if err := db.QueryRow("SELECT COUNT(*) FROM delivery_failures").Scan(&snap.PendingDeliveryFailures); err != nil {
-		log.Printf("fedi live: count delivery failures: %v", err)
+		logging.Errorf("fedi live: count delivery failures: %v", err)
 	}
 
 	// Followers per org.
 	orgRows, err := db.Query("SELECT org_id, COUNT(*) FROM followers GROUP BY org_id ORDER BY COUNT(*) DESC")
 	if err != nil {
-		log.Printf("fedi live: followers by org: %v", err)
+		logging.Errorf("fedi live: followers by org: %v", err)
 	} else {
 		defer orgRows.Close()
 		for orgRows.Next() {
 			var of fediOrgFollowers
 			if err := orgRows.Scan(&of.OrgID, &of.Count); err != nil {
-				log.Printf("fedi live: followers by org scan: %v", err)
+				logging.Errorf("fedi live: followers by org scan: %v", err)
 				continue
 			}
 			snap.FollowersByOrg = append(snap.FollowersByOrg, of)
@@ -351,13 +351,13 @@ func loadFediLive(webDBPath string) *fediLiveSnapshot {
 		ORDER BY n DESC
 		LIMIT 15`)
 	if err != nil {
-		log.Printf("fedi live: top instances: %v", err)
+		logging.Errorf("fedi live: top instances: %v", err)
 	} else {
 		defer instRows.Close()
 		for instRows.Next() {
 			var fi fediSourceInstance
 			if err := instRows.Scan(&fi.Instance, &fi.Count); err != nil {
-				log.Printf("fedi live: top instances scan: %v", err)
+				logging.Errorf("fedi live: top instances scan: %v", err)
 				continue
 			}
 			snap.TopInstances = append(snap.TopInstances, fi)
@@ -496,7 +496,7 @@ func botStatsPageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 		} else {
 			botDays, userDays, engines, err := loadBotStatsDB(cfg.BotStatsDBPath)
 			if err != nil {
-				log.Printf("bot-stats db: %v", err)
+				logging.Errorf("bot-stats db: %v", err)
 				data.DBMissing = true
 			} else {
 				data.BotDays = botDays
@@ -525,7 +525,7 @@ func botStatsPageHandler(cfg *Config, tmpls *Templates) http.HandlerFunc {
 				// Fediverse historical data from the same bot-stats DB.
 				fediDays, fediInst, fErr := loadFediStatsDB(cfg.BotStatsDBPath)
 				if fErr != nil {
-					log.Printf("fedi-stats db: %v", fErr)
+					logging.Errorf("fedi-stats db: %v", fErr)
 				} else {
 					data.FediDays = fediDays
 					data.FediDaysDesc = reverseFediDays(fediDays)

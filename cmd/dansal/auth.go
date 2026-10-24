@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net"
 	"net/http"
 	"strconv"
@@ -64,7 +64,7 @@ func recordFailedLogin(userID int, clientIP string, storedCount int, failedSince
 		} else {
 			db.Exec("UPDATE users SET disabled=1, failed_login_count=? WHERE id=?", newCount, userID)
 		}
-		log.Printf("auth: user %d disabled after %d failed logins within window (last from %s)", userID, newCount, clientIP)
+		logging.Warnf("auth: user %d disabled after %d failed logins within window (last from %s)", userID, newCount, clientIP)
 		credentials.pruneByUserID(userID)
 		db.Exec("DELETE FROM tokens WHERE user_id=?", userID)
 	} else if newSince != nil {
@@ -350,7 +350,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	clientIP := getClientIP(r)
 
 	if !loginRateLimiter.Allow(clientIP) {
-		log.Printf("auth failed from %s: login rate limit exceeded", clientIP)
+		logging.Warnf("auth failed from %s: login rate limit exceeded", clientIP)
 		writeError(w, "Too many login attempts", http.StatusTooManyRequests)
 		return
 	}
@@ -358,7 +358,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	// Verify user credentials
 	authUser, err := resolveLoginUser(req.Email, true)
 	if err == sql.ErrNoRows || err == errAmbiguousIdentifier {
-		log.Printf("auth failed from %s: invalid credentials", clientIP)
+		logging.Warnf("auth failed from %s: invalid credentials", clientIP)
 		writeError(w, "Invalid email or password", http.StatusUnauthorized)
 		return
 	}
@@ -372,7 +372,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	failedSince := authUser.FailedLoginSince
 
 	if authUser.Disabled != 0 {
-		log.Printf("auth failed from %s: user %d is disabled", clientIP, user.ID)
+		logging.Warnf("auth failed from %s: user %d is disabled", clientIP, user.ID)
 		writeError(w, "Invalid email or password", http.StatusUnauthorized)
 		return
 	}
@@ -380,14 +380,14 @@ func login(w http.ResponseWriter, r *http.Request) {
 	// Admin accounts must use a passkey, magic link, OIDC, or mTLS — password
 	// login is disabled for them regardless of whether a password is set.
 	if user.Role == RoleAdmin {
-		log.Printf("auth failed from %s: password login attempted for admin user %d", clientIP, user.ID)
+		logging.Warnf("auth failed from %s: password login attempted for admin user %d", clientIP, user.ID)
 		writeError(w, "Admin accounts cannot use password login — use a passkey or magic link", http.StatusForbidden)
 		return
 	}
 
 	// Reject empty password logins — user must use passkey or magic link.
 	if passwordHash == "" {
-		log.Printf("auth failed from %s: no password set for user %d", clientIP, user.ID)
+		logging.Warnf("auth failed from %s: no password set for user %d", clientIP, user.ID)
 		writeError(w, "No password set — use a passkey or magic link", http.StatusUnauthorized)
 		return
 	}
@@ -395,14 +395,14 @@ func login(w http.ResponseWriter, r *http.Request) {
 	// Verify password; migrate legacy SHA-256 hashes to bcrypt on first successful login.
 	ok, migrate := checkPassword(req.Password, passwordHash)
 	if !ok {
-		log.Printf("auth failed from %s: invalid credentials", clientIP)
+		logging.Warnf("auth failed from %s: invalid credentials", clientIP)
 		recordFailedLogin(user.ID, clientIP, failedCount, failedSince)
 		writeError(w, "Invalid email or password", http.StatusUnauthorized)
 		return
 	}
 	if migrate {
 		if newHash, err := hashPassword(req.Password); err != nil {
-			log.Printf("auth: hash migration for user %d skipped: %v", user.ID, err)
+			logging.Warnf("auth: hash migration for user %d skipped: %v", user.ID, err)
 		} else {
 			db.Exec("UPDATE users SET password_hash = ? WHERE id = ?", newHash, user.ID)
 		}
@@ -417,7 +417,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !totpCheckAndMark(user.ID, totpSecret, req.TotpCode, time.Now()) {
-			log.Printf("auth failed from %s: invalid or replayed TOTP code for user %d", clientIP, user.ID)
+			logging.Warnf("auth failed from %s: invalid or replayed TOTP code for user %d", clientIP, user.ID)
 			writeError(w, "Invalid TOTP code", http.StatusUnauthorized)
 			return
 		}
@@ -426,7 +426,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	// Generate token / session
 	token, expiresAt, err := createTokenInDB(user.ID, r.UserAgent(), clientIP, req.Fingerprint)
 	if err != nil {
-		log.Printf("Error creating token: %v\n", err)
+		logging.Errorf("Error creating token: %v", err)
 		writeError(w, "Failed to create token", http.StatusInternalServerError)
 		return
 	}

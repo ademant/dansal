@@ -4,9 +4,10 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
+
+	"github.com/ademant/dansal/internal/logging"
 )
 
 // newErrorID returns a short random hex string for correlating errors across
@@ -22,8 +23,13 @@ func newErrorID() string {
 // path, and error_id so they can be correlated from a user report.
 func writeJSONError(w http.ResponseWriter, r *http.Request, status int, msg string) {
 	id := newErrorID()
-	if status != http.StatusUnauthorized && status != http.StatusForbidden {
-		log.Printf("error_id=%s status=%d method=%s path=%s: %s", id, status, r.Method, r.URL.Path, msg)
+	// Server errors are Error, other client errors Debug; 401 and 403 are not
+	// logged (#1646).
+	switch {
+	case status >= 500:
+		logging.Errorf("error_id=%s status=%d method=%s path=%s: %s", id, status, r.Method, r.URL.Path, msg)
+	case status != http.StatusUnauthorized && status != http.StatusForbidden:
+		logging.Debugf("error_id=%s status=%d method=%s path=%s: %s", id, status, r.Method, r.URL.Path, msg)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -35,7 +41,11 @@ func writeJSONError(w http.ResponseWriter, r *http.Request, status int, msg stri
 // can quote it when reporting issues.
 func logHTTPError(w http.ResponseWriter, r *http.Request, msg string, code int) {
 	id := newErrorID()
-	log.Printf("error_id=%s status=%d method=%s path=%s: %s", id, code, r.Method, r.URL.Path, msg)
+	if code >= 500 {
+		logging.Errorf("error_id=%s status=%d method=%s path=%s: %s", id, code, r.Method, r.URL.Path, msg)
+	} else {
+		logging.Debugf("error_id=%s status=%d method=%s path=%s: %s", id, code, r.Method, r.URL.Path, msg)
+	}
 	http.Error(w, msg+" (error_id: "+id+")", code)
 }
 

@@ -3,8 +3,8 @@ package main
 import (
 	"encoding/csv"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"io"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -144,9 +144,9 @@ func adminEventsExportHandler(cfg *Config, client *DansalClient) http.HandlerFun
 		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, name))
 		w.Header().Set("Cache-Control", "no-store")
 		if err := writeEventsCSV(w, events, orgMap, cfg.Domain); err != nil {
-			log.Printf("events export: write failed: %v", err)
+			logging.Errorf("events export: write failed: %v", err)
 			return
 		}
-		log.Printf("events export: user=%d scope=%s rows=%d filters=%+v", user.ID, scope, len(events), f)
+		logging.Infof("events export: user=%d scope=%s rows=%d filters=%+v", user.ID, scope, len(events), f)
 	}
 }

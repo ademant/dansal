@@ -168,3 +168,6 @@ dark_mode: auto
 # Optional Cloudflare Turnstile keys for the event suggestion form.
 # captcha_site_key: ""
 # captcha_secret_key: ""
+
+# Minimum level written to the journal (#1645): debug | info (default) | warning | error.
+log_level: info

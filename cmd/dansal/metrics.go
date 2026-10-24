@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"slices"
 	"strconv"
@@ -145,9 +145,9 @@ func startMetricsServer() {
 	}
 
 	go func() {
-		log.Printf("Metrics server starting on %s", addr)
+		logging.Infof("Metrics server starting on %s", addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Printf("Metrics server error: %v", err)
+			logging.Errorf("Metrics server error: %v", err)
 		}
 	}()
 }

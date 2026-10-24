@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"strconv"
 	"strings"
@@ -19,11 +19,11 @@ const pendingRegCookie = "pending_reg"
 func loadRegisterFormData(ctx context.Context, client *DansalClient) ([]Organization, DansalInfo) {
 	orgs, err := client.GetOrganizations(ctx)
 	if err != nil {
-		log.Printf("register: could not load organizations: %v", err)
+		logging.Errorf("register: could not load organizations: %v", err)
 	}
 	info, err := client.GetServiceInfo(ctx)
 	if err != nil {
-		log.Printf("register: could not load service info: %v", err)
+		logging.Errorf("register: could not load service info: %v", err)
 	}
 	return orgs, info
 }
@@ -170,7 +170,7 @@ func registerPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 
 		ip := getClientIP(r)
 		if tokenThrottle.isBlocked(ip) {
-			log.Printf("%s ip=%s path=/register", tokenBlock, ip)
+			logging.Warnf("%s ip=%s path=/register", tokenBlock, ip)
 			http.Error(w, i18n.T(r, "form_token_cap_error"), http.StatusTooManyRequests)
 			return
 		}
@@ -216,7 +216,7 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		}
 		ip := getClientIP(r)
 		if authThrottle.isBlocked(ip) {
-			log.Printf("%s ip=%s path=/register", authBlock, ip)
+			logging.Warnf("%s ip=%s path=/register", authBlock, ip)
 			title := i18n.T(r, "register_title")
 			renderTemplate(w, tmpls.register, tmplData(r, cfg, i18n, title, RegisterPageData{
 				Error:     "login_error_throttled",
@@ -295,7 +295,7 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		result, err := client.Register(r.Context(), req, cfg.publicBaseURL(), getBoardSessionToken(r))
 		if err != nil {
 			clearPendingSubmission(ip, r.UserAgent(), "register")
-			log.Printf("dansal-web: register submit failed ip_hash=%s err=%v", hashIP(ip), err)
+			logging.Errorf("dansal-web: register submit failed ip_hash=%s err=%v", hashIP(ip), err)
 			errKey := "register_error_other"
 			switch classifyAPIError(err) {
 			case errConflict:
@@ -311,7 +311,7 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			return
 		}
 
-		log.Printf("register: new registration pending_id=%s (status=%s)", result["pending_id"], result["status"])
+		logging.Infof("register: new registration pending_id=%s (status=%s)", result["pending_id"], result["status"])
 
 		// Set a persistent cookie so the user can resume verification if the tab is closed.
 		if pid := result["pending_id"]; pid != "" {
@@ -430,12 +430,12 @@ func adminRegistrationsHandler(cfg *Config, tmpls *Templates, client *DansalClie
 		token := getSessionToken(r)
 		regs, err := client.ListPendingRegistrations(r.Context(), token)
 		if err != nil {
-			log.Printf("admin registrations list: %v", err)
+			logging.Errorf("admin registrations list: %v", err)
 			regs = nil
 		}
 		pendingInvites, ierr := client.ListPendingInvites(r.Context(), token)
 		if ierr != nil {
-			log.Printf("admin registrations: could not load pending invites: %v", ierr)
+			logging.Errorf("admin registrations: could not load pending invites: %v", ierr)
 		}
 		title := i18n.T(r, "admin_registrations_title")
 		renderTemplate(w, tmpls.adminRegistrations, tmplData(r, cfg, i18n, title, AdminRegistrationsData{
@@ -464,7 +464,7 @@ func adminRegistrationApproveHandler(cfg *Config, client *DansalClient) http.Han
 		}
 		token := getSessionToken(r)
 		if err := client.ApproveRegistration(r.Context(), token, id, role); err != nil {
-			log.Printf("approve registration %d: %v", id, err)
+			logging.Errorf("approve registration %d: %v", id, err)
 		}
 		http.Redirect(w, r, "/admin/registrations", http.StatusSeeOther)
 	}
@@ -483,7 +483,7 @@ func adminRegistrationResendInviteHandler(cfg *Config, client *DansalClient) htt
 		}
 		token := getSessionToken(r)
 		if err := client.ResendInvite(r.Context(), token, id, cfg.publicBaseURL()); err != nil {
-			log.Printf("resend invite %d: %v", id, err)
+			logging.Errorf("resend invite %d: %v", id, err)
 		}
 		http.Redirect(w, r, "/admin/registrations", http.StatusSeeOther)
 	}
@@ -504,7 +504,7 @@ func adminRegistrationRejectHandler(cfg *Config, client *DansalClient) http.Hand
 		reason := strings.TrimSpace(r.FormValue("reason"))
 		token := getSessionToken(r)
 		if err := client.RejectRegistration(r.Context(), token, id, reason); err != nil {
-			log.Printf("reject registration %d: %v", id, err)
+			logging.Errorf("reject registration %d: %v", id, err)
 		}
 		http.Redirect(w, r, "/admin/registrations", http.StatusSeeOther)
 	}
@@ -525,7 +525,7 @@ func registerResendHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		}
 		tok := parts[1]
 		if err := client.ResendRegistration(r.Context(), tok); err != nil {
-			log.Printf("register resend: %v", err)
+			logging.Errorf("register resend: %v", err)
 		}
 		http.Redirect(w, r, "/register", http.StatusSeeOther)
 	}
@@ -542,7 +542,7 @@ func registerCancelHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		if len(parts) == 2 {
 			tok := parts[1]
 			if err := client.CancelRegistration(r.Context(), tok); err != nil {
-				log.Printf("register cancel: %v", err)
+				logging.Errorf("register cancel: %v", err)
 			}
 		}
 		http.SetCookie(w, &http.Cookie{Name: pendingRegCookie, MaxAge: -1, Path: "/", Secure: true})

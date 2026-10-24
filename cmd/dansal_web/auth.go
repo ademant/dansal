@@ -3,7 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"net/url"
 	"strings"
@@ -110,7 +110,7 @@ func loginPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 		}
 		ip := getClientIP(r)
 		if tokenThrottle.isBlocked(ip) {
-			log.Printf("%s ip=%s path=/login", tokenBlock, ip)
+			logging.Warnf("%s ip=%s path=/login", tokenBlock, ip)
 			http.Error(w, i18n.T(r, "form_token_cap_error"), http.StatusTooManyRequests)
 			return
 		}
@@ -126,7 +126,7 @@ func loginPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 		tokenThrottle.record(ip)
 		providers, err := client.GetOIDCProviders(r.Context(), nil)
 		if err != nil {
-			log.Printf("login page: could not load OIDC providers: %v", err)
+			logging.Errorf("login page: could not load OIDC providers: %v", err)
 		}
 		title := i18n.T(r, "login_title")
 		flash := flashTake(r.URL.Query().Get("msg"))
@@ -160,7 +160,7 @@ func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		}
 
 		if throttle.isBlocked(ip) {
-			log.Printf("%s ip=%s path=/login", authBlock, ip)
+			logging.Warnf("%s ip=%s path=/login", authBlock, ip)
 			tok := issueFormToken(ip)
 			title := i18n.T(r, "login_title")
 			renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{
@@ -207,7 +207,7 @@ func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		}
 		if err != nil {
 			delay := throttle.recordFailure(ip, email, password)
-			log.Printf("%s ip=%s path=/login", authFail, ip)
+			logging.Warnf("%s ip=%s path=/login", authFail, ip)
 			timer := time.NewTimer(delay)
 			select {
 			case <-timer.C:
@@ -257,7 +257,7 @@ func magicRequestHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 	return func(w http.ResponseWriter, r *http.Request) {
 		ip := getClientIP(r)
 		if authThrottle.isBlocked(ip) {
-			log.Printf("%s ip=%s path=/magic", authBlock, ip)
+			logging.Warnf("%s ip=%s path=/magic", authBlock, ip)
 			tok := issueFormToken(ip)
 			title := i18n.T(r, "login_title")
 			renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{

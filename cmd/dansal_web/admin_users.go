@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"sort"
 	"strconv"
@@ -36,7 +36,7 @@ func adminUsersHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 
 		orgs, oErr := client.GetOrganizations(r.Context())
 		if oErr != nil {
-			log.Printf("admin users: could not load organizations: %v", oErr)
+			logging.Errorf("admin users: could not load organizations: %v", oErr)
 		}
 		orgMap := buildOrgMap(orgs)
 
@@ -46,7 +46,7 @@ func adminUsersHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 		}
 		bulkMembers, bErr := client.GetOrganizationMembersBulk(r.Context(), orgIDs, token)
 		if bErr != nil {
-			log.Printf("admin users: could not load memberships: %v", bErr)
+			logging.Errorf("admin users: could not load memberships: %v", bErr)
 		}
 
 		userOrgs := make(map[int][]int)
@@ -78,7 +78,7 @@ func adminUsersHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 
 		invites, iErr := client.ListInvites(r.Context(), token)
 		if iErr != nil {
-			log.Printf("admin users: could not load invites: %v", iErr)
+			logging.Errorf("admin users: could not load invites: %v", iErr)
 		}
 		active := make([]InviteLink, 0, len(invites))
 		for _, inv := range invites {
@@ -178,7 +178,7 @@ func adminUserRoleHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			return
 		}
 		if err := client.UpdateUser(r.Context(), id, map[string]string{"role": r.FormValue("role")}, getSessionToken(r)); err != nil {
-			log.Printf("set role of user %d: %v", id, err)
+			logging.Errorf("set role of user %d: %v", id, err)
 		}
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 	}
@@ -212,11 +212,11 @@ func adminUserOrgHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		}
 		if action == "remove" {
 			if err := client.RemoveOrgMember(r.Context(), orgID, userID, token); err != nil {
-				log.Printf("remove user %d from org %d: %v", userID, orgID, err)
+				logging.Errorf("remove user %d from org %d: %v", userID, orgID, err)
 			}
 		} else {
 			if err := client.AddOrgMember(r.Context(), orgID, userID, token); err != nil {
-				log.Printf("add user %d to org %d: %v", userID, orgID, err)
+				logging.Errorf("add user %d to org %d: %v", userID, orgID, err)
 			}
 		}
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
@@ -241,13 +241,13 @@ func adminUsersBulkHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			case "org":
 				if orgID != nil {
 					if err := client.AddOrgMember(r.Context(), *orgID, id, token); err != nil {
-						log.Printf("bulk add user %d to org %d: %v", id, *orgID, err)
+						logging.Errorf("bulk add user %d to org %d: %v", id, *orgID, err)
 					}
 				}
 			case "role":
 				if role := r.FormValue("role"); role != "" {
 					if err := client.UpdateUser(r.Context(), id, map[string]string{"role": role}, token); err != nil {
-						log.Printf("bulk set role of user %d: %v", id, err)
+						logging.Errorf("bulk set role of user %d: %v", id, err)
 					}
 				}
 			}
@@ -272,7 +272,7 @@ func adminUserDisableHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 		}
 		disabled := r.FormValue("disabled") == "1"
 		if err := client.SetUserDisabled(r.Context(), id, disabled, getSessionToken(r)); err != nil {
-			log.Printf("set disabled=%t for user %d: %v", disabled, id, err)
+			logging.Errorf("set disabled=%t for user %d: %v", disabled, id, err)
 		}
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 	}
@@ -377,7 +377,7 @@ func adminInviteRevokeHandler(cfg *Config, client *DansalClient) http.HandlerFun
 			}
 		}
 		if err := client.RevokeInvite(r.Context(), invToken, token); err != nil {
-			log.Printf("revoke invite %s: %v", invToken, err)
+			logging.Errorf("revoke invite %s: %v", invToken, err)
 		}
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 	}
@@ -426,7 +426,7 @@ func adminInviteResendHandler(cfg *Config, client *DansalClient) http.HandlerFun
 			return
 		}
 		if err := client.RevokeInvite(r.Context(), invToken, token); err != nil {
-			log.Printf("revoke invite %s: %v", invToken, err)
+			logging.Errorf("revoke invite %s: %v", invToken, err)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -503,7 +503,7 @@ func adminPublisherRegenerateKeyHandler(cfg *Config, client *DansalClient) http.
 		}
 		newKey, keyID, err := client.RegeneratePublisherKey(r.Context(), id, token)
 		if err != nil {
-			log.Printf("regenerate publisher key %d: %v", id, err)
+			logging.Errorf("regenerate publisher key %d: %v", id, err)
 			writeJSONError(w, r, http.StatusBadGateway, err.Error())
 			return
 		}
@@ -533,7 +533,7 @@ func adminPublisherReconnectLinkHandler(cfg *Config, client *DansalClient) http.
 		}
 		link, err := client.CreatePublisherReconnectInvite(r.Context(), id, token)
 		if err != nil {
-			log.Printf("create publisher reconnect invite %d: %v", id, err)
+			logging.Errorf("create publisher reconnect invite %d: %v", id, err)
 			writeJSONError(w, r, http.StatusBadGateway, err.Error())
 			return
 		}
@@ -595,7 +595,7 @@ func adminPublisherDeleteHandler(cfg *Config, client *DansalClient) http.Handler
 			return
 		}
 		if err := client.DeletePublisher(r.Context(), id, token); err != nil {
-			log.Printf("delete publisher %d: %v", id, err)
+			logging.Errorf("delete publisher %d: %v", id, err)
 			writeJSONError(w, r, http.StatusBadGateway, err.Error())
 			return
 		}

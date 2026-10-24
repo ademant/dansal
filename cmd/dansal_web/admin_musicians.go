@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"html/template"
 	"io"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -137,7 +137,7 @@ func uploadMusicianFiles(cfg *Config, client *DansalClient, r *http.Request, id 
 		data, _ := io.ReadAll(file)
 		file.Close()
 		if uerr := client.UploadMusicianImage(r.Context(), id, data, header.Filename, token); uerr != nil {
-			log.Printf("upload musician image error: %v", uerr)
+			logging.Errorf("upload musician image error: %v", uerr)
 			flash = imageUploadErrorFlash("image", uerr)
 		}
 	}
@@ -145,7 +145,7 @@ func uploadMusicianFiles(cfg *Config, client *DansalClient, r *http.Request, id 
 		data, _ := io.ReadAll(file)
 		file.Close()
 		if uerr := client.UploadMusicianAvatar(r.Context(), id, data, header.Filename, token); uerr != nil {
-			log.Printf("upload musician avatar error: %v", uerr)
+			logging.Errorf("upload musician avatar error: %v", uerr)
 			if flash.ImageUploadError == "" {
 				flash = imageUploadErrorFlash("avatar", uerr)
 			}
@@ -179,7 +179,7 @@ func saveMusicianGallery(client *DansalClient, r *http.Request, id int, token st
 			})
 		}
 		if err := client.UpdateMusicianGallery(r.Context(), id, items, token); err != nil {
-			log.Printf("update musician gallery %d: %v", id, err)
+			logging.Errorf("update musician gallery %d: %v", id, err)
 			return imageUploadErrorFlash("gallery", err)
 		}
 	}
@@ -198,7 +198,7 @@ func saveMusicianGallery(client *DansalClient, r *http.Request, id int, token st
 			continue
 		}
 		if err := client.UploadMusicianGalleryImage(r.Context(), id, data, fh.Filename, "", ai, token); err != nil {
-			log.Printf("upload musician gallery picture %d: %v", id, err)
+			logging.Errorf("upload musician gallery picture %d: %v", id, err)
 			return galleryUploadErrorFlash(err)
 		}
 	}

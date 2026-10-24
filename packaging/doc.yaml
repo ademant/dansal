@@ -9,3 +9,6 @@ read_header_timeout_secs: 5
 read_timeout_secs: 10
 write_timeout_secs: 30
 idle_timeout_secs: 60
+
+# Minimum level written to the journal (#1645): debug | info (default) | warning | error.
+log_level: info

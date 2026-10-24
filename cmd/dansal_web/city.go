@@ -7,8 +7,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"html/template"
-	"log"
 	"math"
 	"net/http"
 	"sort"
@@ -300,7 +300,7 @@ func cityHubHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I
 			var pErr error
 			pastEvents, pastTotal, pErr = client.GetPastEventsByTownWithTotal(r.Context(), city.Town, locationPastEventsLimit)
 			if pErr != nil {
-				log.Printf("city %q: could not load past events: %v", city.Town, pErr)
+				logging.Errorf("city %q: could not load past events: %v", city.Town, pErr)
 			}
 			if city.Latitude != nil && city.Longitude != nil {
 				hint = nearbyHint(r.Context(), client, *city.Latitude, *city.Longitude, city.Town)

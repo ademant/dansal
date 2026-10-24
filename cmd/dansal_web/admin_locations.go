@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ademant/dansal/internal/logging"
 	"io"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -537,7 +537,7 @@ func adminLocationDeleteHandler(cfg *Config, client *DansalClient) http.HandlerF
 			return
 		}
 		if err := client.DeleteLocation(r.Context(), id, getSessionToken(r)); err != nil {
-			log.Printf("delete location %d: %v", id, err)
+			logging.Errorf("delete location %d: %v", id, err)
 		}
 		client.invalidateLocations()
 		target := safeLocationsReturnURL(r.FormValue("return"))
@@ -684,7 +684,7 @@ func adminLocationMergeHandler(cfg *Config, client *DansalClient) http.HandlerFu
 
 		// Update base location (applies merged fields + org assignments).
 		if err := client.UpdateLocation(ctx, base.ID, base, token); err != nil {
-			log.Printf("merge location: update base %d: %v", base.ID, err)
+			logging.Errorf("merge location: update base %d: %v", base.ID, err)
 		}
 
 		// Delete dropped locations. MergeLocation passes ?reassign_to=base.ID so
@@ -692,7 +692,7 @@ func adminLocationMergeHandler(cfg *Config, client *DansalClient) http.HandlerFu
 		// the FK constraint on events.location_id without touching the wrong DB.
 		for _, l := range locs[1:] {
 			if err := client.MergeLocation(ctx, l.ID, base.ID, token); err != nil {
-				log.Printf("merge location: delete %d: %v", l.ID, err)
+				logging.Errorf("merge location: delete %d: %v", l.ID, err)
 			}
 		}
 
@@ -735,11 +735,11 @@ func adminLocationAssignOrgHandler(cfg *Config, client *DansalClient) http.Handl
 		token := getSessionToken(r)
 		if r.FormValue("action") == "remove" {
 			if err := client.UnassignLocationOrg(r.Context(), id, orgID, token); err != nil {
-				log.Printf("unassign org %d from location %d: %v", orgID, id, err)
+				logging.Errorf("unassign org %d from location %d: %v", orgID, id, err)
 			}
 		} else {
 			if err := client.BulkAssignLocationOrg(r.Context(), []int{id}, &orgID, token); err != nil {
-				log.Printf("assign org %d to location %d: %v", orgID, id, err)
+				logging.Errorf("assign org %d to location %d: %v", orgID, id, err)
 			}
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/locations/%d/edit", id), http.StatusSeeOther)
@@ -771,7 +771,7 @@ func adminLocationRoomCreateHandler(cfg *Config, client *DansalClient) http.Hand
 		sizeSqm := parseFormOptionalInt(r.Form, "size_sqm")
 		child, err := client.CreateLocationChild(r.Context(), id, name, floorCondition, capacity, sizeSqm, token)
 		if err != nil {
-			log.Printf("create child location under %d: %v", id, err)
+			logging.Errorf("create child location under %d: %v", id, err)
 		} else {
 			// organization_ids: only sent by the "add as a room instead" action
 			// on the create-conflict prompt (#1302) — a room has no org
@@ -780,7 +780,7 @@ func adminLocationRoomCreateHandler(cfg *Config, client *DansalClient) http.Hand
 			for _, idStr := range r.Form["organization_ids"] {
 				if orgID, oerr := strconv.Atoi(idStr); oerr == nil && orgID > 0 {
 					if aerr := client.BulkAssignLocationOrg(r.Context(), []int{child.ID}, &orgID, token); aerr != nil {
-						log.Printf("assign org %d to new room %d: %v", orgID, child.ID, aerr)
+						logging.Errorf("assign org %d to new room %d: %v", orgID, child.ID, aerr)
 					}
 				}
 			}
@@ -814,7 +814,7 @@ func adminLocationConflictAssignOrgsHandler(cfg *Config, client *DansalClient) h
 		for _, idStr := range r.Form["organization_ids"] {
 			if orgID, oerr := strconv.Atoi(idStr); oerr == nil && orgID > 0 {
 				if aerr := client.BulkAssignLocationOrg(r.Context(), []int{id}, &orgID, token); aerr != nil {
-					log.Printf("assign org %d to location %d: %v", orgID, id, aerr)
+					logging.Errorf("assign org %d to location %d: %v", orgID, id, aerr)
 				}
 			}
 		}
@@ -878,7 +878,7 @@ func adminRoomQuickEditHandler(client *DansalClient) http.HandlerFunc {
 			return
 		}
 		if err := client.PatchLocationAttrs(r.Context(), roomID, body, getSessionToken(r)); err != nil {
-			log.Printf("room quick-edit %d: %v", roomID, err)
+			logging.Errorf("room quick-edit %d: %v", roomID, err)
 			writeJSONError(w, r, http.StatusBadGateway, "save failed")
 			return
 		}
@@ -902,7 +902,7 @@ func adminLocationRoomDeleteHandler(cfg *Config, client *DansalClient) http.Hand
 		}
 		token := getSessionToken(r)
 		if err := client.DeleteLocationChild(r.Context(), roomID, token); err != nil {
-			log.Printf("delete room %d: %v", roomID, err)
+			logging.Errorf("delete room %d: %v", roomID, err)
 		}
 		client.invalidateLocations()
 		http.Redirect(w, r, fmt.Sprintf("/admin/locations/%d/edit", locID), http.StatusSeeOther)
@@ -944,7 +944,7 @@ func adminLocationSitePlanUploadHandler(cfg *Config, client *DansalClient) http.
 		file.Close()
 		token := getSessionToken(r)
 		if uerr := client.UploadLocationSitePlan(r.Context(), id, data, header.Filename, token); uerr != nil {
-			log.Printf("upload location site plan %d: %v", id, uerr)
+			logging.Errorf("upload location site plan %d: %v", id, uerr)
 			// error_key (#1285) lets the JS show a specific, localized message
 			// ("too large"/"wrong format") instead of the generic fallback it
 			// already had; see imageUploadErrorKey for the classification.
@@ -983,7 +983,7 @@ func adminLocationSitePlanDeleteHandler(cfg *Config, client *DansalClient) http.
 		}
 		token := getSessionToken(r)
 		if derr := client.DeleteLocationSitePlan(r.Context(), id, token); derr != nil {
-			log.Printf("delete location site plan %d: %v", id, derr)
+			logging.Errorf("delete location site plan %d: %v", id, derr)
 			writeJSONError(w, r, http.StatusBadGateway, "delete failed")
 			return
 		}

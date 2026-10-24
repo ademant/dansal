@@ -2,8 +2,8 @@ package main
 
 import (
 	"bytes"
+	"github.com/ademant/dansal/internal/logging"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -25,7 +25,7 @@ func telegramWebhookProxyHandler(cfg *Config) http.HandlerFunc {
 
 		body, err := io.ReadAll(io.LimitReader(r.Body, maxInboundJSONBody))
 		if err != nil {
-			log.Printf("telegram proxy: read body: %v", err)
+			logging.Errorf("telegram proxy: read body: %v", err)
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -33,7 +33,7 @@ func telegramWebhookProxyHandler(cfg *Config) http.HandlerFunc {
 		target := strings.TrimRight(cfg.DansalURL, "/") + "/telegram/webhook"
 		req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, target, bytes.NewReader(body))
 		if err != nil {
-			log.Printf("telegram proxy: build request: %v", err)
+			logging.Errorf("telegram proxy: build request: %v", err)
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -41,7 +41,7 @@ func telegramWebhookProxyHandler(cfg *Config) http.HandlerFunc {
 
 		resp, err := telegramClient.Do(req)
 		if err != nil {
-			log.Printf("telegram proxy: forward: %v", err)
+			logging.Errorf("telegram proxy: forward: %v", err)
 		} else {
 			resp.Body.Close()
 		}

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"net/url"
 	"strings"
@@ -284,7 +284,7 @@ func fetchSuggestHandler(w http.ResponseWriter, r *http.Request) {
 				}() +
 				fmt.Sprintf("\nWant to manage this organization and its feed yourself? Create an account:\n\n%s\n", registerURL)
 			if _, err := SendEmail(req.Email, "Your feed suggestion", msg, false); err != nil {
-				log.Printf("fetch-suggest: send email: %v", err)
+				logging.Errorf("fetch-suggest: send email: %v", err)
 			}
 		}()
 	}

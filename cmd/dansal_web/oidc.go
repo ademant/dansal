@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -32,7 +32,7 @@ func oidcStartHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		defer cancel()
 		flowID, authorizeURL, err := client.OIDCStart(ctx, providerID, redirectURI, invite)
 		if err != nil {
-			log.Printf("oidc start: %v", err)
+			logging.Errorf("oidc start: %v", err)
 			flashRedirect(w, r, oidcErrorRedirect(invite), flashToken(err), FlashMsg{OIDCLoginError: true})
 			return
 		}
@@ -71,7 +71,7 @@ func oidcCallbackHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		defer cancel()
 		sess, err := client.OIDCCallback(ctx, cookie.Value, code, state)
 		if err != nil {
-			log.Printf("oidc callback: %v", err)
+			logging.Errorf("oidc callback: %v", err)
 			flashRedirect(w, r, "/login", flashToken(err), FlashMsg{OIDCLoginError: true})
 			return
 		}
@@ -120,7 +120,7 @@ func oidcLinkStartHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		defer cancel()
 		flowID, authorizeURL, err := client.OIDCLinkStart(ctx, providerID, redirectURI, token)
 		if err != nil {
-			log.Printf("oidc link start: %v", err)
+			logging.Errorf("oidc link start: %v", err)
 			flashRedirect(w, r, "/settings", flashToken(err), FlashMsg{SettingsLinkError: true})
 			return
 		}
@@ -159,7 +159,7 @@ func oidcLinkCallbackHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 		defer cancel()
 		if err := client.OIDCLinkCallback(ctx, cookie.Value, code, state); err != nil {
-			log.Printf("oidc link callback: %v", err)
+			logging.Errorf("oidc link callback: %v", err)
 			flashRedirect(w, r, "/settings", flashToken(err), FlashMsg{SettingsLinkError: true})
 			return
 		}

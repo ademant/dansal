@@ -229,7 +229,8 @@ test.describe("Admin: location lifecycle", () => {
     await openSection(page, "sec-capacity");
     await page.fill("#capacity", "120");
     await page.locator("#save-btn").click();
-    await page.waitForURL(`**/admin/locations/${minId}/edit?saved=1`);
+    // Success redirects to the edit page with a one-time ?msg= flash token (#1516).
+    await page.waitForURL(new RegExp(`/admin/locations/${minId}/edit\\?msg=`));
     await expect(page.locator(".form-saved")).toBeVisible();
     // the survivor's filled short name persists after save (via API GET)
     const saved = await page.request.fetch(
@@ -264,7 +265,8 @@ test.describe("Admin: location lifecycle", () => {
           },
           { message: `location ${id} should be gone`, timeout: 10_000 }
         )
-        .toBe(404);
+        // Deleted locations are tombstoned and answer 410 Gone (#1455).
+        .toBe(410);
     }
 
     // -- E + org deletion: a fresh throwaway org (never the shared seedOrg)
@@ -351,6 +353,7 @@ test.describe("Admin: location lifecycle", () => {
         },
         { message: "org-linked location E should be gone", timeout: 10_000 }
       )
-      .toBe(404);
+      // Deleted locations are tombstoned and answer 410 Gone (#1455).
+      .toBe(410);
   });
 });

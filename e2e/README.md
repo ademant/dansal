@@ -69,8 +69,12 @@ cd e2e
 export ADMIN_CLI=/usr/lib/dansal/dev/dansal_admin
 export ADMIN_SOCKET=/var/lib/dansal/dev/dansal.sock
 export DANSAL_MAIL_FILE=/var/lib/dansal-e2e-mail/dansal-e2e-mail.mbox
-npx playwright test tests/journeys/<file>.spec.ts --project=desktop --retries=0 --reporter=line --workers=1
+npx playwright test tests/journeys/<file>.spec.ts --project=desktop --reporter=line --workers=1
 ```
+
+Retries come from `playwright.config.ts` (`retries: 1`): a test that fails once
+and passes on the second attempt is reported as flaky, not failed. Do not pass
+`--retries=0` for a normal run, or flaky tests look like real failures.
 
 ## Smoke and full suites
 

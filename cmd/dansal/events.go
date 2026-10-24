@@ -1486,7 +1486,7 @@ func insertEventCore(q querier, in EventInput) (int, string, string, error) {
 		return 0, "", "", err
 	}
 	id, _ := result.LastInsertId()
-	syncEventLocationGeohash(int(id))
+	syncEventLocationGeohash(q, int(id))
 	if locationID != 0 {
 		insertJunctionRow(q, "event_locations", "event_id", "location_id", int(id), locationID)
 	}
@@ -1497,16 +1497,19 @@ func insertEventCore(q querier, in EventInput) (int, string, string, error) {
 }
 
 // syncEventLocationGeohash updates location_geohash on an event from its location's coordinates.
-func syncEventLocationGeohash(eventID int) {
+// It runs on q so that, inside a transaction, it uses the transaction's
+// connection: taking a second connection from the pool while the transaction
+// holds one can deadlock the pool under load (#1639).
+func syncEventLocationGeohash(q querier, eventID int) {
 	var lat, lng sql.NullFloat64
-	if err := db.QueryRow(
+	if err := q.QueryRow(
 		`SELECT l.latitude, l.longitude FROM locations l
 		 JOIN events e ON l.id=e.location_id WHERE e.id=?`, eventID,
 	).Scan(&lat, &lng); err != nil || !lat.Valid || !lng.Valid {
 		return
 	}
 	gh := geohashEncode(lat.Float64, lng.Float64, 7)
-	db.Exec("UPDATE events SET location_geohash=? WHERE id=?", gh, eventID)
+	q.Exec("UPDATE events SET location_geohash=? WHERE id=?", gh, eventID)
 }
 
 // createEventFromRequest inserts or updates all events described by req.
@@ -2746,11 +2749,11 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	syncEventLocationGeohash(tx, id)
 	if err := tx.Commit(); err != nil {
 		writeInternalError(w, err)
 		return
 	}
-	syncEventLocationGeohash(id)
 	recheckDuplicatePair(db, id) // #1427: a by-hand fix of date/room/venue resolves the flag
 
 	event, err := getEventByID(db, id)
@@ -3103,11 +3106,11 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	syncEventLocationGeohash(tx, id)
 	if err := tx.Commit(); err != nil {
 		writeInternalError(w, err)
 		return
 	}
-	syncEventLocationGeohash(id)
 	recheckDuplicatePair(db, id) // #1427: a by-hand fix of date/room/venue resolves the flag
 
 	event, err := getEventByID(db, id)
@@ -4416,7 +4419,7 @@ func setEventLocationRef(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	insertJunctionRow(db, "event_locations", "event_id", "location_id", eventID, req.LocationID)
-	syncEventLocationGeohash(eventID)
+	syncEventLocationGeohash(db, eventID)
 	touchEvent(eventID, callerID)
 	w.WriteHeader(http.StatusNoContent)
 }

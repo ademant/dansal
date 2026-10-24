@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ademant/dansal/internal/logging"
+	"github.com/ademant/dansal/internal/orgmatch"
 )
 
 const pendingRegCookie = "pending_reg"
@@ -53,10 +55,20 @@ type RegisterPageData struct {
 	PrefillOrgWebsite      string
 	PrefillOrgContactEmail string
 	PrefillEmail           string
+	// DedupOffers (#1648): existing organisations to offer instead of the new
+	// one; set when a new-org request matches them.
+	DedupOffers []DedupOfferView
 	// #1415: the rest of the form, refilled from the POST on an error re-render.
 	PrefillDescription string
 	PrefillChannel     string
 	PrefillTelegram    string
+}
+
+// DedupOfferView is one organisation offered on the registration form (#1648).
+type DedupOfferView struct {
+	ID     int
+	Name   string
+	Strong bool // same website host and path: a strong match
 }
 
 // registerFormPrefill (#1415) returns the page data an error re-render needs
@@ -208,6 +220,28 @@ func registerPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 	}
 }
 
+// toOrgMatchOrgs converts the organisation list for the duplicate matcher.
+func toOrgMatchOrgs(orgs []Organization) []orgmatch.Org {
+	out := make([]orgmatch.Org, 0, len(orgs))
+	for _, o := range orgs {
+		out = append(out, orgmatch.Org{ID: o.ID, Name: o.Name, ActorName: o.ActorName, Website: o.Website})
+	}
+	return out
+}
+
+// renderDedupOffer shows the form again with the matching organisations and
+// the choice to join one or to continue with a new organisation (#1648).
+func renderDedupOffer(w http.ResponseWriter, r *http.Request, cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n, ip string, orgs []Organization, info DansalInfo, offers []orgmatch.Offer) {
+	data := registerFormPrefill(r)
+	data.Orgs = orgs
+	data.TelegramAvailable = info.TelegramChannelAvailable
+	data.FormToken = issueFormToken(ip)
+	for _, o := range offers {
+		data.DedupOffers = append(data.DedupOffers, DedupOfferView{ID: o.Org.ID, Name: o.Org.Name, Strong: o.Strong})
+	}
+	renderTemplate(w, tmpls.register, tmplData(r, cfg, i18n, i18n.T(r, "register_title"), data))
+}
+
 func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !registrationEnabled(cfg) {
@@ -271,6 +305,24 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 				if id, err := strconv.Atoi(s); err == nil {
 					orgID = &id
 				}
+			}
+		}
+
+		// #1648: a new organisation that looks like an existing one is offered
+		// first. "join:N" joins organisation N; "create" continues with a new
+		// organisation; any other submit gets the offer when there is one.
+		if action := r.FormValue("dedup_action"); strings.HasPrefix(action, "join:") {
+			if id, err := strconv.Atoi(strings.TrimPrefix(action, "join:")); err == nil && id > 0 {
+				regType = "join_org"
+				orgID = &id
+			}
+		} else if regType == "new_org" && action != "create" {
+			orgs, info := loadRegisterFormData(r.Context(), client)
+			offers := orgmatch.Find(orgmatch.Request{Name: orgName, ActorName: orgActorName, Website: orgWebsite}, toOrgMatchOrgs(orgs))
+			if len(offers) > 0 {
+				logging.Debugf("register: %d existing organisation(s) offered for a new-org request", len(offers))
+				renderDedupOffer(w, r, cfg, tmpls, client, i18n, ip, orgs, info, offers)
+				return
 			}
 		}
 

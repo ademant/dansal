@@ -187,8 +187,8 @@ test.describe("Admin: event lifecycle", () => {
     ]);
     expect(
       [respA.status(), respB.status()].sort(),
-      "merge must leave exactly one of A/B alive (200) and drop the other (404)"
-    ).toEqual([200, 404]);
+      "merge must leave exactly one of A/B alive (200) and drop the other (410: tombstoned, #1455)"
+    ).toEqual([200, 410]);
     const survivorId = respA.status() === 200 ? idA : idB;
 
     // -- Cancel the survivor from the events list; the public event page

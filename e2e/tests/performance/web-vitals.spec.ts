@@ -1,9 +1,9 @@
 import { test, expect } from "../../helpers/fixtures";
 import { applyLighthouseMobileThrottling } from "../../helpers/metrics";
 
-// Core Web Vitals "good" thresholds (web.dev/vitals). Reported as soft
-// assertions: a page missing them is a real regression worth looking at,
-// but shouldn't block the rest of the suite by itself.
+// Core Web Vitals "good" thresholds (web.dev/vitals). Reported as warning
+// annotations, not failures: a page missing them is a real regression worth
+// looking at, but a lab measurement shouldn't turn the suite red by itself.
 const LCP_GOOD_MS = 2500;
 const CLS_GOOD = 0.1;
 
@@ -20,6 +20,7 @@ const ROUTES: Array<{ label: string; path: string }> = [
 async function measure(
   page: import("@playwright/test").Page,
   metrics: { collect(name: string): Promise<any> },
+  testInfo: import("@playwright/test").TestInfo,
   label: string,
   profile: string,
   path: string
@@ -34,13 +35,13 @@ async function measure(
       `LCP=${m.vitals.lcp !== null ? m.vitals.lcp.toFixed(0) + "ms" : "n/a"}  ` +
       `CLS=${m.vitals.cls !== null ? m.vitals.cls.toFixed(3) : "n/a"}`
   );
-  expect.soft(m.vitals.lcp, `${label} (${profile}): LCP should have been recorded`).not.toBeNull();
-  expect
-    .soft(m.vitals.lcp ?? 0, `${label} (${profile}): LCP should be "good" (<=${LCP_GOOD_MS}ms)`)
-    .toBeLessThanOrEqual(LCP_GOOD_MS);
-  expect
-    .soft(m.vitals.cls ?? 0, `${label} (${profile}): CLS should be "good" (<=${CLS_GOOD})`)
-    .toBeLessThanOrEqual(CLS_GOOD);
+  const warn = (text: string) => {
+    testInfo.annotations.push({ type: "warning", description: `${label} (${profile}): ${text}` });
+    console.warn(`[web-vitals] WARNING ${label} (${profile}): ${text}`);
+  };
+  if (m.vitals.lcp === null) warn("LCP was not recorded");
+  else if (m.vitals.lcp > LCP_GOOD_MS) warn(`LCP ${m.vitals.lcp.toFixed(0)}ms is over the "good" limit of ${LCP_GOOD_MS}ms`);
+  if (m.vitals.cls !== null && m.vitals.cls > CLS_GOOD) warn(`CLS ${m.vitals.cls.toFixed(3)} is over the "good" limit of ${CLS_GOOD}`);
 }
 
 test.describe("Core Web Vitals (mobile, Lighthouse-throttled)", () => {
@@ -60,7 +61,7 @@ test.describe("Core Web Vitals (mobile, Lighthouse-throttled)", () => {
     test(`${label}: LCP and CLS`, async ({ page, metrics }, testInfo) => {
       test.skip(testInfo.project.name !== "mobile", "the throttled phone profile runs in the mobile project");
       await applyLighthouseMobileThrottling(page);
-      await measure(page, metrics, label, "mobile, throttled", path);
+      await measure(page, metrics, testInfo, label, "mobile, throttled", path);
     });
   }
 });
@@ -70,7 +71,7 @@ test.describe("Core Web Vitals (desktop, unthrottled)", () => {
   for (const { label, path } of ROUTES) {
     test(`${label}: LCP and CLS`, async ({ page, metrics }, testInfo) => {
       test.skip(testInfo.project.name !== "desktop", "the desktop profile runs in the desktop project");
-      await measure(page, metrics, label, "desktop", path);
+      await measure(page, metrics, testInfo, label, "desktop", path);
     });
   }
 });

@@ -96,22 +96,43 @@ test.describe("Event dedup tiers (API)", () => {
     expect(distinctId).not.toBe(firstId);
   });
 
-  test("Tier 2: same url within 3h merges; outside 3h is distinct", async ({
+  // #1637 / #1638: a manual create (no feed source) whose url and start time
+  // match an existing event is refused with 409 and writes nothing. The
+  // admin can insist with create_anyway; a start 3h+ apart is never a match.
+  test("Tier 2: manual same url within 3h is refused (409); create_anyway or 3h+ is distinct", async ({
     page,
   }) => {
     const url = `https://dedup-t2-${nonce}.example.com/event`;
+    const first = eventPayload({ url });
+    const firstId = await postEvent(page, first);
 
-    const firstId = await postEvent(page, eventPayload({ url }));
-    const mergedId = await postEvent(
-      page,
-      eventPayload({
-        url,
-        title: `Dedup T2 renamed ${nonce}`,
-        start_time: isoDateTime(0, 21, 0),
-        end_time: isoDateTime(0, 23, 0),
-      })
-    );
-    expect(mergedId).toBe(firstId);
+    const clash = eventPayload({
+      url,
+      title: `Dedup T2 renamed ${nonce}`,
+      start_time: isoDateTime(0, 21, 0),
+      end_time: isoDateTime(0, 23, 0),
+    });
+    const refused = await page.request.fetch(`${API_BASE}/api/v1/events`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${seed.token}`,
+      },
+      data: JSON.stringify(clash),
+    });
+    expect(refused.status()).toBe(409);
+    expect((await refused.json()).existing_id).toBe(firstId);
+
+    // The refused create wrote nothing: the matched event keeps its title.
+    const unchanged = await authedJSON(page, "GET", `/api/v1/events/${firstId}`);
+    expect(unchanged.title).toBe(first.title);
+
+    // create_anyway inserts a new event instead.
+    const forced = await apiPost(page, "/api/v1/events", seed.token, {
+      ...clash,
+      create_anyway: true,
+    });
+    expect(forced[0].id).not.toBe(firstId);
 
     const distinctId = await postEvent(
       page,

@@ -133,6 +133,8 @@ var writeSchemaExemptions = map[string]string{
 	// locations-admin: admin location surgery (merge, re-org, children, site-plan)
 	"/api/v1/locations/bulk-assign-org": "locations-admin",
 	"/api/v1/locations/merge":           "locations-admin",
+	// orgs-admin: admin organisation merge (#1644); driven from the admin merge page, no integration target
+	"/api/v1/organizations/merge":       "orgs-admin",
 	"/api/v1/locations/unassign-org":    "locations-admin",
 	"/api/v1/locations/{id}/assign-org": "locations-admin",
 	"/api/v1/locations/{id}/children":   "locations-admin",

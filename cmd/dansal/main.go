@@ -4948,6 +4948,8 @@ func main() {
 	// Protected location writes
 	smux.Handle("POST /api/v1/locations", auth(accountMutationLimit(createLocation)))
 	smux.Handle("POST /api/v1/locations/merge", auth(mergeLocations))
+	smux.Handle("POST /api/v1/organizations/merge", auth(mergeOrganizations))
+	smux.Handle("GET /api/v1/organizations/{id}/merge-preview", auth(getOrgMergePreview))
 	smux.Handle("POST /api/v1/locations/bulk-assign-org", auth(bulkAssignLocationOrg))
 	smux.Handle("POST /api/v1/locations/unassign-org", auth(unassignLocationOrg)) // deprecated (#1380): DELETE .../organizations/{org_id}
 	smux.Handle("PUT /api/v1/locations/{id}/organizations/{org_id}", auth(addLocationOrganization))

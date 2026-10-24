@@ -779,6 +779,7 @@ type Templates struct {
 	adminBookings             *template.Template
 	adminOrgs                 *template.Template
 	adminOrgEdit              *template.Template
+	adminOrgMerge             *template.Template
 	adminFetchurls            *template.Template
 	adminFetchurlNew          *template.Template
 	adminFetchurlEdit         *template.Template
@@ -890,6 +891,7 @@ func loadTemplates() *Templates {
 		adminBookings:             load("admin_bookings"),
 		adminOrgs:                 load("admin_orgs"),
 		adminOrgEdit:              load("admin_org_edit"),
+		adminOrgMerge:             load("admin_org_merge"),
 		adminFetchurls:            load("admin_fetchurls"),
 		adminFetchurlNew:          load("admin_fetchurl_new"),
 		adminFetchurlEdit:         load("admin_fetchurl_edit"),

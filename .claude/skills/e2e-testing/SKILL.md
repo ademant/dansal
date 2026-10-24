@@ -10,7 +10,7 @@ RUN AGAINST dev (code under test must already be deployed to dev)
 cd e2e; export NVM_DIR="$HOME/.config/nvm"; . "$NVM_DIR/nvm.sh"; nvm use default
 export ADMIN_CLI=/usr/lib/dansal/dev/dansal_admin ADMIN_SOCKET=/var/lib/dansal/dev/dansal.sock
 export DANSAL_MAIL_FILE=/var/lib/dansal-e2e-mail/dansal-e2e-mail.mbox   # NOT the helper default (/tmp; unit has PrivateTmp)
-npx playwright test tests/journeys/<f>.spec.ts --project=desktop --retries=0 --reporter=line --workers=1
+npx playwright test tests/journeys/<f>.spec.ts --project=desktop --reporter=line --workers=1   # retries: config default 1; never --retries=0
 ```
 - Always run BOTH `--project=desktop` and `--project=mobile` (Pixel 7). One-project pass = not done.
 - Runs take 15–60 s → `run_in_background`. Stderr `error: email already exists` = noise.

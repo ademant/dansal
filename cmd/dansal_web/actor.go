@@ -598,14 +598,23 @@ func readInboxActivity(w http.ResponseWriter, r *http.Request) (raw map[string]a
 		// Delete{actor}, treat this as confirmed deletion rather than an auth
 		// failure. The 410 is itself the signal that the actor is gone, so
 		// full signature verification is intentionally skipped here.
-		if errors.As(err, new(errActorGone)) {
-			actType, _ := raw["type"].(string)
-			if actType == "Delete" && apObjectID(raw["object"]) == actorField {
-				logging.Debugf("inbox: accepting self-Delete from gone actor %s", actorField)
-				return raw, true
-			}
+		actType, _ := raw["type"].(string)
+		selfDelete := actType == "Delete" && apObjectID(raw["object"]) == actorField
+		if selfDelete && errors.As(err, new(errActorGone)) {
+			logging.Debugf("inbox: accepting self-Delete from gone actor %s", actorField)
+			return raw, true
 		}
-		logging.Warnf("inbox: verification failed for %s: %v", actorField, err)
+		// #1662: suspended accounts' final self-Delete arrives from actors
+		// whose server refuses (401/403) or no longer serves (404) the key.
+		// That's weaker evidence than 410 and the request stays unverified,
+		// so acknowledge it to stop the sender's retries but don't process it.
+		var refused errKeyRefused
+		if selfDelete && errors.As(err, &refused) {
+			logging.Debugf("inbox: acked unverifiable self-Delete from %s: %v", actorField, err)
+			w.WriteHeader(http.StatusAccepted)
+			return nil, false
+		}
+		logging.Warnf("inbox: verification failed for %s (type=%s self=%t): %v", actorField, actType, selfDelete, err)
 		writeJSONError(w, r, http.StatusUnauthorized, "signature verification failed")
 		return nil, false
 	}

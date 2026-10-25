@@ -783,6 +783,9 @@ document.addEventListener('DOMContentLoaded', function(){
     if (road)                                    document.getElementById('address').value = road;
     if (a.postcode)                              document.getElementById('zipcode').value = a.postcode;
     if (a.country_code)                          document.getElementById('country_code').value = a.country_code.toUpperCase();
+    // #1650: a venue name typed in front of the address fills the empty name.
+    var locInp = document.getElementById('location');
+    if (locInp && !locInp.value.trim() && window._geoPrefix) locInp.value = window._geoPrefix;
     var snInp = document.getElementById('short_name');
     if (!snInp.value) {
       var sn = item.name || a.amenity || '';
@@ -812,7 +815,8 @@ document.addEventListener('DOMContentLoaded', function(){
     if (!q) return;
     if (searchBtn) searchBtn.disabled = true;
     results.innerHTML = '<li style="color:#666">…</li>';
-    nominatimSearch(q, document.documentElement.lang || 'de', 8, function(data){
+    nominatimSearch(q, document.documentElement.lang || 'de', 8, function(data, meta){
+      window._geoPrefix = (meta && meta.strippedPrefix) || '';
       if (searchBtn) searchBtn.disabled = false;
       results.innerHTML = '';
       if (!data.length) {

@@ -1317,11 +1317,13 @@ function applyTimeDefaults(dateFrom, dateTo) {
     if (h.osm_id) { val('sg-osm-id', h.osm_id); val('sg-osm-type', h.osm_type); }
     setMode('known', h.label);
   }
-  function pickOSM(res) {
+  function pickOSM(res, prefix) {
     var a = res.address || {};
     clearVenue();
     // Never a house number/road as the name (#1414): only a real place name.
-    val('sg-location', res.name || a.amenity || a.building || a.leisure || '');
+    // A venue name the visitor typed in front of the address (#1650) is the
+    // fallback when OpenStreetMap has no name for the place.
+    val('sg-location', res.name || a.amenity || a.building || a.leisure || prefix || '');
     var road = a.road || a.pedestrian || a.path || '', hn = a.house_number || '';
     val('sg-address', road && hn ? road + ' ' + hn : road || hn);
     val('sg-zipcode', a.postcode || '');
@@ -1365,8 +1367,8 @@ function applyTimeDefaults(dateFrom, dateTo) {
       .catch(function(){})
       .then(done);
     var start = Date.now();
-    nominatimSearch(term, document.documentElement.lang || 'en', 5, function(res) {
-      (res || []).forEach(function(r){ osmUl.appendChild(li(r.display_name, function(){ pickOSM(r); })); });
+    nominatimSearch(term, document.documentElement.lang || 'en', 5, function(res, meta) {
+      (res || []).forEach(function(r){ osmUl.appendChild(li(r.display_name, function(){ pickOSM(r, meta && meta.strippedPrefix); })); });
       if (res && res.length) { osmHead.hidden = false; anyHit = true; }
       done();
       // Same "disabled for at least 2s" anti-spam pacing as before.

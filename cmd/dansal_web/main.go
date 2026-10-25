@@ -544,6 +544,8 @@ func main() {
 		r.HandleFunc("GET /admin/organizations/{id}/edit", adminOrgEditPageHandler(cfg, tmpls, client, i18n, db))
 		r.HandleFunc("POST /admin/organizations/{id}/edit", adminRateLimit(adminOrgSaveHandler(cfg, tmpls, db, client, i18n)))
 		r.HandleFunc("POST /admin/organizations/{id}/delete", adminRateLimit(adminOrgDeleteHandler(cfg, db, client)))
+		r.HandleFunc("GET /admin/organizations/{id}/merge", adminOrgMergePageHandler(cfg, tmpls, client, i18n))
+		r.HandleFunc("POST /admin/organizations/{id}/merge", adminRateLimit(adminOrgMergeSubmitHandler(cfg, tmpls, db, client, i18n)))
 		r.HandleFunc("POST /admin/organizations/{id}/run-feeds", adminRateLimit(adminOrgRunFeedsHandler(cfg, client)))
 		r.HandleFunc("POST /admin/organizations/{id}/redeliver", adminRateLimit(adminOrgRedeliverHandler(cfg, db, client)))
 		r.HandleFunc("POST /admin/organizations/{id}/members", adminRateLimit(adminOrgMemberHandler(cfg, client)))

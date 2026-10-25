@@ -1,0 +1,59 @@
+{{template "base" .}}
+{{define "content"}}
+<style nonce="{{$.Nonce}}">
+.org-merge-table{width:100%;border-collapse:collapse;margin:.75rem 0}
+.org-merge-table th,.org-merge-table td{padding:.35rem .5rem;vertical-align:top;text-align:left}
+.org-merge-table thead th{font-size:.9rem}
+.org-merge-legend{font-size:.9rem;color:#555}
+.merge-cell{display:block;position:relative;cursor:pointer;margin:0}
+.merge-cell input{position:absolute;opacity:0;width:1px;height:1px;margin:0}
+.merge-cell span{display:block;padding:.4rem .6rem;border:2px solid #c62828;border-radius:6px;background:#fdecea;word-break:break-word}
+.merge-cell span::before{content:"✕ ";font-weight:700;color:#c62828}
+.merge-cell input:checked + span{border-color:#2e7d32;background:#e6f4ea}
+.merge-cell input:checked + span::before{content:"✓ ";color:#2e7d32}
+.merge-cell input:focus-visible + span{outline:2px solid #1a6eb5;outline-offset:2px}
+.org-merge-auto{color:#555}
+</style>
+
+<h1>{{.Strings.T "org_merge_title"}}</h1>
+<p>{{.Strings.T "org_merge_intro"}}</p>
+{{with .Data}}
+{{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
+{{if not .Compare}}
+<form method="get" action="/admin/organizations/{{.KeepID}}/merge">
+  <p><strong>{{.KeepName}}</strong> ← <label for="merge-with">{{$.Strings.T "org_merge_choose"}}</label></p>
+  <select id="merge-with" name="with" required>
+    {{range .Others}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+  </select>
+  <button type="submit" class="btn-primary">{{$.Strings.T "org_merge_compare"}}</button>
+</form>
+{{else}}
+<form method="post" action="/admin/organizations/{{.KeepID}}/merge">
+  <input type="hidden" name="merge_id" value="{{.MergeID}}">
+  <p class="org-merge-legend">{{$.Strings.T "org_merge_legend"}}</p>
+  <table class="org-merge-table">
+    <thead><tr>
+      <th scope="col"></th>
+      <th scope="col">{{$.Strings.T "org_merge_keep_head"}}: {{.KeepName}}</th>
+      <th scope="col">{{$.Strings.T "org_merge_merge_head"}}: {{.MergeName}}</th>
+    </tr></thead>
+    <tbody>
+    {{range .Rows}}
+      <tr>
+        <th scope="row">{{$.Strings.T .LabelKey}}</th>
+        {{if .Auto}}
+        <td colspan="2" class="org-merge-auto">{{.Value}} <small>({{$.Strings.T "org_merge_auto"}})</small></td>
+        {{else}}
+        <td><label class="merge-cell"><input type="radio" name="choice_{{.Field}}" value="keep"{{if .KeepSide}} checked{{end}}><span>{{.Keep}}</span></label></td>
+        <td><label class="merge-cell"><input type="radio" name="choice_{{.Field}}" value="merge"{{if .MergeSide}} checked{{end}}><span>{{.Merge}}</span></label></td>
+        {{end}}
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{if not .Rows}}<p>{{$.Strings.T "org_merge_no_conflicts"}}</p>{{end}}
+  <button type="submit" class="btn-primary">{{$.Strings.T "org_merge_submit"}}</button>
+</form>
+{{end}}
+{{end}}
+{{end}}

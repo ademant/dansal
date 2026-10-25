@@ -50,6 +50,24 @@ func (e errActorGone) Error() string {
 	return fmt.Sprintf("actor key %q returned 410 Gone", e.keyID)
 }
 
+// errKeyRefused is returned by fetchActorPublicKey when the remote key
+// endpoint answered 401/403 (also via the denied cache) or 404. Unlike
+// errActorGone it is not proof of deletion, so callers may only use it to
+// acknowledge an unverifiable self-Delete without acting on it (#1662).
+// The messages match the earlier plain errors so log lines stay comparable.
+type errKeyRefused struct {
+	keyID  string
+	status int  // HTTP status of the key fetch; 0 when served from the denied cache
+	cached bool // true when the denied cache answered without a fetch
+}
+
+func (e errKeyRefused) Error() string {
+	if e.cached {
+		return "actor key fetch refused (cached)"
+	}
+	return fmt.Sprintf("actor fetch returned HTTP %d", e.status)
+}
+
 // doKeyFetchRequest issues one GET for the actor document at url, signed
 // with the relay actor key (#1432) unless signed is false -- the #1456
 // unsigned retry.
@@ -89,7 +107,7 @@ func fetchActorPublicKey(ctx context.Context, httpClient *http.Client, keyID str
 		}
 		if e.denied && time.Since(e.fetchedAt) < deniedCacheTTL {
 			pubKeyCacheMu.Unlock()
-			return "", "", fmt.Errorf("actor key fetch refused (cached)")
+			return "", "", errKeyRefused{keyID: keyID, cached: true}
 		}
 		if !e.gone && time.Since(e.fetchedAt) < pubKeyCacheTTL {
 			pubKeyCacheMu.Unlock()
@@ -128,13 +146,13 @@ func fetchActorPublicKey(ctx context.Context, httpClient *http.Client, keyID str
 		if resp.StatusCode == http.StatusGone {
 			return "", "", errActorGone{keyID: keyID}
 		}
-		return "", "", fmt.Errorf("actor fetch returned HTTP %d", resp.StatusCode)
+		return "", "", errKeyRefused{keyID: keyID, status: resp.StatusCode}
 	}
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		pubKeyCacheMu.Lock()
 		pubKeyCache[keyID] = pubKeyEntry{denied: true, fetchedAt: time.Now()}
 		pubKeyCacheMu.Unlock()
-		return "", "", fmt.Errorf("actor fetch returned HTTP %d", resp.StatusCode)
+		return "", "", errKeyRefused{keyID: keyID, status: resp.StatusCode}
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "", "", fmt.Errorf("actor fetch returned HTTP %d", resp.StatusCode)

@@ -1204,6 +1204,7 @@ type EventFilter struct {
 	Offset          int
 	Town            string
 	Tag             string
+	Title           string // substring match on the event title (API LIKE)
 }
 
 // Values encodes the filter as API query parameters.
@@ -1235,6 +1236,9 @@ func (f EventFilter) Values() url.Values {
 	}
 	if f.Tag != "" {
 		q.Set("tag", f.Tag)
+	}
+	if f.Title != "" {
+		q.Set("title", f.Title)
 	}
 	return q
 }

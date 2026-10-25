@@ -4,15 +4,29 @@
   {{with .Data}}
   <h1 class="error-page-title">{{.Title}}</h1>
   <p class="error-page-message">{{.Message}}</p>
+  {{if .Suggestions}}
+  <h2 class="error-page-suggest-heading">{{.SuggestHeading}}</h2>
+  <ul class="error-page-suggest">
+    {{range .Suggestions}}
+    <li><a href="{{.URL}}">{{.Title}}</a>{{if .StartTime}} <span class="error-page-suggest-sub">{{formatDate $.LangCode $.DateFormat .StartTime}}</span>{{else if .Sub}} <span class="error-page-suggest-sub">{{.Sub}}</span>{{end}}</li>
+    {{end}}
+  </ul>
+  {{end}}
   <a href="/" class="error-page-home">{{.BackHome}}</a>
+  {{range .Links}}<a href="{{.URL}}" class="error-page-link">{{.Label}}</a>{{end}}
   {{end}}
 </div>
 
-<style>
+<style nonce="{{$.Nonce}}">
 .error-page-wrap{max-width:480px;margin:4rem auto;text-align:center}
 .error-page-title{font-size:1.6rem;margin-bottom:.75rem}
 .error-page-message{color:var(--fg-muted);margin-bottom:1.5rem}
+.error-page-suggest-heading{font-size:1.1rem;margin:0 0 .5rem}
+.error-page-suggest{list-style:none;padding:0;margin:0 0 1.5rem;text-align:left}
+.error-page-suggest li{padding:.35rem 0;border-bottom:1px solid var(--border,#ddd)}
+.error-page-suggest-sub{color:var(--fg-muted);font-size:.9em;white-space:nowrap}
 .error-page-home{display:inline-block;padding:.5rem 1.2rem;border-radius:4px;background:var(--link);color:#fff;font-weight:600;text-decoration:none}
 .error-page-home:hover{background:var(--link-h)}
+.error-page-link{display:inline-block;margin-left:1rem}
 </style>
 {{end}}

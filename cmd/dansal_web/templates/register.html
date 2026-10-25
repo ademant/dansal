@@ -78,7 +78,21 @@
     <button type="button" class="tab-btn{{if eq .PrefillRegType "new_org"}} active{{end}}" data-fn="switchTab" data-args='["new"]'>{{$.Strings.T "register_tab_new"}}</button>
   </div>
 
-  <form method="post" action="/register">
+  {{if .DedupOffers}}
+  <style nonce="{{$.Nonce}}">.dedup-offer{border:2px solid #c62828;border-radius:8px;padding:.75rem 1rem;margin:0 0 1.25rem;background:#fdecea}.dedup-offer ul{margin:.25rem 0 .75rem 1.2rem}</style>
+  <div class="dedup-offer" role="alert">
+    <p><strong>{{$.Strings.T "register_dedup_title"}}</strong> {{$.Strings.T "register_dedup_intro"}}</p>
+    <ul>
+    {{range .DedupOffers}}<li>{{.Name}}{{if .Strong}} <small>({{$.Strings.T "register_dedup_same_site"}})</small>{{end}}</li>{{end}}
+    </ul>
+    <p>
+    {{range .DedupOffers}}<button type="submit" form="register-form" name="dedup_action" value="join:{{.ID}}" class="btn-primary">{{$.Strings.T "register_dedup_join"}}: {{.Name}}</button> {{end}}
+    <button type="submit" form="register-form" name="dedup_action" value="create" class="btn-secondary">{{$.Strings.T "register_dedup_create"}}</button>
+    </p>
+  </div>
+  {{end}}
+
+  <form method="post" action="/register" id="register-form">
     <input type="hidden" name="_form_token" value="{{.FormToken}}">
     <input type="text" name="dansal_phone2" class="hp-field" style="display:none!important" tabindex="-1" autocomplete="off">
 

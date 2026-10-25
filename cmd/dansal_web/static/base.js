@@ -112,6 +112,17 @@ function shareURL(url, btn) {
 }
 // closeBulkAttrsDialog: shared by the admin events/locations/org bulk-attrs modal.
 function closeBulkAttrsDialog() { document.getElementById('bulk-attrs-dialog').close(); }
+// updateActorPreview (#1647): shows the Fediverse handle an organisation name
+// will get on the registration form, as the applicant types. The host comes
+// from data-host on the preview element.
+function updateActorPreview(v) {
+  var out = document.getElementById('actor-preview');
+  if (!out) return;
+  var host = out.getAttribute('data-host') || '';
+  v = (v || '').trim();
+  out.textContent = v && host ? '@' + v + '@' + host : '';
+}
+
 // toggleKuferFields: shared by the fetchurl new/edit forms' "type" select.
 function toggleKuferFields(val) {
   document.getElementById('kufer-fields').style.display = val === 'kufer' ? '' : 'none';

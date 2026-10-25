@@ -338,11 +338,13 @@ func main() {
 		// Legacy Gancio identifiers belonged to a different database, so they
 		// cannot be safely redirected to a current Dansal resource. 410 is
 		// truthful and avoids homepage soft-404s in search engines (#1433).
-		r.HandleFunc("GET /event/{slug}", legacyGancioGone)
-		r.HandleFunc("GET /tag/{slug}", legacyGancioGone)
-		r.HandleFunc("GET /collection/{name}", legacyGancioGone)
-		r.HandleFunc("GET /place/{id}/{slug...}", legacyGancioGone)
-		r.HandleFunc("GET /export", legacyGancioGone)
+		// Browsers get matching events/venues from the old slug (#1661).
+		legacyGone := legacyGoneHandler(client)
+		r.HandleFunc("GET /event/{slug}", legacyGone)
+		r.HandleFunc("GET /tag/{slug}", legacyGone)
+		r.HandleFunc("GET /collection/{name}", legacyGone)
+		r.HandleFunc("GET /place/{id}/{slug...}", legacyGone)
+		r.HandleFunc("GET /export", legacyGone)
 		// Legacy Gancio event images (#1458): no mapping exists from Gancio's
 		// media hashes to current images, same reasoning as the identifiers above.
 		r.HandleFunc("GET /media/{file...}", legacyGancioGone)

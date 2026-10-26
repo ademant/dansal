@@ -68,6 +68,25 @@ type ErrorPageData struct {
 	Title    string
 	Message  string
 	BackHome string
+	// #1661: optional extras for the legacy-URL 410 page — "maybe you're
+	// looking for" links derived from the old slug, plus further nav links.
+	SuggestHeading string
+	Suggestions    []ErrorPageSuggestion
+	Links          []ErrorPageLink
+}
+
+// ErrorPageSuggestion is one candidate on the legacy 410 page. StartTime is
+// set for events (formatted in the template), Sub for venues (the town).
+type ErrorPageSuggestion struct {
+	Title     string
+	URL       string
+	StartTime string
+	Sub       string
+}
+
+type ErrorPageLink struct {
+	Label string
+	URL   string
 }
 
 // errorPageDeps holds the one Config/Templates/I18n instance this process
@@ -123,12 +142,17 @@ func htmlError(w http.ResponseWriter, r *http.Request, status int) {
 		titleKey, msgKey = keys[0], keys[1]
 	}
 	i18n := errorPageDeps.i18n
-	title := i18n.T(r, titleKey)
-	td := tmplData(r, errorPageDeps.cfg, i18n, title, ErrorPageData{
-		Title:    title,
+	renderErrorPage(w, r, status, ErrorPageData{
+		Title:    i18n.T(r, titleKey),
 		Message:  i18n.T(r, msgKey),
 		BackHome: i18n.T(r, "error_page_back_home"),
 	})
+}
+
+// renderErrorPage writes the styled error page with status. Callers check
+// wantsHTML and errorPageDeps.tmpls first.
+func renderErrorPage(w http.ResponseWriter, r *http.Request, status int, data ErrorPageData) {
+	td := tmplData(r, errorPageDeps.cfg, errorPageDeps.i18n, data.Title, data)
 	// Content-Type must be set before WriteHeader; renderTemplate's own
 	// identical Header().Set() call after is then a harmless no-op.
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

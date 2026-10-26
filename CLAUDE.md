@@ -281,7 +281,7 @@ Full removal of `has_*` from the API and DB is tracked in issue #871 (Layer 1: `
 
 3. **`fetchActorPublicKey` is scheme-agnostic.** Both schemes use the same `keyId`/key-URL lookup and the same `pubKeyCache`. Do not fork key fetching per scheme.
 
-4. **Negative caches apply to both schemes:** 404/410 (`errActorGone`, `negCacheTTL`) and, since #1432, 401/403 to our signed key fetch (`denied`, `deniedCacheTTL` = 1 h). A gone or refusing actor is so regardless of which signature scheme the remote used. Key fetches are capped at `keyFetchTimeout` (5 s) because the sender is waiting on our inbox answer.
+4. **Negative caches apply to both schemes:** 404/410 (`errActorGone`, `negCacheTTL`) and, since #1432, 401/403 to our signed key fetch (`denied`, `deniedCacheTTL` = 1 h). A gone or refusing actor is so regardless of which signature scheme the remote used. Key fetches are capped at `keyFetchTimeout` (5 s) because the sender is waiting on our inbox answer. Failures are typed: `errActorGone` (410) → `readInboxActivity` processes a self-`Delete`; `errKeyRefused` (401/403/404, incl. the denied cache) → a self-`Delete` is acked 202 but **not** processed (#1662, unverified). Keep both error messages unchanged — log analysis greps them.
 
 5. **`VerifyRequest` is draft-cavage only;** RFC 9421 goes through the separate `VerifyRequestRFC9421(r, pubKeyPEM, sigInput, sigBytes string) error`. The signing-base construction is fundamentally different (`\n`-joined `"name": value` lines ending in `"@signature-params"`, not a joining of header values). The structured-field parser (`parseSFDictionary`) keeps each member's raw text, because the `@signature-params` line must reproduce the sender's serialization byte for byte.
 

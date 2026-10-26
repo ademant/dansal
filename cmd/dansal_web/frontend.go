@@ -1015,6 +1015,8 @@ func legacyGancioRedirect(target string) http.HandlerFunc {
 // a different database and therefore cannot be mapped reliably. A permanent
 // redirect to the homepage is a crawler soft-404 and sends visitors somewhere
 // unrelated; 410 lets both clients stop retrying the dead URL (#1433).
+// Only /media/ still uses it; page routes go through legacyGoneHandler,
+// which adds suggestions for browsers (#1661).
 func legacyGancioGone(w http.ResponseWriter, r *http.Request) {
 	htmlError(w, r, http.StatusGone)
 }

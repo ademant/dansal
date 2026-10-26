@@ -31,6 +31,7 @@ export default defineConfig({
     ["list"],
     ["json", { outputFile: "test-results/results.json" }],
     ["./helpers/reporter.ts"],
+    ["./helpers/failure-reporter.ts"],
   ],
   use: {
     baseURL: BASE_URL,

@@ -32,6 +32,16 @@
 {{end}}
 {{define "content"}}
 {{with .Data}}
+{{/* #1673: phone tab bar. Panels keep the desktop order; on desktop the bar
+     is hidden and every panel shows. */}}
+<div class="mtab-root" id="mus-tabs" data-mtab="info">
+<div class="mtabs mtabs-icons" role="tablist" aria-label="{{$.Strings.T "mtab_label"}}">
+  <button type="button" role="tab" class="mtab" data-tab="info" aria-controls="mus-tabs" aria-selected="true" tabindex="0"><span class="mtab-ico" aria-hidden="true">ℹ️</span><span class="mtab-label">{{$.Strings.T "mtab_info"}}</span></button>
+  <button type="button" role="tab" class="mtab{{if not .UpcomingEvents}} is-empty{{end}}" data-tab="calendar" aria-controls="mus-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">📅</span><span class="mtab-label">{{$.Strings.T "mtab_calendar"}}</span></button>
+  <button type="button" role="tab" class="mtab{{if not .Events}} is-empty{{end}}" data-tab="events" aria-controls="mus-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">🗓️</span><span class="mtab-label">{{$.Strings.T "mtab_events"}}</span></button>
+  <button type="button" role="tab" class="mtab{{if not (or .Musician.Gallery .Musician.Media .Musician.Internetsite .Musician.Mastodon .Musician.Instagram .Musician.Facebook .Musician.Soundcloud .Musician.Spotify .Musician.Deezer .Musician.MBID)}} is-empty{{end}}" data-tab="meta" aria-controls="mus-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">🔗</span><span class="mtab-label">{{$.Strings.T "mtab_meta"}}</span></button>
+</div>
+<div class="mtab-panel" data-tab="info">
 <div class="musician-header">
   {{if .Musician.ImageURL}}
   <div style="position:relative;display:inline-block">
@@ -90,6 +100,9 @@
 </div>
 {{end}}
 
+</div>
+
+<div class="mtab-panel" data-tab="meta">
 {{if or .Musician.Internetsite .Musician.Mastodon .Musician.Instagram .Musician.Facebook .Musician.Soundcloud .Musician.Spotify .Musician.Deezer .Musician.MBID}}
 <div class="page-section">
   <div class="musician-links">
@@ -123,12 +136,15 @@
 {{end}}
 
 {{template "media-links-list" (dict "S" $.Strings "Links" .Musician.Media)}}
+</div>
 
 <div class="page-section">
+  <div class="mtab-panel" data-tab="events">
   <div class="events-heading-row">
     <h2 class="section-heading">{{$.Strings.T "musician_upcoming_events"}}</h2>
     {{if .HasPast}}
     <form method="get" class="past-toggle">
+      <input type="hidden" name="tab" value="events">
       {{if .IncludePast}}
       <button type="submit" name="include_past" value="" class="btn-toggle btn-toggle-active">{{$.Strings.T "filter_include_past"}}</button>
       {{else}}
@@ -137,7 +153,9 @@
     </form>
     {{end}}
   </div>
+  </div>
 
+  <div class="mtab-panel" data-tab="calendar">
   <div class="feed-links">
     <div class="cal-dd">
       <button type="button" class="btn-icon" data-fn="toggleInfoPopup" data-args='["@this"]' title="{{$.Strings.T "cal_subscribe"}}" aria-label="{{$.Strings.T "cal_subscribe"}}">📅</button>
@@ -154,7 +172,9 @@
   {{/* Follow-up to #1161/#1167: rolling monthly calendar, same shared component as /org/{slug}.
       Always upcoming-only, independent of the include_past toggle above. */}}
   {{template "month-calendar" (dict "ID" "musician-calendar" "Events" .UpcomingEvents "Strings" $.Strings "Nonce" $.Nonce)}}
+  </div>
 
+  <div class="mtab-panel" data-tab="events">
   {{if .Events}}
   {{/* Map — only rendered if at least one event has coordinates */}}
   <div id="mmap-wrap" hidden>
@@ -184,6 +204,9 @@
   {{end}}
   </ul>
   {{else}}<p class="empty-msg">{{$.Strings.T "musician_no_events"}}</p>{{end}}
+  </div>
+</div>
+<p class="mtab-empty">{{$.Strings.T "evt_mtab_empty"}}</p>
 </div>
 
 {{end}}{{/* .Data */}}
@@ -249,6 +272,7 @@ document.addEventListener('DOMContentLoaded', function(){
   // below, which refines this default once the marker bounds are known).
   var map = L.map('mmap').setView([50,10], 5);
   attachTileLayer(map);
+  window.mmap = map;
 
   var bounds = [];
   geo.forEach(function(e){
@@ -268,6 +292,17 @@ document.addEventListener('DOMContentLoaded', function(){
   }
 
   function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+});
+// #1673: phone tab bar. The include-past form reloads the page, so ?tab=
+// keeps the Events tab open after the reload.
+document.addEventListener('DOMContentLoaded', function(){
+  var root = document.getElementById('mus-tabs');
+  if (!root) return;
+  var t = new URLSearchParams(location.search).get('tab');
+  if (t && root.querySelector('.mtab[data-tab="' + t + '"]')) root.setAttribute('data-mtab', t);
+  dansalMtabs(root, function(tab){
+    if (tab === 'events' && window.mmap) window.mmap.invalidateSize();
+  });
 });
 </script>
 {{end}}

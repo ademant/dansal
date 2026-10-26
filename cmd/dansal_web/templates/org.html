@@ -40,6 +40,19 @@
 {{end}}
 {{define "content"}}
 {{with .Data}}
+{{/* #1672: phone tab bar. Panels keep the desktop order; on desktop the bar
+     is hidden and every panel shows. */}}
+{{$geo := eventsGeoJSON .AllEvents}}
+<div class="mtab-root" id="org-tabs" data-mtab="info">
+<div class="mtabs mtabs-icons" role="tablist" aria-label="{{$.Strings.T "mtab_label"}}">
+  <button type="button" role="tab" class="mtab" data-tab="info" aria-controls="org-tabs" aria-selected="true" tabindex="0"><span class="mtab-ico" aria-hidden="true">ℹ️</span><span class="mtab-label">{{$.Strings.T "mtab_info"}}</span></button>
+  <button type="button" role="tab" class="mtab{{if not .UpcomingEvents}} is-empty{{end}}" data-tab="calendar" aria-controls="org-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">📅</span><span class="mtab-label">{{$.Strings.T "mtab_calendar"}}</span></button>
+  <button type="button" role="tab" class="mtab{{if and (not .UpcomingEvents) (not .PastEvents)}} is-empty{{end}}" data-tab="events" aria-controls="org-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">🗓️</span><span class="mtab-label">{{$.Strings.T "mtab_events"}}</span></button>
+  <button type="button" role="tab" class="mtab{{if not .Musicians}} is-empty{{end}}" data-tab="musicians" aria-controls="org-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">🎵</span><span class="mtab-label">{{$.Strings.T "mtab_musicians"}}</span></button>
+  <button type="button" role="tab" class="mtab{{if not .RecurringSeries}} is-empty{{end}}" data-tab="series" aria-controls="org-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">🔁</span><span class="mtab-label">{{$.Strings.T "mtab_series"}}</span></button>
+  <button type="button" role="tab" class="mtab{{if eq (printf "%s" $geo) "[]"}} is-empty{{end}}" data-tab="map" aria-controls="org-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">🗺️</span><span class="mtab-label">{{$.Strings.T "mtab_map"}}</span></button>
+</div>
+<div class="mtab-panel" data-tab="info">
 {{with .Org.ImageURL}}<div style="position:relative;display:block"><img src="{{.}}" fetchpriority="high" alt="{{$.Data.Org.Name}}{{if $.Data.Org.ImageAIGenerated}}; {{$.Strings.T "evt_image_ai_label"}}{{end}}" class="org-banner">{{if $.Data.Org.ImageAIGenerated}}<img src="/ai-badge" alt="{{$.Strings.T "evt_image_ai_label"}}" style="position:absolute;bottom:8px;right:8px;max-width:64px;max-height:64px;pointer-events:none">{{end}}</div>{{end}}
 <span data-print-qr hidden></span>
 <div class="org-page-header">
@@ -103,8 +116,10 @@
   </div>
 </div>
 
+</div>
+
 {{/* Map with event locations */}}
-{{$geo := eventsGeoJSON .AllEvents}}
+<div class="mtab-panel" data-tab="map">
 {{if ne (printf "%s" $geo) "[]"}}
 <div id="org-map" style="height:280px;border-radius:6px;margin:1.25rem 0;border:1px solid #ddd"></div>
 <script nonce="{{$.Nonce}}" defer src="/static/qrcode.min.js"></script>
@@ -122,6 +137,7 @@ document.addEventListener('DOMContentLoaded', function(){
   // below, which refines this default once the marker bounds are known).
   var map = L.map('org-map').setView([50,10], 5);
   attachTileLayer(map);
+  window.orgMap = map;
   var bounds = [];
   geo.forEach(function(e){
     if (!e.lat || !e.lng) return;
@@ -136,15 +152,19 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 </script>
 {{end}}
+</div>
 
 {{/* #1161/#1167: rolling monthly calendar, shared component (base.html) also
     used by location.html, musician.html and instructor.html. */}}
+<div class="mtab-panel" data-tab="calendar">
 {{template "month-calendar" (dict "ID" "org-calendar" "Events" .UpcomingEvents "Strings" $.Strings "Nonce" $.Nonce)}}
+</div>
 
 {{/* #1185: recurring-series disclosure — only series with a cadence set AND
     at least one upcoming published event show up here (see
     recurringSeriesFromEvents' doc comment in frontend.go for why that
     condition holds by construction). */}}
+<div class="mtab-panel" data-tab="series">
 {{if .RecurringSeries}}
 <div class="org-recurring">
   <h2 class="section-heading">{{$.Strings.T "org_recurring_title"}}</h2>
@@ -159,8 +179,10 @@ document.addEventListener('DOMContentLoaded', function(){
   </ul>
 </div>
 {{end}}
+</div>
 
 {{/* Upcoming events */}}
+<div class="mtab-panel" data-tab="events">
 <div class="events-heading-row">
   <h2 class="section-heading">{{$.Strings.T "org_events_title"}}</h2>
   {{if .PastEvents}}
@@ -207,7 +229,10 @@ document.addEventListener('DOMContentLoaded', function(){
 </ul>
 {{end}}
 
+</div>
+
 {{/* Musicians */}}
+<div class="mtab-panel" data-tab="musicians">
 {{if .Musicians}}
 <div class="org-musicians">
   <h2 class="section-heading">{{$.Strings.T "org_musicians_title"}}</h2>
@@ -219,6 +244,10 @@ document.addEventListener('DOMContentLoaded', function(){
 </div>
 {{end}}
 
+</div>
+</div>
+<p class="mtab-empty">{{$.Strings.T "evt_mtab_empty"}}</p>
+</div>
 {{end}}{{/* .Data */}}
 
 <style>
@@ -277,5 +306,15 @@ function togglePastList(btn) {
   l.hidden = !l.hidden;
   btn.classList.toggle('btn-toggle-active');
 }
+</script>
+<script nonce="{{$.Nonce}}">
+// #1672: phone tab bar. The map is sized again when its tab opens.
+document.addEventListener('DOMContentLoaded', function(){
+  var root = document.getElementById('org-tabs');
+  if (!root) return;
+  dansalMtabs(root, function(tab){
+    if (tab === 'map' && window.orgMap) window.orgMap.invalidateSize();
+  });
+});
 </script>
 {{end}}

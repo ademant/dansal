@@ -1636,7 +1636,8 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   });
   // The bar steps aside while a form field has focus (on-screen keyboard).
-  dansalTabBarKeyboard(bar);
+  // base.js loads with defer, so the helper exists only once parsing is done.
+  document.addEventListener('DOMContentLoaded', function(){ dansalTabBarKeyboard(bar); });
   // #1670: a tap on the photo opens it fullscreen, with its aspect ratio kept.
   var lb=document.getElementById('evt-lightbox'), lbImg=document.getElementById('evt-lightbox-img');
   var hero=document.querySelector('.evt-hero-img');

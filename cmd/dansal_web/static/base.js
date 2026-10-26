@@ -1174,7 +1174,8 @@ function watchlistUI(){
   var stars=document.querySelectorAll('[data-wl-star]');
   for(var s=0;s<stars.length;s++){
     var on=ids.indexOf(parseInt(stars[s].getAttribute('data-wl-star'),10))>=0;
-    stars[s].textContent=on?'★':'☆';
+    var glyph=stars[s].querySelector('.wl-star-glyph')||stars[s];
+    glyph.textContent=on?'★':'☆';
     stars[s].setAttribute('aria-pressed',on?'true':'false');
   }
 }

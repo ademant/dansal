@@ -47,6 +47,20 @@ func TestEventPagePhoneTabs(t *testing.T) {
 			t.Errorf("event page missing %s", want)
 		}
 	}
+	// #1670: the notice sits on the General tab, the lightbox and the phone watchlist link exist
+	for _, want := range []string{
+		`id="evt-lightbox"`,
+		`class="evt-lightbox-close"`,
+		`class="evt-wl-link evt-phone-only evt-panel" data-tab="general"`,
+		`<p class="evt-disclaimer evt-panel" data-tab="general">`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("event page missing %s", want)
+		}
+	}
+	if strings.Contains(html, `class="evt-disclaimer evt-panel" data-tab="details"`) {
+		t.Error("the notice must not stay on the Details tab")
+	}
 	if strings.Contains(html, `class="mtab is-empty" data-tab="board"`) {
 		t.Error("the board tab is never grayed out")
 	}

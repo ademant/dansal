@@ -170,17 +170,21 @@
 {{if or .ImageURL $.Data.SeriesImageURL (and $.Data.Org $.Data.Org.ImageURL)}}
 <div class="evt-hero" style="position:relative;display:inline-block;width:100%">
   {{if .ImageURL}}
-  <img src="{{.ImageURL}}" fetchpriority="high" alt="{{.Title}}{{if .ImageAIGenerated}}; {{$.Strings.T "evt_image_ai_label"}}{{end}}" style="width:100%;display:block">
+  <img src="{{.ImageURL}}" fetchpriority="high" class="evt-hero-img" role="button" tabindex="0" alt="{{.Title}}{{if .ImageAIGenerated}}; {{$.Strings.T "evt_image_ai_label"}}{{end}}" style="width:100%;display:block">
   {{if .ImageAIGenerated}}<img src="/ai-badge" alt="{{$.Strings.T "evt_image_ai_label"}}" style="position:absolute;bottom:8px;right:8px;max-width:64px;max-height:64px;pointer-events:none">{{end}}
   {{else}}
   {{/* No own image: a series-banner+date or org-banner+title overlay is generated server-side (#1082, #1083) rather than showing the plain, identical-across-every-event banner. */}}
   {{$bannerAI := $.Data.SeriesImageAIGenerated}}
   {{if and (not $.Data.SeriesImageURL) $.Data.Org}}{{$bannerAI = $.Data.Org.ImageAIGenerated}}{{end}}
-  <img src="/api/v1/event-banner/{{.ID}}" fetchpriority="high" alt="{{.Title}}{{if $bannerAI}}; {{$.Strings.T "evt_image_ai_label"}}{{end}}" style="width:100%;display:block">
+  <img src="/api/v1/event-banner/{{.ID}}" fetchpriority="high" class="evt-hero-img" role="button" tabindex="0" alt="{{.Title}}{{if $bannerAI}}; {{$.Strings.T "evt_image_ai_label"}}{{end}}" style="width:100%;display:block">
   {{if $bannerAI}}<img src="/ai-badge" alt="{{$.Strings.T "evt_image_ai_label"}}" style="position:absolute;bottom:8px;right:8px;max-width:64px;max-height:64px;pointer-events:none">{{end}}
   {{end}}
 </div>
 {{end}}
+<dialog id="evt-lightbox" class="evt-lightbox" aria-label="{{.Title}}">
+  <img id="evt-lightbox-img" src="/ai-badge" alt="">
+  <button type="button" class="evt-lightbox-close" data-close aria-label="{{$.Strings.T "index_about_close"}}">&#10005;</button>
+</dialog>
 
 {{if or $.Data.PrevEvent $.Data.NextEvent .SeriesCadence}}
 <nav class="series-nav">
@@ -275,6 +279,11 @@
     </span>
     {{end}}
   </div>
+  {{/* #1670: phone info block (General tab): the venue, the watchlist link and
+       the notice, under the header. Desktop hides the phone-only parts. */}}
+  {{with .Location}}{{if .Location}}<p class="evt-phone-only evt-panel evt-info-venue" data-tab="general">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</p>{{end}}{{end}}
+  <button type="button" class="evt-wl-link evt-phone-only evt-panel" data-tab="general" data-wl-star="{{.ID}}" data-fn="watchlistToggle" data-args="[{{.ID}}]" aria-pressed="false"><span class="wl-star-glyph" aria-hidden="true">☆</span> {{$.Strings.T "wl_header_title"}}</button>
+  <p class="evt-disclaimer evt-panel" data-tab="general">{{$.Strings.T "evt_disclaimer"}}</p>
   {{/* #1469: visible to every visitor (not just logged-in editors — that's
        the separate badge-unusual-date above), server-rendered so the page
        stays cacheable and old bookmarks/shares/fediverse posts land on a
@@ -777,7 +786,6 @@
     {{end}}
     {{end}}
 
-    <p class="evt-disclaimer evt-panel" data-tab="details">{{$.Strings.T "evt_disclaimer"}}</p>
   </aside>
 </div>
 
@@ -1258,9 +1266,26 @@
 .tpl-msg{font-size:.82rem}
 .tpl-msg.ok{color:#155724}
 .tpl-msg.err{color:#991b1b}
-/* #1617: phone tab bar for the event page. Above 680px nothing here applies. */
+/* #1617: phone tab bar for the event page. The bar (base.html) shows up to
+   640px, so the tab panels switch at the same width. */
 .evt-tab-empty{color:var(--fg-muted);text-align:center;padding:1rem;font-size:.92rem}
-@media(max-width:680px){
+.evt-phone-only{display:none}
+.evt-lightbox{width:100vw;height:100vh;max-width:100vw;max-height:100vh;margin:0;padding:0;border:0;background:#000}
+.evt-lightbox[open]{display:flex;align-items:center;justify-content:center}
+.evt-lightbox::backdrop{background:#000}
+.evt-lightbox img{max-width:100%;max-height:100%;object-fit:contain}
+.evt-lightbox-close{position:fixed;top:.5rem;right:.5rem;min-width:44px;min-height:44px;border:1px solid #888;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:1.1rem;cursor:pointer}
+.evt-hero-img{cursor:zoom-in}
+.evt-hero-img:focus-visible{outline:2px solid var(--link);outline-offset:2px}
+.evt-wl-link{display:none;align-items:center;gap:.35rem;background:none;border:none;padding:.4rem 0;color:var(--link);font:inherit;font-size:.95rem;cursor:pointer;min-height:44px}
+@media(max-width:640px){
+  .evt-phone-only{display:block}
+  .evt-wl-link{display:flex}
+  .evt-header [data-fn="historyBack"]{display:none}
+  .evt-header > [data-wl-star]{display:none}
+  #evt-tabs:not([data-mtab="general"]) .evt-hero,
+  #evt-tabs:not([data-mtab="general"]) .evt-header-meta{display:none}
+  #evt-tabs:not([data-mtab="general"]) .evt-header h1{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   #evt-tabs:not([data-mtab="general"]) .evt-panel[data-tab="general"],
   #evt-tabs:not([data-mtab="details"]) .evt-panel[data-tab="details"],
   #evt-tabs:not([data-mtab="timetable"]) .evt-panel[data-tab="timetable"],
@@ -1594,7 +1619,7 @@ document.addEventListener('DOMContentLoaded', function(){
     });
     emptyMsg.hidden=!empty;
     if(tab==='location' && window.dansalEvtMap) window.dansalEvtMap.invalidateSize();
-    if(byUser) window.scrollTo(0,0);
+    if(byUser) dansalScrollTo(root);
   }
   btns.forEach(function(b){
     b.addEventListener('click', function(){ show(this.dataset.tab, true); });
@@ -1611,10 +1636,22 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   });
   // The bar steps aside while a form field has focus (on-screen keyboard).
-  root.addEventListener('focusin', function(e){
-    if(e.target.matches('input,select,textarea')) bar.classList.add('mtabs-away');
-  });
-  root.addEventListener('focusout', function(){ bar.classList.remove('mtabs-away'); });
+  // base.js loads with defer, so the helper exists only once parsing is done.
+  document.addEventListener('DOMContentLoaded', function(){ dansalTabBarKeyboard(bar); });
+  // #1670: a tap on the photo opens it fullscreen, with its aspect ratio kept.
+  var lb=document.getElementById('evt-lightbox'), lbImg=document.getElementById('evt-lightbox-img');
+  var hero=document.querySelector('.evt-hero-img');
+  if(lb && lbImg && hero){
+    var openLB=function(){ lbImg.src=hero.currentSrc||hero.src; lbImg.alt=hero.alt; lb.showModal(); };
+    hero.addEventListener('click', openLB);
+    hero.addEventListener('keydown', function(e){
+      if(e.key==='Enter' || e.key===' '){ e.preventDefault(); openLB(); }
+    });
+    lb.addEventListener('click', function(e){
+      if(e.target===lb || e.target.matches('[data-close]')) lb.close();
+    });
+    lb.addEventListener('close', function(){ hero.focus(); });
+  }
   show('general', false);
   if(location.hash.length>1){
     var target=document.getElementById(decodeURIComponent(location.hash.slice(1)));

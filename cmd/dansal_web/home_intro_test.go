@@ -110,18 +110,17 @@ func TestSmokeRenderIndexHomeIntro(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, body)
 	}
-	// #1299: a real <details> disclosure, not a plain always-visible <p> —
-	// collapsed by default (no "open" attribute) but still present in the
-	// raw HTML for any crawler that doesn't run JS, with a translated
-	// <summary> toggle label.
-	if !strings.Contains(string(body), `<details class="home-intro">`) {
-		t.Fatalf("expected a collapsible <details class=\"home-intro\">, body tail: %s", body[max(0, len(body)-800):])
+	// #1668: the intro lives in a header info button and a native <dialog>, not in
+	// the list area. The dialog is closed by default (no "open" attribute) but
+	// still present in the raw HTML for crawlers, with a translated button label.
+	if strings.Contains(string(body), `<details class="home-intro">`) {
+		t.Fatalf("the intro must no longer take space in the list area")
 	}
-	if strings.Contains(string(body), `<details class="home-intro" open>`) {
-		t.Fatalf("home-intro must be collapsed by default (no open attribute)")
+	if !strings.Contains(string(body), `<dialog id="home-intro-dialog"`) || strings.Contains(string(body), `<dialog id="home-intro-dialog" open`) {
+		t.Fatalf("expected a closed <dialog id=\"home-intro-dialog\">")
 	}
-	if !strings.Contains(string(body), "<summary>About this site</summary>") {
-		t.Fatalf("expected the translated summary toggle label, body tail: %s", body[max(0, len(body)-800):])
+	if !strings.Contains(string(body), `id="home-info-btn"`) || !strings.Contains(string(body), `aria-label="About this site"`) {
+		t.Fatalf("expected the header info button with the translated label, body tail: %s", body[max(0, len(body)-800):])
 	}
 	if !strings.Contains(string(body), "Example Calendar is the community calendar") {
 		t.Fatalf("expected the site name to be filled into the English default, body tail: %s", body[max(0, len(body)-800):])

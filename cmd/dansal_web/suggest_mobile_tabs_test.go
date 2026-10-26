@@ -44,6 +44,10 @@ func TestSuggestPhoneStepBar(t *testing.T) {
 	if !strings.Contains(html, `id="wiz-arrows"`) {
 		t.Error("top progress arrows must stay for wider screens")
 	}
+	// #1666: no Next/Previous bar any more; the send button starts disabled-by-script
+	if strings.Contains(html, `id="wiz-next"`) || strings.Contains(html, `id="wiz-back"`) {
+		t.Error("Next/Previous buttons must be gone")
+	}
 
 	var cfgYAML struct {
 		Languages map[string]struct {
@@ -58,7 +62,7 @@ func TestSuggestPhoneStepBar(t *testing.T) {
 		t.Fatal(err)
 	}
 	for lang, section := range cfgYAML.Languages {
-		for _, key := range []string{"suggest_step_bar_label", "suggest_tab_edited"} {
+		for _, key := range []string{"suggest_step_bar_label", "suggest_tab_edited", "suggest_tab_req_valid", "suggest_tab_req_missing"} {
 			if section.Strings[key] == "" {
 				t.Errorf("%s: missing %s", lang, key)
 			}

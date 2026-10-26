@@ -12,14 +12,28 @@
   <a href="/festivals?year={{.NextYear}}" class="fest-year-btn">{{.NextYear}} &#8594;</a>
 </div>
 
-<div id="map-container"></div>
+{{/* #1674: phone tab bar under the year selector. Panels keep the desktop
+     order; on desktop the bar is hidden and every panel shows. */}}
+<div class="mtab-root" id="fest-tabs" data-mtab="map">
+<div class="mtabs mtabs-icons" role="tablist" aria-label="{{$.Strings.T "mtab_label"}}">
+  <button type="button" role="tab" class="mtab{{if eq (printf "%s" .MapEvents) "[]"}} is-empty{{end}}" data-tab="map" aria-controls="fest-tabs" aria-selected="true" tabindex="0"><span class="mtab-ico" aria-hidden="true">🗺️</span><span class="mtab-label">{{$.Strings.T "mtab_map"}}</span></button>
+  <button type="button" role="tab" class="mtab{{if not .YearEvents}} is-empty{{end}}" data-tab="calendar" aria-controls="fest-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">📅</span><span class="mtab-label">{{$.Strings.T "mtab_calendar"}}</span></button>
+  <button type="button" role="tab" class="mtab{{if and (not .YearEvents) (not .FoldedEvents)}} is-empty{{end}}" data-tab="events" aria-controls="fest-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">🗓️</span><span class="mtab-label">{{$.Strings.T "mtab_events"}}</span></button>
+</div>
 
+<div class="mtab-panel" data-tab="map">
+<div id="map-container"></div>
+</div>
+
+<div class="mtab-panel" data-tab="calendar">
 <div class="fest-calendar-wrap" id="fest-cal-wrap" hidden>
   <button type="button" class="fest-nav" id="fest-cal-prev" aria-label="{{$.Strings.T "pagination_prev"}}" hidden>‹</button>
   <div id="fest-calendar" class="fest-calendar" hidden></div>
   <button type="button" class="fest-nav" id="fest-cal-next" aria-label="{{$.Strings.T "pagination_next"}}" hidden>›</button>
 </div>
+</div>
 
+<div class="mtab-panel" data-tab="events">
 {{if .YearEvents}}
 <div class="table-wrap">
 <table class="event-table">
@@ -64,10 +78,13 @@
 </table>
 </div>
 {{end}}
+</div>
 
 <script type="application/json" id="fest-map-geo">{{eventsGeoJSON .MapEvents}}</script>
 <script type="application/json" id="fest-cal-events">{{festivalCalendarJSON .YearEvents}}</script>
 <script nonce="{{$.Nonce}}">window.__festYear = {{.Year}};</script>
+<p class="mtab-empty">{{$.Strings.T "evt_mtab_empty"}}</p>
+</div>
 {{end}}
 
 <style>
@@ -112,6 +129,7 @@ table.fest-folded .col-time,table.fest-folded .col-venue{color:var(--fg-muted)}
       // fitBounds below, which refines this default once bounds are known).
       var map = L.map('map-container').setView([50,10], 5);
       attachTileLayer(map);
+      window.festMap = map;
       // Nearby festivals merge into a numbered cluster that expands as you
       // zoom in, same plugin/radius as /cities and the homepage map.
       var cluster = L.markerClusterGroup({maxClusterRadius:40});
@@ -170,7 +188,21 @@ table.fest-folded .col-time,table.fest-folded .col-venue{color:var(--fg-muted)}
     }
     render();
     mq.addEventListener('change', render);
+    // #1674: on phones the calendar is a carousel, so a swipe moves it a month.
+    if (wrap) dansalSwipe(wrap,
+      function(){ if (mq.matches && nextBtn) nextBtn.click(); },
+      function(){ if (mq.matches && prevBtn) prevBtn.click(); });
   });
 })();
+</script>
+<script nonce="{{$.Nonce}}">
+// #1674: phone tab bar. The festival map is sized again when its tab opens.
+document.addEventListener('DOMContentLoaded', function(){
+  var root = document.getElementById('fest-tabs');
+  if (!root) return;
+  dansalMtabs(root, function(tab){
+    if (tab === 'map' && window.festMap) window.festMap.invalidateSize();
+  });
+});
 </script>
 {{end}}

@@ -13,7 +13,7 @@
   {{with .Data}}
   {{if .Error}}<p class="form-error" role="alert">{{$.Strings.T .Error}}</p>{{end}}
 
-  <p class="suggest-hint {{if .HintSMTP}}hint-email{{else}}hint-review{{end}}">
+  <p class="suggest-hint {{if .HintSMTP}}hint-email{{else}}hint-review{{end}}" data-wiz-steps="1 6">
     {{if .HintSMTP}}{{$.Strings.T "suggest_hint_email"}}{{else}}{{$.Strings.T "suggest_hint_review"}}{{end}}
   </p>
   {{/* #1468: same remaining-count hint the done page showed, when the
@@ -26,12 +26,12 @@
   <!-- Phone step bar (#1616): icon tabs at the bottom, with an "edited" dot
        and the word in the accessible name. Shown on phones only (base.html). -->
   <div class="mtabs mtabs-icons" id="wiz-mtabs" role="tablist" aria-label="{{$.Strings.T "suggest_step_bar_label"}}">
-    <button type="button" role="tab" class="mtab" data-step="1" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">📝</span><span class="mtab-label">{{$.Strings.T "suggest_step_title"}}</span><span class="mtab-dot" aria-hidden="true"></span><span class="mtab-edited-word" hidden>{{$.Strings.T "suggest_tab_edited"}}</span></button>
-    <button type="button" role="tab" class="mtab" data-step="2" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">🕒</span><span class="mtab-label">{{$.Strings.T "suggest_step_time"}}</span><span class="mtab-dot" aria-hidden="true"></span><span class="mtab-edited-word" hidden>{{$.Strings.T "suggest_tab_edited"}}</span></button>
-    <button type="button" role="tab" class="mtab" data-step="3" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">📍</span><span class="mtab-label">{{$.Strings.T "suggest_step_location"}}</span><span class="mtab-dot" aria-hidden="true"></span><span class="mtab-edited-word" hidden>{{$.Strings.T "suggest_tab_edited"}}</span></button>
-    <button type="button" role="tab" class="mtab" data-step="4" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">📄</span><span class="mtab-label">{{$.Strings.T "suggest_step_description"}}</span><span class="mtab-dot" aria-hidden="true"></span><span class="mtab-edited-word" hidden>{{$.Strings.T "suggest_tab_edited"}}</span></button>
-    <button type="button" role="tab" class="mtab" data-step="5" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">🎶</span><span class="mtab-label">{{$.Strings.T "suggest_step_timetable"}}</span><span class="mtab-dot" aria-hidden="true"></span><span class="mtab-edited-word" hidden>{{$.Strings.T "suggest_tab_edited"}}</span></button>
-    <button type="button" role="tab" class="mtab" data-step="6" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">✉️</span><span class="mtab-label">{{$.Strings.T "suggest_step_contact"}}</span><span class="mtab-dot" aria-hidden="true"></span><span class="mtab-edited-word" hidden>{{$.Strings.T "suggest_tab_edited"}}</span></button>
+    <button type="button" role="tab" class="mtab" data-step="1" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">📝</span><span class="mtab-label">{{$.Strings.T "suggest_step_title"}}</span><span class="mtab-dot" aria-hidden="true"></span><span class="mtab-edited-word" hidden>{{$.Strings.T "suggest_tab_edited"}}</span><span class="mtab-req-valid" hidden>{{$.Strings.T "suggest_tab_req_valid"}}</span><span class="mtab-req-missing" hidden>{{$.Strings.T "suggest_tab_req_missing"}}</span></button>
+    <button type="button" role="tab" class="mtab" data-step="2" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">🕒</span><span class="mtab-label">{{$.Strings.T "suggest_step_time"}}</span><span class="mtab-dot" aria-hidden="true"></span><span class="mtab-edited-word" hidden>{{$.Strings.T "suggest_tab_edited"}}</span><span class="mtab-req-valid" hidden>{{$.Strings.T "suggest_tab_req_valid"}}</span><span class="mtab-req-missing" hidden>{{$.Strings.T "suggest_tab_req_missing"}}</span></button>
+    <button type="button" role="tab" class="mtab" data-step="3" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">📍</span><span class="mtab-label">{{$.Strings.T "suggest_step_location"}}</span><span class="mtab-dot" aria-hidden="true"></span><span class="mtab-edited-word" hidden>{{$.Strings.T "suggest_tab_edited"}}</span><span class="mtab-req-valid" hidden>{{$.Strings.T "suggest_tab_req_valid"}}</span><span class="mtab-req-missing" hidden>{{$.Strings.T "suggest_tab_req_missing"}}</span></button>
+    <button type="button" role="tab" class="mtab" data-step="4" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">📄</span><span class="mtab-label">{{$.Strings.T "suggest_step_description"}}</span><span class="mtab-dot" aria-hidden="true"></span><span class="mtab-edited-word" hidden>{{$.Strings.T "suggest_tab_edited"}}</span><span class="mtab-req-valid" hidden>{{$.Strings.T "suggest_tab_req_valid"}}</span><span class="mtab-req-missing" hidden>{{$.Strings.T "suggest_tab_req_missing"}}</span></button>
+    <button type="button" role="tab" class="mtab" data-step="5" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">🎶</span><span class="mtab-label">{{$.Strings.T "suggest_step_timetable"}}</span><span class="mtab-dot" aria-hidden="true"></span><span class="mtab-edited-word" hidden>{{$.Strings.T "suggest_tab_edited"}}</span><span class="mtab-req-valid" hidden>{{$.Strings.T "suggest_tab_req_valid"}}</span><span class="mtab-req-missing" hidden>{{$.Strings.T "suggest_tab_req_missing"}}</span></button>
+    <button type="button" role="tab" class="mtab" data-step="6" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">✉️</span><span class="mtab-label">{{$.Strings.T "suggest_step_contact"}}</span><span class="mtab-dot" aria-hidden="true"></span><span class="mtab-edited-word" hidden>{{$.Strings.T "suggest_tab_edited"}}</span><span class="mtab-req-valid" hidden>{{$.Strings.T "suggest_tab_req_valid"}}</span><span class="mtab-req-missing" hidden>{{$.Strings.T "suggest_tab_req_missing"}}</span></button>
   </div>
   <!-- Progress arrows — visible above manual/import tabs, updated by JS -->
   <!-- #1388: hoisted out of the import-mode else-branch so a page reached -->
@@ -58,7 +58,7 @@
   {{end}}
   <a href="/events/suggest" class="import-back-link">&#8592; {{$.Strings.T "suggest_tab_import"}}</a>
   {{else}}
-  <div class="suggest-tabs">
+  <div class="suggest-tabs" data-wiz-steps="1">
     <button class="tab-btn active" data-fn="switchTab" data-args='["@this","manual"]'>{{$.Strings.T "suggest_tab_manual"}}</button>
     <button class="tab-btn" data-fn="switchTab" data-args='["@this","import"]'>{{$.Strings.T "suggest_tab_import"}}</button>
   </div>
@@ -432,10 +432,6 @@
       <button type="submit" class="btn-primary">{{if $.Data.ManageToken}}{{$.Strings.T "suggest_manage_submit_btn"}}{{else}}{{$.Strings.T "suggest_submit_btn"}}{{end}}</button>
     </div>
 
-    <div class="wiz-nav">
-      <button type="button" id="wiz-back" class="btn-secondary wiz-arrow-btn" hidden>&#8592;</button>
-      <button type="button" id="wiz-next" class="btn-primary wiz-arrow-btn">&#8594;</button>
-    </div>
   </form>
   </div>
 
@@ -596,6 +592,9 @@
    base.html). Above 640px the top arrows stay as they are. */
 .mtab-dot{display:none;position:absolute;top:.25rem;right:calc(50% - 1.1rem);width:.45rem;height:.45rem;border-radius:50%;background:var(--link)}
 .mtab.is-edited .mtab-dot{display:block}
+.mtab.is-missing{color:#c62828}
+.mtab.is-valid{color:#2e7d32}
+.mtab-req-valid,.mtab-req-missing{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .mtab-edited-word{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 @media(max-width:640px){
   .wiz-arrows{display:none}
@@ -1016,6 +1015,13 @@ document.addEventListener('DOMContentLoaded', function(){
   // #1560: the wizard's Next and step arrows call this on the date step, so a
   // past or unreadable date cannot be left behind. Returns false and shows
   // the error when the date blocks moving on.
+  // #1666: read-only check for the tab colour (no error text, no focus).
+  window.sgDateReady = function() {
+    var v = txtEl ? txtEl.value.trim() : '';
+    if (v && !sgParseDateText(v)) return false;
+    var f = fromEl.value;
+    return !!f && f >= sgTodayISO();
+  };
   window.sgDateValid = function() {
     if (hintEl) hintEl.style.display = 'none';
     if (!typedDateOK()) return false;
@@ -1030,6 +1036,7 @@ document.addEventListener('DOMContentLoaded', function(){
   window.sgDateApply = function(f, t) {
     if (f) fromEl.value = f;
     if (t) toEl.value = t;
+    if (window.dansalSuggestRefresh) window.dansalSuggestRefresh();
     if (txtEl && document.activeElement !== txtEl) txtEl.value = sgFormatDateForDisplay(fromEl.value);
     window.sgDatePickerSet(fromEl.value, toEl.value);
     showDateHint(fromEl.value); // #1560
@@ -1320,6 +1327,7 @@ function applyTimeDefaults(dateFrom, dateTo) {
   }
   function setMode(m, label) {
     mode = m;
+    if (window.dansalSuggestRefresh) window.dansalSuggestRefresh();
     picker.hidden = (m !== 'none');
     chip.hidden = (m !== 'known');
     box.hidden = (m !== 'new');
@@ -1429,6 +1437,12 @@ function applyTimeDefaults(dateFrom, dateTo) {
 
   // Step validation (wizard "next" and submit): a venue is optional, but a
   // new one needs a name and a town.
+  // #1666: read-only check for the tab colour: a known venue, or a new one with
+  // a name and a town.
+  window.sgVenueReady = function() {
+    if (mode === 'known') return true;
+    return mode === 'new' && nameInp.value.trim() !== '' && val('sg-town').trim() !== '';
+  };
   window.sgVenueValid = function() {
     if (mode !== 'new') return true;
     var ok = nameInp.value.trim() !== '' && val('sg-town').trim() !== '';
@@ -1778,8 +1792,7 @@ document.addEventListener('DOMContentLoaded', function(){
   var steps = Array.prototype.slice.call(form.querySelectorAll('.wiz-step'));
   var total = steps.length;
   var current = 1;
-  var backBtn = document.getElementById('wiz-back');
-  var nextBtn = document.getElementById('wiz-next');
+  var submitBtn = form.querySelector('button[type="submit"]');
   var arrowBtns = Array.prototype.slice.call((document.getElementById('wiz-arrows') || {querySelectorAll:function(){return [];}}).querySelectorAll('.wiz-arrow'));
   var titleInput = document.getElementById('wiz-title');
   var honeypot = form.querySelector('input[name="dansal_phone2"]');
@@ -1811,34 +1824,60 @@ document.addEventListener('DOMContentLoaded', function(){
     });
     return {edited: edited, empty: !filled};
   }
+  // #1666: the required steps are title (1), date and time (2) and location (3).
+  // Their tabs turn red while missing and green once valid. The e-mail is
+  // optional, so the contact step keeps the plain state. Nothing here shows an
+  // error text; that stays with each step's own validators.
+  function stepValid(n){
+    if(n === 1) return titleInput.value.trim() !== '';
+    if(n === 2) return !!(window.sgDateReady && window.sgDateReady()) && document.getElementById('sg-start-time').value !== '';
+    if(n === 3) return !!(window.sgVenueReady && window.sgVenueReady());
+    return null;
+  }
+  function requiredValid(){ return stepValid(1) && stepValid(2) && stepValid(3); }
+  // The send button is active only with every required step valid. A filled
+  // honeypot still submits: the server accepts it silently and stores nothing.
+  function updateSend(){
+    if(!submitBtn) return;
+    var bot = honeypot && honeypot.value !== '';
+    submitBtn.disabled = !(bot || requiredValid());
+  }
   function updateMtabs(){
     mtabBtns.forEach(function(btn){
       var n = parseInt(btn.dataset.step, 10);
+      var req = stepValid(n);
       var st = stepState(n - 1);
-      btn.classList.toggle('is-edited', st.edited);
-      btn.classList.toggle('is-empty', st.empty && !st.edited);
+      var edited = req === null && st.edited;
+      btn.classList.toggle('is-edited', edited);
+      btn.classList.toggle('is-empty', req === null && st.empty && !st.edited);
+      btn.classList.toggle('is-valid', req === true);
+      btn.classList.toggle('is-missing', req === false);
       btn.setAttribute('aria-selected', n === current ? 'true' : 'false');
       btn.tabIndex = n === current ? 0 : -1;
       var word = btn.querySelector('.mtab-edited-word');
-      if(word) word.hidden = !st.edited;
+      if(word) word.hidden = !edited;
+      var ok = btn.querySelector('.mtab-req-valid'), miss = btn.querySelector('.mtab-req-missing');
+      if(ok) ok.hidden = req !== true;
+      if(miss) miss.hidden = req !== false;
     });
+    updateSend();
   }
+  window.dansalSuggestRefresh = updateMtabs;
   if(mtabBar){
     document.body.classList.add('has-mtabs');
     form.addEventListener('input', updateMtabs);
     form.addEventListener('change', updateMtabs);
     // The bar steps aside while a field has focus, so it does not sit on top
     // of the on-screen keyboard.
-    form.addEventListener('focusin', function(e){
-      if(e.target.matches('input,select,textarea')) mtabBar.classList.add('mtabs-away');
-    });
-    form.addEventListener('focusout', function(){ mtabBar.classList.remove('mtabs-away'); });
+    dansalTabBarKeyboard(mtabBar);
   }
 
   function render() {
     steps.forEach(function(s){ s.hidden = (parseInt(s.dataset.step, 10) !== current); });
-    backBtn.hidden = (current === 1);
-    nextBtn.hidden = (current === total);
+    // #1667: the approval hint and the import/manual switch belong to particular steps.
+    document.querySelectorAll('[data-wiz-steps]').forEach(function(el){
+      el.hidden = el.dataset.wizSteps.split(' ').indexOf(String(current)) < 0;
+    });
     arrowBtns.forEach(function(btn, idx){
       var n = idx + 1;
       btn.classList.toggle('is-active', n === current);
@@ -1854,48 +1893,14 @@ document.addEventListener('DOMContentLoaded', function(){
     form.scrollIntoView({block: 'start', behavior: 'smooth'});
   }
 
-  nextBtn.addEventListener('click', function() {
-    if (current === 1) {
-      // Bot bait: a script that filled every dansal_-looking field on step 1
-      // likely also filled the honeypot. Submit immediately (server silently
-      // accepts-and-discards) instead of walking it through more steps.
-      if (honeypot && honeypot.value !== '') {
-        form.requestSubmit ? form.requestSubmit() : form.submit();
-        return;
-      }
-      if (!titleInput.value.trim()) {
-        titleInput.reportValidity ? titleInput.reportValidity() : titleInput.focus();
-        return;
-      }
-    }
-    // #1560: a past or unreadable date keeps the suggester on "When?".
-    if (steps[current - 1] && steps[current - 1].querySelector('#sg-date-from') && window.sgDateValid && !window.sgDateValid()) return;
-    // #1414: a new venue needs a name and a town before leaving "Where?".
-    if (steps[current - 1] && steps[current - 1].querySelector('#sg-venue-new') && window.sgVenueValid && !window.sgVenueValid()) return;
-    goTo(current + 1);
-  });
-  backBtn.addEventListener('click', function() { goTo(current - 1); });
-
+  // #1666: every tab (bar and top arrows) opens its step directly, in either
+  // direction. Nothing is gated; the send button is the only check.
   window.suggestWizGoTo = goTo; // #1649: the draft restore returns to the saved step
-  // The phone step bar uses the same rules as the top arrows: back and any
-  // already-visited step at once, forward one step at a time.
   mtabBtns.forEach(function(btn){
-    btn.addEventListener('click', function(){
-      var target = parseInt(btn.dataset.step, 10);
-      if (target < current) { goTo(target); return; }
-      nextBtn.click();
-    });
+    btn.addEventListener('click', function(){ goTo(parseInt(btn.dataset.step, 10)); });
   });
-  // Arrow clicks — allow jumping to any already-visited step; forward jumps
-  // go only one step at a time (same validation as Next button).
   arrowBtns.forEach(function(btn){
-    btn.addEventListener('click', function(){
-      var target = parseInt(btn.dataset.step, 10);
-      if (target < current) { goTo(target); return; }
-      if (target === current + 1) { nextBtn.click(); return; }
-      // Clicking further ahead: step through one at a time.
-      nextBtn.click();
-    });
+    btn.addEventListener('click', function(){ goTo(parseInt(btn.dataset.step, 10)); });
   });
 
   // Mobile: swipe left/right between steps (same plain touchstart/touchend
@@ -1909,8 +1914,7 @@ document.addEventListener('DOMContentLoaded', function(){
     var dx = e.changedTouches[0].clientX - touchStartX;
     touchStartX = null;
     if (Math.abs(dx) < 50) return;
-    if (dx < 0) { nextBtn.hidden || nextBtn.click(); }
-    else { backBtn.hidden || backBtn.click(); }
+    goTo(dx < 0 ? current + 1 : current - 1);
   }, {passive: true});
 
   render();

@@ -7,12 +7,18 @@
 .feed-hint{color:var(--fg-hint)}
 .fed-source{font-size:.75rem;color:var(--fg-muted);margin-left:.35rem;white-space:nowrap}
 .federated-event td{color:var(--fg-2)}
-.home-intro{border:1px solid var(--border-mid);border-radius:6px;padding:0 .9rem;margin:0 0 .75rem;max-width:60rem}
-.home-intro summary{cursor:pointer;font-size:.9rem;font-weight:600;padding:.5rem 0;color:var(--fg-2)}
-.home-intro p{font-size:.95rem;color:var(--fg-2);line-height:1.6;margin:0 0 .75rem}
+.nav-info-btn{flex:none;width:2rem;height:2rem;border-radius:50%;border:1px solid #7a7a9a;background:#2a2a4a;color:#fff;font:600 1rem/1 Georgia,serif;cursor:pointer;padding:0;margin-left:auto}
+.nav-info-btn:hover{background:#3a3a5a;border-color:#c0c8ff}
+.nav-info-btn:focus-visible{outline:2px solid #c0c8ff;outline-offset:2px}
+.home-intro-dialog{max-width:36rem;width:calc(100% - 2rem);border:none;border-radius:8px;padding:1.25rem 1.25rem 1rem;background:var(--bg-card);color:var(--fg);box-shadow:0 8px 32px rgba(0,0,0,.35)}
+.home-intro-dialog::backdrop{background:rgba(0,0,0,.45)}
+.home-intro-dialog h2{font-size:1.1rem;margin:0 0 .6rem;color:var(--heading)}
+.home-intro-dialog p{font-size:.95rem;color:var(--fg-2);line-height:1.6;margin:0 0 .75rem}
+@media(pointer:coarse){.nav-info-btn{width:44px;height:44px}}
 .travel-notice{font-size:.82rem;color:var(--fg-muted);margin:0 0 .4rem}
-.type-selector{display:flex;gap:.4rem;margin-bottom:.6rem;flex-wrap:wrap;align-items:center}
-.type-btn{padding:.3rem .9rem;border:1px solid var(--border-mid);border-radius:20px;background:var(--btn-bg);cursor:pointer;font-size:.88rem;color:var(--fg-2);transition:background .15s,color .15s}
+.type-selector{display:flex;gap:.3rem;margin-bottom:.6rem;flex-wrap:wrap;align-items:center;max-width:100%;min-width:0}
+/* #1669: tighter pills on desktop, so the row wraps inside the content width. */
+.type-btn{padding:.25rem .6rem;border:1px solid var(--border-mid);border-radius:20px;background:var(--btn-bg);cursor:pointer;font-size:.88rem;color:var(--fg-2);transition:background .15s,color .15s;white-space:nowrap}
 .type-btn:hover{background:var(--btn-bg-h)}
 .type-btn.type-active{background:var(--heading);color:#fff;border-color:var(--heading)}
 .type-selector select{padding:.3rem .5rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.88rem;background:var(--bg-card);color:var(--fg)}
@@ -202,7 +208,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   #event-tiles{display:block;font-size:.95rem}
   #load-more{width:100%;min-height:44px}
   .type-selector{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch}
-  .type-btn{flex:none;min-height:40px}
+  .type-btn{flex:none;min-height:40px;padding:.3rem .9rem}
   .wm-arrow{min-width:40px;min-height:40px}
   .week-mobile-days .day-code{display:inline-flex;align-items:center;min-height:40px;padding:.3rem .6rem}
   .map-toolbar button{min-height:40px}
@@ -212,27 +218,20 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 }
 </style>
 {{end}}
+{{define "nav_info"}}{{with .Data.HomeIntro}}
+<button type="button" class="nav-info-btn" id="home-info-btn" aria-haspopup="dialog" aria-controls="home-intro-dialog" aria-label="{{$.Strings.T "index_about_summary"}}" title="{{$.Strings.T "index_about_summary"}}">i</button>
+<dialog id="home-intro-dialog" class="home-intro-dialog" aria-labelledby="home-intro-title">
+  <h2 id="home-intro-title">{{$.Strings.T "index_about_summary"}}</h2>
+  <p>{{.}}</p>
+  <p><button type="button" class="btn-secondary" data-close>{{$.Strings.T "index_about_close"}}</button></p>
+</dialog>
+{{end}}{{end}}
 {{define "content"}}
 <h1>{{.Strings.T "events_title"}}</h1>
 
 {{with .Data}}
 {{$orgMap := .OrgMap}}
 
-{{/* #1298/#1299: webmin-editable introductory paragraph. Collapsed by
-     default via native <details> — a real disclosure widget, not
-     display:none, so the text stays in the raw HTML for any crawler that
-     doesn't even run JS, while the homepage itself stays visually minimal.
-     No JS/ARIA wiring needed: <details> already has correct built-in
-     semantics every screen reader understands. Absent entirely if
-     home_intro somehow resolves empty (shouldn't happen — HomeIntro always
-     falls back to the shipped default in Go — but the page must still
-     render fine if it ever does). */}}
-{{with .HomeIntro}}
-<details class="home-intro">
-  <summary>{{$.Strings.T "index_about_summary"}}</summary>
-  <p>{{.}}</p>
-</details>
-{{end}}
 
 <!-- Leaflet CSS loads non-blocking via dansalLeafletCss() at map init (#1215) -->
 <!-- Filters -->
@@ -372,7 +371,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 </div>
 
 <!-- Phone bottom tab bar (#1613): list is the default, see initialHomeTab() -->
-<div class="mtabs" role="tablist" aria-label="{{$.Strings.T "mtab_label"}}">
+<div class="mtabs mtabs-icons" role="tablist" aria-label="{{$.Strings.T "mtab_label"}}">
   <button type="button" role="tab" class="mtab" id="mtab-list" data-tab="list" aria-controls="mpanel-list" aria-selected="true" tabindex="0"><span class="mtab-ico" aria-hidden="true">☰</span><span class="mtab-label">{{$.Strings.T "mtab_list"}}</span></button>
   <button type="button" role="tab" class="mtab" id="mtab-week" data-tab="week" aria-controls="mpanel-week" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">📅</span><span class="mtab-label">{{$.Strings.T "mtab_calendar"}}</span></button>
   <button type="button" role="tab" class="mtab" id="mtab-map" data-tab="map" aria-controls="mpanel-map" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">🗺</span><span class="mtab-label">{{$.Strings.T "mtab_map"}}</span></button>
@@ -1514,6 +1513,15 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   // is what a visitor's choice goes through: it also stores the tab, writes
   // ?view= (replaceState, so the back button is unaffected), and switches the
   // table mode the tab needs.
+  // #1668: the "about this page" dialog, opened from the header info button.
+  // Native dialog: showModal() traps focus, and closing returns it to the button.
+  (function(){
+    var infoBtn=document.getElementById('home-info-btn'), dlg=document.getElementById('home-intro-dialog');
+    if(!infoBtn || !dlg) return;
+    infoBtn.addEventListener('click', function(){ dlg.showModal(); });
+    dlg.addEventListener('close', function(){ infoBtn.focus(); });
+    dlg.querySelector('[data-close]').addEventListener('click', function(){ dlg.close(); });
+  })();
   var HOME_TABS = ['list','week','map'];
   function applyHomeTab(tab){
     mobileTab = tab;
@@ -1531,7 +1539,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
       var sp = new URLSearchParams(window.location.search);
       sp.set('view', tab);
       history.replaceState(history.state, '', window.location.pathname + '?' + sp.toString());
-      window.scrollTo(0, 0);
+      dansalScrollTo(document.getElementById('home-tabs'));
     }
     if(tab === 'map'){
       ensureMap().then(function(){ map.invalidateSize(); updateMapMarkers(true); });

@@ -45,8 +45,21 @@
 {{end}}
 {{define "content"}}
 {{with .Data}}
+{{/* #1671: phone tab bar. Panels keep the desktop order; on desktop the bar
+     is hidden and every panel shows. */}}
+<div class="mtab-root" id="loc-tabs" data-mtab="info">
+<div class="mtabs mtabs-icons" role="tablist" aria-label="{{$.Strings.T "mtab_label"}}">
+  <button type="button" role="tab" class="mtab" data-tab="info" aria-controls="loc-tabs" aria-selected="true" tabindex="0"><span class="mtab-ico" aria-hidden="true">ℹ️</span><span class="mtab-label">{{$.Strings.T "mtab_info"}}</span></button>
+  <button type="button" role="tab" class="mtab{{if not .Events}} is-empty{{end}}" data-tab="calendar" aria-controls="loc-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">📅</span><span class="mtab-label">{{$.Strings.T "mtab_calendar"}}</span></button>
+  <button type="button" role="tab" class="mtab{{if and (not .Events) (not .PastEvents)}} is-empty{{end}}" data-tab="events" aria-controls="loc-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">🗓️</span><span class="mtab-label">{{$.Strings.T "mtab_events"}}</span></button>
+  {{with $.Data.Location}}
+  {{if and .Latitude .Longitude}}<button type="button" role="tab" class="mtab" data-tab="map" aria-controls="loc-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">🗺️</span><span class="mtab-label">{{$.Strings.T "mtab_map"}}</span></button>{{end}}
+  {{if or .Children .SitePlanURL}}<button type="button" role="tab" class="mtab" data-tab="rooms" aria-controls="loc-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">🚪</span><span class="mtab-label">{{$.Strings.T "mtab_rooms"}}</span></button>{{end}}
+  {{end}}
+</div>
 {{with .Location}}
 <span data-print-qr hidden></span>
+<div class="mtab-panel" data-tab="info">
 <div class="loc-page-header">
   <h1>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</h1>
   <div class="cal-dd">
@@ -98,21 +111,34 @@
   </div>
   {{end}}
   {{if and .Latitude .Longitude}}
-  <div class="loc-map-links">
+  <div class="loc-map-links mtab-desk-only">
     <a href="geo:{{.Latitude}},{{.Longitude}}?q={{.Latitude}},{{.Longitude}}" rel="nofollow" class="loc-map-link loc-map-link-nav" title="{{$.Strings.T "loc_navigate_hint"}}">🧭 {{$.Strings.T "loc_navigate"}}</a>
     <a href="https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&to={{.Latitude}},{{.Longitude}}" target="_blank" rel="noopener" class="loc-map-link loc-osm-link">🗺 OpenStreetMap</a>
   </div>
   {{end}}
+{{if $.Data.Events}}<p class="loc-future-count">{{$.Strings.TF "mtab_future_count" (len $.Data.Events)}}</p>{{end}}
+</div>
 </div>
 
 {{if and .Latitude .Longitude}}
+<div class="mtab-panel" data-tab="map">
 <div id="loc-map" data-lat="{{.Latitude}}" data-lng="{{.Longitude}}" class="loc-map"></div>
+<div class="mtab-phone-only">
+  <div class="loc-map-links">
+    <a href="geo:{{.Latitude}},{{.Longitude}}?q={{.Latitude}},{{.Longitude}}" rel="nofollow" class="loc-map-link loc-map-link-nav" title="{{$.Strings.T "loc_navigate_hint"}}">🧭 {{$.Strings.T "loc_navigate"}}</a>
+    <a href="https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&to={{.Latitude}},{{.Longitude}}" target="_blank" rel="noopener" class="loc-map-link loc-osm-link">🗺 OpenStreetMap</a>
+  </div>
+</div>
+</div>
 {{end}}
 
+<div class="mtab-panel" data-tab="info">
 {{with .NotesMd}}<div class="loc-notes md-content">{{markdownHTML .}}</div>{{end}}
 
 {{template "media-links-list" (dict "S" $.Strings "Links" .Media)}}
+</div>
 
+<div class="mtab-panel" data-tab="rooms">
 {{if .SitePlanURL}}
 <details class="loc-siteplan">
   <summary class="loc-siteplan-summary">{{$.Strings.T "loc_siteplan_section"}}</summary>
@@ -137,17 +163,24 @@
   </ul>
 </div>
 {{end}}
+</div>
 
+<div class="mtab-panel" data-tab="info">
 {{if .ParentID}}
 <p class="loc-parent-link"><a href="/location/{{derefInt .ParentID}}">← {{$.Strings.T "loc_back_to_building"}}</a></p>
 {{end}}
+</div>
 
 {{end}}{{/* .Location */}}
 
 {{if .Events}}
+<div class="mtab-panel" data-tab="calendar">
 {{/* Follow-up to #1161/#1167: rolling monthly calendar, same shared component as /org/{slug}. */}}
 {{template "month-calendar" (dict "ID" "loc-calendar" "Events" .Events "Strings" $.Strings "Nonce" $.Nonce)}}
-
+</div>
+{{end}}
+<div class="mtab-panel" data-tab="events">
+{{if .Events}}
 <h2 class="section-heading">{{$.Strings.T "org_events_title"}}</h2>
 <ul class="event-list">
 {{range .Events}}
@@ -200,6 +233,9 @@
 {{end}}
 {{end}}
 
+</div>
+<p class="mtab-empty">{{$.Strings.T "evt_mtab_empty"}}</p>
+</div>
 {{end}}{{/* .Data */}}
 
 <style>
@@ -253,6 +289,16 @@ document.addEventListener('DOMContentLoaded', function(){
   var map = L.map('loc-map').setView([lat, lng], 15);
   attachTileLayer(map);
   L.marker([lat, lng]).addTo(map);
+  window.locMap = map;
+});
+// #1671: phone tab bar. The map is sized again when its tab opens, since it
+// was created while its panel was hidden.
+document.addEventListener('DOMContentLoaded', function(){
+  var root = document.getElementById('loc-tabs');
+  if (!root) return;
+  dansalMtabs(root, function(tab){
+    if (tab === 'map' && window.locMap) window.locMap.invalidateSize();
+  });
 });
 </script>
 {{end}}

@@ -269,7 +269,16 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
   .mtab{position:relative}
   .mtab.is-empty:not([aria-selected="true"]){color:var(--fg-faint);opacity:.6}
   .mtabs.mtabs-away{display:none!important}
+  /* #1671-#1675: panels of the tab pages. dansalMtabs (base.js) sets data-off
+     on inactive panels; desktop never sees data-off, so nothing is hidden there. */
+  .mtab-root .mtab-panel[data-off]{display:none!important}
+  .mtab-root .mtab-empty[data-show]{display:block}
+  .mtab-phone-only{display:block}
+  .mtab-desk-only{display:none!important}
+  body.has-mtabs #back-to-top{bottom:calc(4.5rem + env(safe-area-inset-bottom) + .5rem)}
 }
+.mtab-empty{display:none;color:var(--fg-muted);text-align:center;padding:1rem;font-size:.92rem}
+.mtab-phone-only{display:none}
 @media(pointer:coarse){
   .nav-watchlist,.nav-hamburger,.nav-user-btn{min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center}
   .lang-select{font-size:16px}
@@ -677,6 +686,10 @@ document.addEventListener('DOMContentLoaded', function(){
   document.getElementById('{{.ID}}-wrap').hidden = false;
   renderMiniCalendar('{{.ID}}', calEvents, months,
     {carousel: true, prevId: '{{.ID}}-prev', nextId: '{{.ID}}-next', wrapId: '{{.ID}}-wrap'});
+  // #1671: a swipe on phones moves the calendar like its arrow buttons.
+  dansalSwipe(document.getElementById('{{.ID}}-wrap'),
+    function(){ document.getElementById('{{.ID}}-next').click(); },
+    function(){ document.getElementById('{{.ID}}-prev').click(); });
 });
 </script>
 {{end}}

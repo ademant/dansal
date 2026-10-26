@@ -647,6 +647,65 @@ function dansalScrollTo(el){
   if(!el) return;
   window.scrollTo(0, el.getBoundingClientRect().top + window.pageYOffset - 8);
 }
+// dansalMtabs (#1671-#1675): phone tab bar for the detail pages. root holds the
+// bar (.mtabs with .mtab buttons) and the panels (.mtab-panel[data-tab]). On
+// desktop the bar is hidden and no panel gets data-off, so every panel shows.
+// Returns show(tab, byUser); onShow(tab) runs after each switch.
+function dansalMtabs(root, onShow){
+  var bar=root.querySelector('.mtabs');
+  if(!bar) return null;
+  var btns=Array.prototype.slice.call(bar.querySelectorAll('.mtab'));
+  var panels=Array.prototype.slice.call(root.querySelectorAll('.mtab-panel'));
+  var emptyMsg=root.querySelector('.mtab-empty');
+  document.body.classList.add('has-mtabs');
+  function show(tab, byUser){
+    root.setAttribute('data-mtab', tab);
+    var empty=false;
+    btns.forEach(function(b){
+      var on=b.dataset.tab===tab;
+      b.setAttribute('aria-selected', on?'true':'false');
+      b.tabIndex=on?0:-1;
+      if(on) empty=b.classList.contains('is-empty');
+    });
+    panels.forEach(function(p){ p.toggleAttribute('data-off', p.dataset.tab!==tab); });
+    if(emptyMsg) emptyMsg.toggleAttribute('data-show', empty);
+    if(onShow) onShow(tab);
+    if(byUser) dansalScrollTo(root);
+  }
+  btns.forEach(function(b){
+    b.addEventListener('click', function(){ show(this.dataset.tab, true); });
+    b.addEventListener('keydown', function(e){
+      var i=btns.indexOf(this), j=-1;
+      if(e.key==='ArrowRight') j=(i+1)%btns.length;
+      else if(e.key==='ArrowLeft') j=(i+btns.length-1)%btns.length;
+      else if(e.key==='Home') j=0;
+      else if(e.key==='End') j=btns.length-1;
+      if(j<0) return;
+      e.preventDefault();
+      btns[j].focus();
+      show(btns[j].dataset.tab, true);
+    });
+  });
+  dansalTabBarKeyboard(bar);
+  show(root.getAttribute('data-mtab') || btns[0].dataset.tab, false);
+  return show;
+}
+// dansalSwipe (#1671): calls onLeft or onRight for a mostly horizontal swipe on el.
+function dansalSwipe(el, onLeft, onRight){
+  var x0=0, y0=0, on=false;
+  el.addEventListener('touchstart', function(e){
+    if(e.touches.length!==1) return;
+    on=true; x0=e.touches[0].clientX; y0=e.touches[0].clientY;
+  }, {passive:true});
+  el.addEventListener('touchend', function(e){
+    if(!on) return;
+    on=false;
+    var t=e.changedTouches[0], dx=t.clientX-x0, dy=t.clientY-y0;
+    if(Math.abs(dx)>50 && Math.abs(dx)>1.5*Math.abs(dy)){
+      if(dx<0 && onLeft) onLeft(); else if(dx>0 && onRight) onRight();
+    }
+  }, {passive:true});
+}
 function dansalLoadLeaflet(cluster){
   if(dansalLoadLeaflet.p) return dansalLoadLeaflet.p;
   function load(src){

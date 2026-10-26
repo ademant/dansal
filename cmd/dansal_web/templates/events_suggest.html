@@ -23,6 +23,16 @@
   {{end}}
 
   {{if not .ManageToken}}
+  <!-- Phone step bar (#1616): icon tabs at the bottom, with an "edited" dot
+       and the word in the accessible name. Shown on phones only (base.html). -->
+  <div class="mtabs mtabs-icons" id="wiz-mtabs" role="tablist" aria-label="{{$.Strings.T "suggest_step_bar_label"}}">
+    <button type="button" role="tab" class="mtab" data-step="1" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">📝</span><span class="mtab-label">{{$.Strings.T "suggest_step_title"}}</span><span class="mtab-dot" aria-hidden="true"></span><span class="mtab-edited-word" hidden>{{$.Strings.T "suggest_tab_edited"}}</span></button>
+    <button type="button" role="tab" class="mtab" data-step="2" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">🕒</span><span class="mtab-label">{{$.Strings.T "suggest_step_time"}}</span><span class="mtab-dot" aria-hidden="true"></span><span class="mtab-edited-word" hidden>{{$.Strings.T "suggest_tab_edited"}}</span></button>
+    <button type="button" role="tab" class="mtab" data-step="3" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">📍</span><span class="mtab-label">{{$.Strings.T "suggest_step_location"}}</span><span class="mtab-dot" aria-hidden="true"></span><span class="mtab-edited-word" hidden>{{$.Strings.T "suggest_tab_edited"}}</span></button>
+    <button type="button" role="tab" class="mtab" data-step="4" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">📄</span><span class="mtab-label">{{$.Strings.T "suggest_step_description"}}</span><span class="mtab-dot" aria-hidden="true"></span><span class="mtab-edited-word" hidden>{{$.Strings.T "suggest_tab_edited"}}</span></button>
+    <button type="button" role="tab" class="mtab" data-step="5" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">🎶</span><span class="mtab-label">{{$.Strings.T "suggest_step_timetable"}}</span><span class="mtab-dot" aria-hidden="true"></span><span class="mtab-edited-word" hidden>{{$.Strings.T "suggest_tab_edited"}}</span></button>
+    <button type="button" role="tab" class="mtab" data-step="6" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">✉️</span><span class="mtab-label">{{$.Strings.T "suggest_step_contact"}}</span><span class="mtab-dot" aria-hidden="true"></span><span class="mtab-edited-word" hidden>{{$.Strings.T "suggest_tab_edited"}}</span></button>
+  </div>
   <!-- Progress arrows — visible above manual/import tabs, updated by JS -->
   <!-- #1388: hoisted out of the import-mode else-branch so a page reached -->
   <!-- via "Preview" still renders the nav. The wizard JS tolerates a missing -->
@@ -582,6 +592,14 @@
 .wiz-nav{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-top:1.5rem;padding-top:1rem;border-top:1px solid #eee}
 .wiz-arrow-btn{padding:.5rem .9rem;font-size:1.25rem;line-height:1;min-width:2.8rem}
 .wiz-step{touch-action:pan-y}
+/* #1616: on phones the step bar moves to the bottom (the shared .mtabs bar in
+   base.html). Above 640px the top arrows stay as they are. */
+.mtab-dot{display:none;position:absolute;top:.25rem;right:calc(50% - 1.1rem);width:.45rem;height:.45rem;border-radius:50%;background:var(--link)}
+.mtab.is-edited .mtab-dot{display:block}
+.mtab-edited-word{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media(max-width:640px){
+  .wiz-arrows{display:none}
+}
 .import-picker{border:1px solid var(--border-mid,#ddd);border-radius:6px;padding:.5rem;margin-bottom:1rem}
 .import-pick-row{display:flex;align-items:center;gap:.75rem;padding:.4rem .5rem;border-bottom:1px solid var(--border-low,#eee)}
 .import-pick-row:last-child{border-bottom:none}
@@ -1766,6 +1784,57 @@ document.addEventListener('DOMContentLoaded', function(){
   var titleInput = document.getElementById('wiz-title');
   var honeypot = form.querySelector('input[name="dansal_phone2"]');
 
+  // #1616: phone step bar. A step is "edited" once a field differs from the
+  // value it had when the page loaded; it is "empty" while no field holds a
+  // value. Gray tabs stay tappable, so the forward checks below still apply.
+  var mtabBar = document.getElementById('wiz-mtabs');
+  var mtabBtns = mtabBar ? Array.prototype.slice.call(mtabBar.querySelectorAll('.mtab')) : [];
+  function stepFields(step){
+    return Array.prototype.slice.call(step.querySelectorAll('input,select,textarea')).filter(function(el){
+      return el.type !== 'hidden' && el.type !== 'file' && el.name !== 'dansal_phone2';
+    });
+  }
+  function fieldValue(el){
+    return (el.type === 'checkbox' || el.type === 'radio') ? (el.checked ? '1' : '') : el.value;
+  }
+  var startVals = steps.map(function(step){
+    var m = new Map();
+    stepFields(step).forEach(function(el){ m.set(el, fieldValue(el)); });
+    return m;
+  });
+  function stepState(i){
+    var edited = false, filled = false;
+    stepFields(steps[i]).forEach(function(el){
+      var v = fieldValue(el);
+      if(v !== '') filled = true;
+      if(startVals[i].has(el) ? v !== startVals[i].get(el) : v !== '') edited = true;
+    });
+    return {edited: edited, empty: !filled};
+  }
+  function updateMtabs(){
+    mtabBtns.forEach(function(btn){
+      var n = parseInt(btn.dataset.step, 10);
+      var st = stepState(n - 1);
+      btn.classList.toggle('is-edited', st.edited);
+      btn.classList.toggle('is-empty', st.empty && !st.edited);
+      btn.setAttribute('aria-selected', n === current ? 'true' : 'false');
+      btn.tabIndex = n === current ? 0 : -1;
+      var word = btn.querySelector('.mtab-edited-word');
+      if(word) word.hidden = !st.edited;
+    });
+  }
+  if(mtabBar){
+    document.body.classList.add('has-mtabs');
+    form.addEventListener('input', updateMtabs);
+    form.addEventListener('change', updateMtabs);
+    // The bar steps aside while a field has focus, so it does not sit on top
+    // of the on-screen keyboard.
+    form.addEventListener('focusin', function(e){
+      if(e.target.matches('input,select,textarea')) mtabBar.classList.add('mtabs-away');
+    });
+    form.addEventListener('focusout', function(){ mtabBar.classList.remove('mtabs-away'); });
+  }
+
   function render() {
     steps.forEach(function(s){ s.hidden = (parseInt(s.dataset.step, 10) !== current); });
     backBtn.hidden = (current === 1);
@@ -1775,6 +1844,7 @@ document.addEventListener('DOMContentLoaded', function(){
       btn.classList.toggle('is-active', n === current);
       btn.classList.toggle('is-done', n < current);
     });
+    updateMtabs();
   }
 
   function goTo(step) {
@@ -1807,6 +1877,15 @@ document.addEventListener('DOMContentLoaded', function(){
   backBtn.addEventListener('click', function() { goTo(current - 1); });
 
   window.suggestWizGoTo = goTo; // #1649: the draft restore returns to the saved step
+  // The phone step bar uses the same rules as the top arrows: back and any
+  // already-visited step at once, forward one step at a time.
+  mtabBtns.forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var target = parseInt(btn.dataset.step, 10);
+      if (target < current) { goTo(target); return; }
+      nextBtn.click();
+    });
+  });
   // Arrow clicks — allow jumping to any already-visited step; forward jumps
   // go only one step at a time (same validation as Next button).
   arrowBtns.forEach(function(btn){

@@ -72,11 +72,8 @@ export async function searchFilter(
 
 export async function goToAllView(page: Page): Promise<void> {
   // Below 640px the desktop #tmt-week/#tmt-all toggle (inside .tmt) is
-  // CSS-hidden entirely — the mobile layout switches table mode via its own
-  // #mobile-show-all/#mobile-show-week bar instead (see index.html). #tmt-all
-  // being invisible there means the desktop branch below was silently a
-  // no-op on mobile, leaving the page stuck in the default "week" view
-  // (which usually has zero events, since seeded events land 3-45 days out).
+  // CSS-hidden. There the list tab (#mtab-list, the default, #1613) shows
+  // every future event, so no click is needed.
   const btn = page.locator("#tmt-all");
   if (await btn.isVisible().catch(() => false)) {
     const isActive = await btn.evaluate((el) =>
@@ -86,12 +83,16 @@ export async function goToAllView(page: Page): Promise<void> {
       await btn.click();
       await page.waitForTimeout(300);
     }
-    return;
   }
-  const mobileBtn = page.locator("#mobile-show-all");
-  if (await mobileBtn.isVisible().catch(() => false)) {
-    await mobileBtn.click();
-    await page.waitForTimeout(300);
+}
+
+// openHomeTab switches the phone bottom tab bar (#1613) to list, week or map.
+// Desktop has no tab bar, so this does nothing there.
+export async function openHomeTab(page: Page, tab: "list" | "week" | "map"): Promise<void> {
+  const btn = page.locator(`#mtab-${tab}`);
+  if (await btn.isVisible().catch(() => false)) {
+    await btn.click();
+    await expect(page.locator("#home-tabs")).toHaveAttribute("data-mtab", tab);
   }
 }
 

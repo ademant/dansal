@@ -152,6 +152,19 @@
 {{end}}
 {{define "content"}}
 {{with .Data}}
+{{/* #1617: on phones the event page is split into six tabs by the bottom bar
+     below. Blocks carry evt-panel + data-tab; CSS shows the active tab only
+     (base.html's shared .mtabs bar). Above 680px every block is shown. */}}
+<div class="evt-tabs" id="evt-tabs" data-mtab="general">
+<div class="mtabs mtabs-icons" role="tablist" aria-label="{{$.Strings.T "evt_mtab_label"}}">
+  <button type="button" role="tab" class="mtab" data-tab="general" aria-controls="evt-tabs" aria-selected="true" tabindex="0"><span class="mtab-ico" aria-hidden="true">ℹ️</span><span class="mtab-label">{{$.Strings.T "evt_mtab_general"}}</span></button>
+  <button type="button" role="tab" class="mtab{{if not (or $.Data.Event.Description $.Data.DefaultDescription)}} is-empty{{end}}" data-tab="details" aria-controls="evt-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">📝</span><span class="mtab-label">{{$.Strings.T "evt_mtab_details"}}</span></button>
+  <button type="button" role="tab" class="mtab{{if not $.Data.Event.Timetable}} is-empty{{end}}" data-tab="timetable" aria-controls="evt-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">🎶</span><span class="mtab-label">{{$.Strings.T "evt_mtab_timetable"}}</span></button>
+  <button type="button" role="tab" class="mtab{{if not $.Data.Event.Location}} is-empty{{end}}" data-tab="location" aria-controls="evt-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">📍</span><span class="mtab-label">{{$.Strings.T "evt_mtab_location"}}</span></button>
+  <button type="button" role="tab" class="mtab{{if not $.Data.Org}} is-empty{{end}}" data-tab="org" aria-controls="evt-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">🏠</span><span class="mtab-label">{{$.Strings.T "evt_mtab_org"}}</span></button>
+  <button type="button" role="tab" class="mtab" data-tab="board" aria-controls="evt-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">📌</span><span class="mtab-label">{{$.Strings.T "evt_mtab_board"}}</span></button>
+</div>
+<p class="evt-tab-empty" hidden>{{$.Strings.T "evt_mtab_empty"}}</p>
 {{with .Event}}
 
 {{if or .ImageURL $.Data.SeriesImageURL (and $.Data.Org $.Data.Org.ImageURL)}}
@@ -281,7 +294,7 @@
   <div class="evt-main">
 
     {{if .Musicians}}
-    <section class="evt-section">
+    <section class="evt-section evt-panel" data-tab="general">
       <h2>{{$.Strings.T "evt_musicians"}}</h2>
       <div class="evt-musician-tiles">
         {{range .Musicians}}
@@ -295,13 +308,13 @@
     </section>
     {{else if .NoLiveMusic}}
     {{/* #1612: flagged as recorded music; no musicians are listed. */}}
-    <section class="evt-section evt-no-live-music">
+    <section class="evt-section evt-no-live-music evt-panel" data-tab="general">
       <p>{{$.Strings.T "evt_no_live_music_display"}}</p>
     </section>
     {{end}}
 
     {{if .Instructors}}
-    <section class="evt-section">
+    <section class="evt-section evt-panel" data-tab="general">
       <h2>{{$.Strings.T "evt_instructors"}}</h2>
       <div class="evt-instructor-tiles">
         {{range .Instructors}}
@@ -316,21 +329,21 @@
     {{end}}
 
     {{if .Description}}
-    <section class="evt-section">
+    <section class="evt-section evt-panel" data-tab="details">
       <h2>{{$.Strings.T "evt_description"}}</h2>
       <div class="evt-description md-content">{{markdownHTML .Description}}</div>
     </section>
     {{else if $.Data.DefaultDescription}}
     {{/* #1290: same text as the JSON-LD description above — plain text, no
          markdown, so a plain paragraph rather than markdownHTML. */}}
-    <section class="evt-section">
+    <section class="evt-section evt-panel" data-tab="details">
       <h2>{{$.Strings.T "evt_description"}}</h2>
       <p class="evt-description">{{$.Data.DefaultDescription}}</p>
     </section>
     {{end}}
 
     {{if .Timetable}}
-    <section class="evt-section">
+    <section class="evt-section evt-panel" data-tab="timetable">
       <h2>{{$.Strings.T "evt_timetable"}}</h2>
       <div class="tt-toolbar">
         <button type="button" id="tt-my-toggle" data-fn="toggleMyTimetable" data-args="[]">{{$.Strings.T "tt_my_timetable"}}</button>
@@ -549,7 +562,7 @@
     {{end}}
 
     {{if $.Data.TimetableHistory}}
-    <section class="evt-section">
+    <section class="evt-section evt-panel" data-tab="timetable">
       <h2>{{$.Strings.T "evt_timetable_history"}}</h2>
       <ul class="tt-history-list">
         {{range $.Data.TimetableHistory}}
@@ -565,7 +578,7 @@
     {{if .Location}}
     {{$usedRooms := usedRoomIDs .Timetable}}
     {{if and .Location.SitePlanURL (gt (len $usedRooms) 1)}}
-    <details class="loc-siteplan">
+    <details class="loc-siteplan evt-panel" data-tab="location">
       <summary class="loc-siteplan-summary">{{$.Strings.T "loc_siteplan_section"}}</summary>
       <div class="siteplan-canvas">
         <img src="{{.Location.SitePlanURL}}" alt="{{$.Strings.T "loc_siteplan_section"}}">
@@ -588,8 +601,8 @@
          existing accessibility icons), admission as a "label: value" line. */}}
     {{$floor := .FloorCondition}}{{if not $floor}}{{if .Location}}{{$floor = .Location.FloorCondition}}{{end}}{{end}}
     {{$hasVenue := false}}{{with .Location}}{{if or .Location .Town}}{{$hasVenue = true}}{{end}}{{end}}
-    {{if or $hasVenue $floor .Food .Drink .Pricing}}
-    <div class="sidebar-block">
+    {{if or $hasVenue $floor .Food .Drink}}
+    <div class="sidebar-block evt-panel" data-tab="location">
       {{with .Location}}
       {{if or .Location .Town}}
       <div class="sidebar-label">{{$.Strings.T "evt_venue"}}</div>
@@ -648,6 +661,12 @@
       </div>
       {{end}}
 
+    </div>
+    {{end}}
+
+    {{/* Admission (#1617): its own card, so the General tab shows the price */}}
+    {{if .Pricing}}
+    <div class="sidebar-block evt-panel" data-tab="general">
       {{/* Admission: label: value */}}
       {{with .Pricing}}
       {{$cur := .Currency}}
@@ -666,14 +685,14 @@
 
     {{/* Booking / tickets */}}
     {{if .BookingURL}}
-    <div class="sidebar-block">
+    <div class="sidebar-block evt-panel" data-tab="general">
       <a href="{{.BookingURL}}" target="_blank" rel="noopener" class="btn-booking">{{$.Strings.T "evt_booking"}}</a>
     </div>
     {{end}}
 
     {{/* Reservation notice (#1337) */}}
     {{if .ReservationRequested}}
-    <div class="sidebar-block">
+    <div class="sidebar-block evt-panel" data-tab="general">
       <div class="evt-reservation-notice">{{$.Strings.T "evt_reservation_notice"}}</div>
       {{with .ContactEmail}}<a href="mailto:{{.}}" class="btn-reservation">{{$.Strings.T "evt_reservation_cta"}}</a>{{end}}
     </div>
@@ -681,7 +700,7 @@
 
     {{/* Website */}}
     {{if .URL}}
-    <div class="sidebar-block">
+    <div class="sidebar-block evt-panel" data-tab="general">
       <div class="sidebar-label">{{$.Strings.T "evt_links"}}</div>
       <a href="{{.URL}}" target="_blank" rel="noopener" class="sidebar-link">{{$.Strings.T "evt_website"}}</a>
     </div>
@@ -690,7 +709,7 @@
     {{/* Dance styles (#1085) — searchable/filterable elsewhere (search.html's
          dance dropdown), but never shown on the event's own page until now. */}}
     {{if .DanceNames}}
-    <div class="sidebar-block">
+    <div class="sidebar-block evt-panel" data-tab="details">
       <div class="sidebar-label">{{$.Strings.T "evt_dance_styles"}}</div>
       <div>{{range .DanceNames}}<span class="tag">{{.}}</span>{{end}}</div>
     </div>
@@ -698,7 +717,7 @@
 
     {{/* Tags */}}
     {{if .Tags}}
-    <div class="sidebar-block">
+    <div class="sidebar-block evt-panel" data-tab="details">
       <div class="sidebar-label">{{$.Strings.T "evt_tags"}}</div>
       <div>{{range .Tags}}<a href="/tags/{{.}}" class="tag">{{tagLabel $.Strings $.Data.TagMap .}}</a>{{end}}</div>
     </div>
@@ -707,7 +726,7 @@
     {{/* Organisation contact */}}
     {{with $.Data.Org}}
     {{if or $.Data.Event.ContactName $.Data.Event.ContactEmail .Website .Mastodon .Instagram .Facebook}}
-    <div class="sidebar-block">
+    <div class="sidebar-block evt-panel" data-tab="org">
       <div class="sidebar-label">{{$.Strings.T "evt_org_contact"}}</div>
       {{with $.Data.Event.ContactName}}<div>{{.}}</div>{{end}}
       {{with $.Data.Event.ContactEmail}}<div><a href="mailto:{{.}}" class="sidebar-link">{{.}}</a></div>{{end}}
@@ -721,7 +740,7 @@
 
     {{/* Last update info */}}
     {{if .ChangedAt}}
-    <div class="sidebar-block">
+    <div class="sidebar-block evt-panel" data-tab="details">
       <div class="sidebar-label">{{$.Strings.T "evt_last_update"}}</div>
       <div class="sidebar-meta-text">{{formatTime $.LangCode $.TimeFormat $.DateFormat .ChangedAt}}</div>
       {{if $.User}}
@@ -746,7 +765,7 @@
          nothing if neither is available rather than blocking the page. */}}
     {{if .FetchSourceID}}
     {{if or .SourceAttribution $.Data.Org}}
-    <div class="sidebar-block">
+    <div class="sidebar-block evt-panel" data-tab="details">
       <div class="sidebar-label">{{$.Strings.T "evt_import_credit"}}</div>
       <div class="sidebar-meta-text">{{if .SourceAttribution}}{{.SourceAttribution}}{{else}}{{$.Data.Org.Name}}{{end}}{{with .SourceLicence}} · {{.}}{{end}}</div>
       {{if .SourceTermsURL}}
@@ -758,14 +777,14 @@
     {{end}}
     {{end}}
 
-    <p class="evt-disclaimer">{{$.Strings.T "evt_disclaimer"}}</p>
+    <p class="evt-disclaimer evt-panel" data-tab="details">{{$.Strings.T "evt_disclaimer"}}</p>
   </aside>
 </div>
 
 {{end}}{{/* .Event */}}
 
 {{with .Org}}
-<div class="evt-org">
+<div class="evt-org evt-panel" data-tab="org">
   <h2>{{$.Strings.T "evt_organised_by"}} <a href="/org/{{$.Data.OrgSlug}}">{{.Name}}</a></h2>
   {{if .Description}}<div class="md-content">{{markdownHTML .Description}}</div>{{end}}
   <div class="org-links">
@@ -779,7 +798,7 @@
 
 {{/* ── Booking form ───────────────────────────────────────────── */}}
 {{if and .Event.BookingEnabled (ne .Event.Availability "sold_out")}}
-<section class="booking-section">
+<section class="booking-section evt-panel" data-tab="general">
   <h2>{{$.Strings.T "book_title"}}</h2>
 
   {{if .BookingOK}}
@@ -820,7 +839,7 @@
 {{end}}
 
 {{/* ── Contact board ──────────────────────────────────────────── */}}
-<section class="board-section">
+<section class="board-section evt-panel" data-tab="board">
   <h2>{{$.Strings.T "board_title"}}</h2>
 
   {{if .BoardPosted}}
@@ -987,6 +1006,7 @@
   </details>
 </section>
 
+</div>
 {{end}}{{/* .Data */}}
 
 <style>
@@ -1238,6 +1258,21 @@
 .tpl-msg{font-size:.82rem}
 .tpl-msg.ok{color:#155724}
 .tpl-msg.err{color:#991b1b}
+/* #1617: phone tab bar for the event page. Above 680px nothing here applies. */
+.evt-tab-empty{color:var(--fg-muted);text-align:center;padding:1rem;font-size:.92rem}
+@media(max-width:680px){
+  #evt-tabs:not([data-mtab="general"]) .evt-panel[data-tab="general"],
+  #evt-tabs:not([data-mtab="details"]) .evt-panel[data-tab="details"],
+  #evt-tabs:not([data-mtab="timetable"]) .evt-panel[data-tab="timetable"],
+  #evt-tabs:not([data-mtab="location"]) .evt-panel[data-tab="location"],
+  #evt-tabs:not([data-mtab="org"]) .evt-panel[data-tab="org"],
+  #evt-tabs:not([data-mtab="board"]) .evt-panel[data-tab="board"]{display:none}
+  #evt-tabs .evt-tab-empty:not([hidden]){display:block}
+  .evt-header .btn-icon{min-width:44px;min-height:44px;margin-top:.2rem}
+  .evt-header h1,.evt-description,.evt-loc-name,.evt-loc-addr{overflow-wrap:anywhere;min-width:0}
+  .booking-form input,.booking-form textarea,.board-section input,.board-section textarea,.board-section select{font-size:16px}
+  body.has-mtabs #back-to-top{bottom:calc(4.5rem + env(safe-area-inset-bottom) + .5rem)}
+}
 </style>
 
 <script nonce="{{$.Nonce}}">
@@ -1537,6 +1572,57 @@ document.addEventListener('DOMContentLoaded', function(){
      the attribute) — so the map-init script below is wrapped in a
      DOMContentLoaded listener instead, which is what actually delays it
      until after the deferred external script has run and L is defined. -->
+<script nonce="{{$.Nonce}}">
+// #1617: phone tab bar for the event page. Hash links open the tab that holds
+// their target (e.g. #board-post-… opens Board, a timetable link opens
+// Timetable). Only the bar and the panels change; nothing is re-rendered.
+(function(){
+  var root=document.getElementById('evt-tabs');
+  if(!root) return;
+  var bar=root.querySelector('.mtabs');
+  var btns=Array.prototype.slice.call(bar.querySelectorAll('.mtab'));
+  var emptyMsg=root.querySelector('.evt-tab-empty');
+  document.body.classList.add('has-mtabs');
+  function show(tab, byUser){
+    root.setAttribute('data-mtab', tab);
+    var empty=false;
+    btns.forEach(function(b){
+      var on=b.dataset.tab===tab;
+      b.setAttribute('aria-selected', on?'true':'false');
+      b.tabIndex=on?0:-1;
+      if(on) empty=b.classList.contains('is-empty');
+    });
+    emptyMsg.hidden=!empty;
+    if(tab==='location' && window.dansalEvtMap) window.dansalEvtMap.invalidateSize();
+    if(byUser) window.scrollTo(0,0);
+  }
+  btns.forEach(function(b){
+    b.addEventListener('click', function(){ show(this.dataset.tab, true); });
+    b.addEventListener('keydown', function(e){
+      var i=btns.indexOf(this), j=-1;
+      if(e.key==='ArrowRight') j=(i+1)%btns.length;
+      else if(e.key==='ArrowLeft') j=(i+btns.length-1)%btns.length;
+      else if(e.key==='Home') j=0;
+      else if(e.key==='End') j=btns.length-1;
+      if(j<0) return;
+      e.preventDefault();
+      btns[j].focus();
+      show(btns[j].dataset.tab, true);
+    });
+  });
+  // The bar steps aside while a form field has focus (on-screen keyboard).
+  root.addEventListener('focusin', function(e){
+    if(e.target.matches('input,select,textarea')) bar.classList.add('mtabs-away');
+  });
+  root.addEventListener('focusout', function(){ bar.classList.remove('mtabs-away'); });
+  show('general', false);
+  if(location.hash.length>1){
+    var target=document.getElementById(decodeURIComponent(location.hash.slice(1)));
+    var panel=target && target.closest('.evt-panel');
+    if(panel) show(panel.dataset.tab, false);
+  }
+})();
+</script>
 <script nonce="{{$.Nonce}}" defer src="/static/leaflet/leaflet.js"></script>
 <script nonce="{{$.Nonce}}">
 // #1166: same bfcache staleness as #1162 — an admin editing this event
@@ -1556,6 +1642,7 @@ document.addEventListener('DOMContentLoaded', function(){
   dansalLeafletCss();
   var map=L.map(el,{zoomControl:false,dragging:false,scrollWheelZoom:false,doubleClickZoom:false,boxZoom:false,keyboard:false,touchZoom:false}).setView([lat,lng],15);
   attachTileLayer(map);
+  window.dansalEvtMap=map; // #1617: the location tab resizes it when it is shown
   L.marker([lat,lng]).addTo(map);
   // Extra venue markers (festival additional buildings)
   {{$primID := derefInt .Event.LocationID}}

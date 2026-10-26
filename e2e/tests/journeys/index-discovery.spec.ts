@@ -1,6 +1,7 @@
 import { test, expect } from "../../helpers/fixtures";
 import { fullSeed, SeedResult, getTokenFromCookie } from "../../helpers/seed";
 import { AUTH_FILE } from "../../helpers/auth";
+import { openHomeTab } from "../../helpers/nav";
 import { ensureIndexWeekFixture, ensureFollowingWeekFixture, IndexWeekFixture } from "../../helpers/indexFixture";
 
 // Covers the index page's actual discovery mechanics (#1266) — type
@@ -65,6 +66,7 @@ test.describe("Index page: discovery mechanics", () => {
 
   test("clicking the far marker opens its popup and links to the right event", async ({ page }) => {
     await page.goto("/");
+    await openHomeTab(page, "map");
     const marker = page.locator(`.leaflet-marker-icon[title="${fixture.farEventTitle}"]`);
     await expect(marker).toBeVisible();
     await marker.click();
@@ -76,6 +78,7 @@ test.describe("Index page: discovery mechanics", () => {
 
   test("clicking a cluster zooms in to reveal individual markers; zooming out re-groups them", async ({ page }) => {
     await page.goto("/");
+    await openHomeTab(page, "map");
     // The nearby pair shares one location, so at the map's initial
     // fit-bounds zoom they render as a single cluster icon, not two
     // separate markers.
@@ -193,18 +196,25 @@ test.describe("Index page: discovery mechanics", () => {
 
   test("mobile: daily view replaces the weekly table; day switching leaves the map alone", async ({ page }) => {
     await page.goto("/");
-    const weekMobile = page.locator(".week-mobile");
-    if (!(await weekMobile.isVisible().catch(() => false))) {
+    const weekTab = page.locator("#mtab-week");
+    if (!(await weekTab.isVisible().catch(() => false))) {
       test.skip(true, "mobile-only view");
     }
+    // #1613: the phone homepage opens on the list; the calendar is one tab away.
+    await openHomeTab(page, "week");
+    const weekMobile = page.locator(".week-mobile");
+    await expect(weekMobile).toBeVisible();
     await expect(page.locator("#week-mini-cal")).toBeHidden();
 
+    // The map is on its own tab (#1613) and loads once the browser is idle.
+    await openHomeTab(page, "map");
     // The map loads asynchronously (Leaflet's CSS/tiles load non-blocking,
     // #1215) — wait for at least one marker/cluster to actually render
     // before taking the "before" count, or a slow first paint reads as 0
     // and any later async settling looks like a false change.
     await expect(page.locator(".leaflet-marker-icon, .marker-cluster").first()).toBeVisible();
     const initialMarkers = await page.locator(".leaflet-marker-icon, .marker-cluster").count();
+    await openHomeTab(page, "week");
     const dayCodes = page.locator(".week-mobile-days .day-code");
     const otherDay = dayCodes.nth(2);
     await otherDay.click();

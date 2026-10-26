@@ -16,8 +16,9 @@
 .home-intro-dialog p{font-size:.95rem;color:var(--fg-2);line-height:1.6;margin:0 0 .75rem}
 @media(pointer:coarse){.nav-info-btn{width:44px;height:44px}}
 .travel-notice{font-size:.82rem;color:var(--fg-muted);margin:0 0 .4rem}
-.type-selector{display:flex;gap:.4rem;margin-bottom:.6rem;flex-wrap:wrap;align-items:center}
-.type-btn{padding:.3rem .9rem;border:1px solid var(--border-mid);border-radius:20px;background:var(--btn-bg);cursor:pointer;font-size:.88rem;color:var(--fg-2);transition:background .15s,color .15s}
+.type-selector{display:flex;gap:.3rem;margin-bottom:.6rem;flex-wrap:wrap;align-items:center;max-width:100%;min-width:0}
+/* #1669: tighter pills on desktop, so the row wraps inside the content width. */
+.type-btn{padding:.25rem .6rem;border:1px solid var(--border-mid);border-radius:20px;background:var(--btn-bg);cursor:pointer;font-size:.88rem;color:var(--fg-2);transition:background .15s,color .15s;white-space:nowrap}
 .type-btn:hover{background:var(--btn-bg-h)}
 .type-btn.type-active{background:var(--heading);color:#fff;border-color:var(--heading)}
 .type-selector select{padding:.3rem .5rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.88rem;background:var(--bg-card);color:var(--fg)}
@@ -207,7 +208,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   #event-tiles{display:block;font-size:.95rem}
   #load-more{width:100%;min-height:44px}
   .type-selector{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch}
-  .type-btn{flex:none;min-height:40px}
+  .type-btn{flex:none;min-height:40px;padding:.3rem .9rem}
   .wm-arrow{min-width:40px;min-height:40px}
   .week-mobile-days .day-code{display:inline-flex;align-items:center;min-height:40px;padding:.3rem .6rem}
   .map-toolbar button{min-height:40px}

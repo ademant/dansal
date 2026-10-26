@@ -3,8 +3,11 @@
 #
 #   scripts/e2e-dev-background.sh [--shuffle[=SEED]] [--repeat=N] [spec files...] [playwright args...]
 #
-# Output goes to $LOG (default e2e/full-run.log); the PID goes to $PIDFILE
-# (default e2e/full-run.pid). Stop it with: kill "$(cat e2e/full-run.pid)"
+# Each run writes its output to e2e/runs/<timestamp>.log. e2e/full-run.log links
+# to the latest one, and each finished run appends a line to e2e/runs/index.jsonl
+# (start/finish time, arguments, exit code, pass/fail/flaky/skipped counts,
+# failing tests). The PID of the active run goes to $PIDFILE (default
+# e2e/full-run.pid). Stop it with: kill "$(cat e2e/full-run.pid)"
 #
 # --shuffle runs each spec file in its own `playwright test` call, in a random
 # order drawn from SEED (default: the current time; printed at the top of the
@@ -21,6 +24,40 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
+runs="$root/e2e/runs"
+index="$runs/index.jsonl"
+
+# Appends one summary line for the run in $E2E_RUN_LOG to $index.
+# Args: exit code.
+record_run() {
+  python3 - "$E2E_RUN_LOG" "$index" "$1" "$E2E_RUN_ARGS" "$E2E_RUN_STARTED" <<'PY'
+import datetime, json, re, sys
+
+log, index, exit_code, args, started = sys.argv[1:6]
+counts = {"passed": 0, "failed": 0, "flaky": 0, "skipped": 0}
+failed = []
+with open(log, errors="replace") as f:
+    for line in f:
+        m = re.match(r"^  (\d+) (passed|failed|flaky|skipped)\b", line)
+        if m:
+            counts[m.group(2)] += int(m.group(1))
+        m = re.match(r"^  \d+\) (.+?)\s*$", line)
+        if m:
+            failed.append(m.group(1))
+
+record = {
+    "started": started,
+    "finished": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
+    "args": args,
+    "exit": int(exit_code),
+    "log": log,
+    **counts,
+    "failed_tests": failed,
+}
+with open(index, "a") as f:
+    f.write(json.dumps(record) + "\n")
+PY
+}
 
 if [[ "${1:-}" == "--worker" ]]; then
   shift
@@ -88,16 +125,24 @@ print("\n".join(files))
     if [[ $round_rc -ne 0 ]]; then overall=$round_rc; fi
   done
   echo "EXIT $overall"
+  record_run "$overall"
   exit "$overall"
 fi
 
-LOG="${LOG:-$root/e2e/full-run.log}"
 PIDFILE="${PIDFILE:-$root/e2e/full-run.pid}"
-
 if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-  echo "already running as PID $(cat "$PIDFILE") (see $LOG)" >&2
+  echo "already running as PID $(cat "$PIDFILE")" >&2
   exit 1
 fi
+
+mkdir -p "$runs"
+stamp="$(date +%Y%m%d-%H%M%S)"
+LOG="${LOG:-$runs/$stamp.log}"
+ln -sfn "$LOG" "$root/e2e/full-run.log"
+
+export E2E_RUN_LOG="$LOG"
+export E2E_RUN_ARGS="$*"
+export E2E_RUN_STARTED="$(date --iso-8601=seconds)"
 
 nohup "$0" --worker "$@" > "$LOG" 2>&1 &
 

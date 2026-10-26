@@ -594,12 +594,9 @@
 .wiz-step{touch-action:pan-y}
 /* #1616: on phones the step bar moves to the bottom (the shared .mtabs bar in
    base.html). Above 640px the top arrows stay as they are. */
-.mtab{position:relative}
 .mtab-dot{display:none;position:absolute;top:.25rem;right:calc(50% - 1.1rem);width:.45rem;height:.45rem;border-radius:50%;background:var(--link)}
 .mtab.is-edited .mtab-dot{display:block}
-.mtab.is-empty:not([aria-selected="true"]){color:var(--fg-faint);opacity:.6}
 .mtab-edited-word{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-.mtabs.mtabs-away{display:none!important}
 @media(max-width:640px){
   .wiz-arrows{display:none}
 }

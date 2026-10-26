@@ -266,6 +266,9 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
   .mtab-ico{font-size:1.25rem;line-height:1}
   .mtabs-icons .mtab:not([aria-selected="true"]) .mtab-label{display:none}
   .mtab:focus-visible{outline:2px solid var(--link);outline-offset:-4px}
+  .mtab{position:relative}
+  .mtab.is-empty:not([aria-selected="true"]){color:var(--fg-faint);opacity:.6}
+  .mtabs.mtabs-away{display:none!important}
 }
 @media(pointer:coarse){
   .nav-watchlist,.nav-hamburger,.nav-user-btn{min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center}

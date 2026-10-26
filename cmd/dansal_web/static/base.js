@@ -621,6 +621,25 @@ function dansalLeafletCss(cluster){
     document.head.appendChild(l);
   });
 }
+// dansalLoadLeaflet (#1613): loads Leaflet (and optionally markercluster) from
+// a script that the page does not have to block on. Returns one cached Promise.
+// Scripts created by a nonce'd script are trusted under strict-dynamic, so no
+// nonce is needed on the injected tags.
+function dansalLoadLeaflet(cluster){
+  if(dansalLoadLeaflet.p) return dansalLoadLeaflet.p;
+  function load(src){
+    return new Promise(function(resolve, reject){
+      var s=document.createElement('script');
+      s.src=src; s.onload=resolve; s.onerror=reject;
+      document.head.appendChild(s);
+    });
+  }
+  dansalLeafletCss(cluster);
+  dansalLoadLeaflet.p=load('/static/leaflet/leaflet.js').then(function(){
+    return cluster ? load('/static/leaflet.markercluster/leaflet.markercluster.js') : null;
+  });
+  return dansalLoadLeaflet.p;
+}
 (function(){
   var btn=document.getElementById('back-to-top');
   var nav=document.querySelector('nav');

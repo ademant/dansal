@@ -160,8 +160,6 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 .week-mobile-days .day-code.active{background:var(--link);color:#fff;font-weight:700}
 .week-mobile-content{display:flex;flex-direction:column;gap:.4rem}
 .week-mobile-empty{color:var(--fg-muted);font-size:.88rem;text-align:center;padding:1rem 0}
-.mobile-mode-bar{display:none}
-.mobile-mode-btn{padding:.4rem 1.2rem;border:1px solid var(--border-mid);border-radius:20px;background:var(--btn-bg);color:var(--link);font-size:.88rem;cursor:pointer}
 .tile-span-first{border-radius:.4rem 0 0 .4rem;margin-right:-.6rem;padding-right:1.2rem;border-right:none}
 .tile-span-last{border-radius:0 .4rem .4rem 0;margin-left:-.6rem;padding-left:1.2rem;border-left:none}
 .tile-span-mid{border-radius:0;margin:0 -.6rem;padding-left:1.2rem;padding-right:1.2rem;border-left:none;border-right:none}
@@ -190,12 +188,27 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   .week-nav{display:none}
   .leaflet-popup-close-button{width:28px!important;height:28px!important;font-size:20px!important;line-height:28px!important;top:4px!important;right:4px!important}
   .table-wrap{display:none}
-  #event-tiles{display:none}
   .week-table-wrap{display:none}
   .week-mobile{display:block}
   .tmt{display:none}
   #week-outer{padding:.6rem;overflow:hidden;min-height:260px}
-  .mobile-mode-bar{display:flex;justify-content:center;padding:.4rem 0}
+  /* #1613: on phones the homepage shows one of three panels, chosen by the
+     bottom tab bar (data-mtab on #home-tabs). The list panel holds the tile
+     list, the week panel the calendar, the map panel the map. */
+  #home-tabs:not([data-mtab="map"]) #mpanel-map,
+  #home-tabs:not([data-mtab="week"]) #mpanel-week,
+  #home-tabs:not([data-mtab="list"]) #mpanel-list{display:none}
+  #home-tabs .week-divider{display:none}
+  #event-tiles{display:block;font-size:.95rem}
+  #load-more{width:100%;min-height:44px}
+  .type-selector{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .type-btn{flex:none;min-height:40px}
+  .wm-arrow{min-width:40px;min-height:40px}
+  .week-mobile-days .day-code{display:inline-flex;align-items:center;min-height:40px;padding:.3rem .6rem}
+  .map-toolbar button{min-height:40px}
+  .cal-evt b{white-space:normal;overflow-wrap:anywhere}
+  #week-main{touch-action:pan-y}
+  body.has-mtabs #back-to-top{bottom:calc(4.5rem + env(safe-area-inset-bottom) + .5rem)}
 }
 </style>
 {{end}}
@@ -230,6 +243,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   {{end}}
 </div>
 
+<div class="home-tabs" id="home-tabs" data-mtab="list">
 <!-- Map -->
 {{/* #1299: the same events already render as accessible text further down
      this page (the weekly table / future list), so the map is a
@@ -244,7 +258,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
      regression from the map's tiles being the largest element on screen;
      #1520 reverted that so mobile order matches desktop (map, then week)
      again, accepting that LCP tradeoff back for order consistency. */}}
-<div class="home-mapweek">
+<section class="mtab-panel home-mapweek" id="mpanel-map" data-tab="map" role="tabpanel" aria-labelledby="mtab-map">
 <div id="map-container" aria-hidden="true"></div>
   <button type="button" id="map-locate-overlay" class="map-locate-overlay" title="{{$.Strings.T "map_locate"}}" aria-label="{{$.Strings.T "map_locate"}}">&#9678;</button>
 <div class="map-toolbar">
@@ -253,18 +267,15 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   <span id="map-no-coords" hidden>{{$.Strings.T "map_no_coords"}}</span>
   <span id="f-info" class="filter-info" aria-live="polite" style="margin-left:auto"></span>
 </div>
+</section>
 
 <!-- Week view + mini-cal in a shared card so the selection link is obvious -->
+<section class="mtab-panel" id="mpanel-week" data-tab="week" role="tabpanel" aria-labelledby="mtab-week">
 <div id="week-outer">
   <div id="week-main"></div>
   <div id="week-mini-cal"></div>
 </div>
-
-<div id="mobile-mode-bar" class="mobile-mode-bar">
-  <button type="button" id="mobile-show-all" class="mobile-mode-btn">{{$.Strings.T "table_mode_all"}} →</button>
-  <button type="button" id="mobile-show-week" class="mobile-mode-btn" hidden>← {{$.Strings.T "table_mode_week"}}</button>
-</div>
-</div>
+</section>
 
 <!-- Mobile week-selector popup -->
 <dialog id="wp-dialog" class="wp-dialog">
@@ -282,6 +293,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 
 <hr class="week-divider">
 
+<section class="mtab-panel" id="mpanel-list" data-tab="list" role="tabpanel" aria-labelledby="mtab-list">
 <!-- Table header: search link + week/all toggle + add past events -->
 <div class="search-trigger-bar">
   <a href="/search" class="search-events-btn">🔍 {{$.Strings.T "search_events_btn"}}</a>
@@ -356,6 +368,15 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   {{$.Strings.T "no_events_found"}}
   <button type="button" id="clear-filters-empty">{{$.Strings.T "clear_filters"}}</button>
 </p>
+</section>
+</div>
+
+<!-- Phone bottom tab bar (#1613): list is the default, see initialHomeTab() -->
+<div class="mtabs" role="tablist" aria-label="{{$.Strings.T "mtab_label"}}">
+  <button type="button" role="tab" class="mtab" id="mtab-list" data-tab="list" aria-controls="mpanel-list" aria-selected="true" tabindex="0"><span class="mtab-ico" aria-hidden="true">☰</span><span class="mtab-label">{{$.Strings.T "mtab_list"}}</span></button>
+  <button type="button" role="tab" class="mtab" id="mtab-week" data-tab="week" aria-controls="mpanel-week" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">📅</span><span class="mtab-label">{{$.Strings.T "mtab_calendar"}}</span></button>
+  <button type="button" role="tab" class="mtab" id="mtab-map" data-tab="map" aria-controls="mpanel-map" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">🗺</span><span class="mtab-label">{{$.Strings.T "mtab_map"}}</span></button>
+</div>
 
 <script type="application/json" id="events-geo">{{eventsGeoJSON .Events}}</script>
 <!-- #1220: external map overlay (e.g. folkbalbende.be) — pins dansal
@@ -382,26 +403,17 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 {{end}}
 
 
-<!-- defer (#1130): these are the last elements on the page, so deferring the
-     two external tags below doesn't change execution order — it just lets
-     the browser finish parsing the rest of the document instead of blocking
-     on the Leaflet download at this exact point. `defer` has NO effect on an
-     inline script without `src` (it always runs synchronously at its parse
-     position regardless of the attribute).
+<!-- Leaflet is not loaded by a script tag here: dansalLoadLeaflet() (base.js)
+     fetches it when the map is needed. Desktop asks for it at once; phones
+     ask when the browser is idle, or when the map tab is opened (#1613).
 
      The app-logic script below runs as an IIFE at its parse position
      (immediately, since it's the last thing in <body> — the elements it
      touches already exist) rather than waiting for DOMContentLoaded (#1210):
      week/mini-cal/table rendering has no dependency on Leaflet's global `L`
      at all (pure DOM/date building from the JSON already embedded in the
-     page), so gating it behind the deferred Leaflet download was an
-     unnecessary CLS-causing delay under slow/throttled mobile networks —
-     `#week-outer` sat empty, then popped in once L happened to finish
-     loading, shifting everything below it. Only initMap()'s one-time
-     updateMapMarkers() call (bottom of this script) genuinely needs L, so
-     that alone still waits for DOMContentLoaded. -->
-<script nonce="{{$.Nonce}}" defer src="/static/leaflet/leaflet.js"></script>
-<script nonce="{{$.Nonce}}" defer src="/static/leaflet.markercluster/leaflet.markercluster.js"></script>
+     page). Only initMap() needs `L`, and ensureMap() calls it once Leaflet
+     has loaded. -->
 <script nonce="{{$.Nonce}}">
 (function(){
   var PAGE = 25;
@@ -431,6 +443,37 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   // 'week' = table shows only current-week events in sync with the calendar;
   // 'all'  = table shows all future events with pagination (classic view).
   var tableMode = new URLSearchParams(window.location.search).get('mode') === 'all' ? 'all' : 'week';
+
+  // ── Phone tabs (#1613) ──────────────────────────────────────────────────
+  // On phones the page shows one panel at a time: list (tiles, the "all"
+  // table mode), calendar (week view, the "week" table mode) or map. Desktop
+  // ignores the tabs and keeps its layout. The tab name is data-mtab on
+  // #home-tabs; CSS decides what is visible.
+  var PHONE_MQ = window.matchMedia('(max-width:640px)');
+  function isPhone(){ return PHONE_MQ.matches; }
+  // initialHomeTab: ?view= wins, then the week deep links (?week=, ?day=)
+  // open the calendar, ?mode=all opens the list, then the last tab the
+  // visitor chose (localStorage), and the list by default.
+  function initialHomeTab(){
+    var sp = new URLSearchParams(window.location.search);
+    var v = sp.get('view');
+    if(v === 'list' || v === 'week' || v === 'map') return v;
+    if(sp.get('week') || sp.get('day')) return 'week';
+    if(sp.get('mode') === 'all') return 'list';
+    try{
+      var s = localStorage.getItem('dansal_home_tab');
+      if(s === 'list' || s === 'week' || s === 'map') return s;
+    }catch(e){}
+    return 'list';
+  }
+  // The table mode a tab needs: the list shows every future event, the
+  // calendar only the week. Desktop keeps the mode from the URL.
+  function desiredTableMode(){
+    if(isPhone()) return mobileTab === 'list' ? 'all' : 'week';
+    return new URLSearchParams(window.location.search).get('mode') === 'all' ? 'all' : 'week';
+  }
+  var mobileTab = initialHomeTab();
+  tableMode = desiredTableMode();
 
   function pad(n){ return n < 10 ? '0'+n : ''+n; }
   function dateToIso(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
@@ -513,7 +556,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   // #1554: when the watchlist changes, refresh the watched map markers and the
   // weekly calendar (so watched events get their yellow cell).
   function refreshWatchedMarkers(){
-    if(!window.L) return;
+    if(!map) return;
     var byId={};
     eventsGeo.forEach(function(e){ byId[e.id]=e; });
     Object.keys(allMarkers).forEach(function(id){
@@ -837,13 +880,15 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 
   // ── Touch swipe on week table (mobile) ───────────────────────────────────
   (function(){
-    var el=document.getElementById('week-main'), sx=null;
-    el.addEventListener('touchstart',function(e){sx=e.touches[0].clientX;},{passive:true});
+    var el=document.getElementById('week-main'), sx=null, sy=null;
+    el.addEventListener('touchstart',function(e){sx=e.touches[0].clientX; sy=e.touches[0].clientY;},{passive:true});
     el.addEventListener('touchend',function(e){
       if(sx===null)return;
-      var dx=e.changedTouches[0].clientX-sx; sx=null;
-      if(Math.abs(dx)>50){
-        if(window.matchMedia('(max-width:640px)').matches){
+      var dx=e.changedTouches[0].clientX-sx, dy=e.changedTouches[0].clientY-sy; sx=null;
+      if(isPhone()){
+        // #1613: a horizontal swipe that is clearly not a scroll changes the day
+        if(mobileTab!=='week' || Math.abs(dx)<=50 || Math.abs(dx)<=1.5*Math.abs(dy)) return;
+        {
           var crossedWeek=false;
           if(dx<0){
             if(++currentDayIndex>6){ currentDayIndex=0; weekOffset++; crossedWeek=true; }
@@ -852,10 +897,10 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
           }
           pushWeekState(); syncMiniCalToWeek(); renderWeek(); renderMiniCal();
           if(crossedWeek) updateMapMarkers(true);
-        } else {
-          weekOffset+=dx<0?1:-1;
-          pushWeekState(); syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(true);
         }
+      } else if(Math.abs(dx)>50){
+        weekOffset+=dx<0?1:-1;
+        pushWeekState(); syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(true);
       }
     },{passive:true});
   })();
@@ -1093,7 +1138,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     // URL instead of /events/{id}, and credit the source.
     var detailUrl=e.ext ? (e.url||'#') : ('/events/'+e.id);
     var srcLine=(e.ext && e.src) ? '<div style="font-size:.78rem;margin-top:.2rem;color:var(--fg-hint,#888)">'+escHtml(I18N.mapExternalVia)+' '+escHtml(e.src)+'</div>' : '';
-    var isMobile=window.matchMedia('(max-width:640px)').matches;
+    var isMobile=isPhone();
     var outerStyle='min-width:200px;max-width:280px';
     var outerClick='';
     if(isMobile){ outerStyle+=';cursor:pointer'; outerClick=' data-fn="navigateTo" data-args=\'["'+detailUrl.replace(/"/g,'\\"')+'"]\''; }
@@ -1333,7 +1378,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
       // the marker here — eventsGeo already has the entry, so initMap()'s
       // own forEach over eventsGeo (once L is ready) creates it instead;
       // this just avoids a race that would otherwise throw.
-      if(!allMarkers[e.id] && window.L){
+      if(!allMarkers[e.id] && map){
         var m = L.marker([e.lat, e.lng], {icon: eventIcon(e), alt: e.t});
         m.bindPopup(buildPopup(e),{maxWidth:300});
         allMarkers[e.id] = m;
@@ -1423,7 +1468,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
             if(geoById[e.id]) return;
             geoById[e.id] = {lat:e.lat, lng:e.lng};
             eventsGeo.push(e);
-            if(!allMarkers[e.id] && window.L){
+            if(!allMarkers[e.id] && map){
               var m = L.marker([e.lat, e.lng], {icon: eventIcon(e), alt: e.t});
               m.bindPopup(buildPopup(e),{maxWidth:300});
               allMarkers[e.id] = m;
@@ -1463,8 +1508,56 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   }
   document.getElementById('tmt-week').addEventListener('click', function(){ setTableMode('week'); });
   document.getElementById('tmt-all').addEventListener('click',  function(){ setTableMode('all');  });
-  document.getElementById('mobile-show-all').addEventListener('click',  function(){ setTableMode('all');  });
-  document.getElementById('mobile-show-week').addEventListener('click', function(){ setTableMode('week'); });
+
+  // ── Phone tab bar (#1613) ───────────────────────────────────────────────
+  // applyHomeTab only sets which panel is shown and the ARIA state. setHomeTab
+  // is what a visitor's choice goes through: it also stores the tab, writes
+  // ?view= (replaceState, so the back button is unaffected), and switches the
+  // table mode the tab needs.
+  var HOME_TABS = ['list','week','map'];
+  function applyHomeTab(tab){
+    mobileTab = tab;
+    document.getElementById('home-tabs').setAttribute('data-mtab', tab);
+    document.querySelectorAll('.mtab').forEach(function(b){
+      var on = b.dataset.tab === tab;
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+      b.tabIndex = on ? 0 : -1;
+    });
+  }
+  function setHomeTab(tab, byUser){
+    applyHomeTab(tab);
+    if(byUser){
+      try{ localStorage.setItem('dansal_home_tab', tab); }catch(e){}
+      var sp = new URLSearchParams(window.location.search);
+      sp.set('view', tab);
+      history.replaceState(history.state, '', window.location.pathname + '?' + sp.toString());
+      window.scrollTo(0, 0);
+    }
+    if(tab === 'map'){
+      ensureMap().then(function(){ map.invalidateSize(); updateMapMarkers(true); });
+      return;
+    }
+    var m = desiredTableMode();
+    if(tableMode !== m){
+      setTableMode(m);
+      if(m === 'all'){ shown = 0; render(); }
+    }
+  }
+  document.querySelectorAll('.mtab').forEach(function(b){
+    b.addEventListener('click', function(){ setHomeTab(this.dataset.tab, true); });
+    b.addEventListener('keydown', function(e){
+      var i = HOME_TABS.indexOf(this.dataset.tab), j = -1;
+      if(e.key === 'ArrowRight') j = (i + 1) % 3;
+      else if(e.key === 'ArrowLeft') j = (i + 2) % 3;
+      else if(e.key === 'Home') j = 0;
+      else if(e.key === 'End') j = 2;
+      if(j < 0) return;
+      e.preventDefault();
+      var next = document.querySelector('.mtab[data-tab="' + HOME_TABS[j] + '"]');
+      next.focus();
+      setHomeTab(HOME_TABS[j], true);
+    });
+  });
 
   // Returns the rows to display in the table: all visible in 'all' mode,
   // only those overlapping the current week in 'week' mode.
@@ -1644,14 +1737,6 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     document.getElementById('pagination-bar').hidden = tableMode==='week' || tRows.length===0;
     insertDateSeparators();
 
-    // Mobile: toggle between daily view and full tile list based on tableMode
-    if(window.matchMedia('(max-width:640px)').matches){
-      var inAll = tableMode==='all';
-      document.getElementById('week-outer').hidden = inAll;
-      document.getElementById('event-tiles').style.display = inAll ? 'block' : 'none';
-      document.getElementById('mobile-show-all').hidden = inAll;
-      document.getElementById('mobile-show-week').hidden = !inAll;
-    }
     renderTiles();
   }
 
@@ -1688,10 +1773,28 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   // clusterGroup and the one-time updateMapMarkers() call shows whichever
   // are in the already-computed `visible` set (map var is guarded to no-op
   // if called before this).
-  document.addEventListener('DOMContentLoaded', function(){
-    initMap();
-    updateMapMarkers();
-  });
+  // ensureMap loads Leaflet and builds the map once. Desktop does it now.
+  // On phones the list is shown first, so the map loads when the browser is
+  // idle (after the load event), or at once when the map tab is the one
+  // remembered, and on the first map-tab open when Save-Data is on.
+  var mapLoad = null;
+  function ensureMap(){
+    if(!mapLoad){
+      mapLoad = dansalLoadLeaflet(true).then(function(){
+        initMap();
+        if(!isPhone() || mobileTab === 'map') updateMapMarkers(true);
+      });
+    }
+    return mapLoad;
+  }
+  function whenIdle(fn){
+    function go(){
+      if('requestIdleCallback' in window) requestIdleCallback(fn, {timeout: 2000});
+      else setTimeout(fn, 200);
+    }
+    if(document.readyState === 'complete') go();
+    else window.addEventListener('load', go, {once: true});
+  }
   var _advanced = autoAdvanceToNextEventWeek();
   if(_advanced) syncMiniCalToWeek();
   // Record initial week in history so back-button works from within the page.
@@ -1700,6 +1803,16 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   history.replaceState({wo:weekOffset,di:currentDayIndex},'',
     _advanced ? ('?week='+dateToIso(getWeekStart(weekOffset))+'&day='+currentDayIndex) : window.location.href);
   applyFilters();
+  applyHomeTab(mobileTab);
+  var saveData = !!(navigator.connection && navigator.connection.saveData);
+  if(!isPhone() || mobileTab === 'map') ensureMap();
+  else if(!saveData) whenIdle(ensureMap);
+  PHONE_MQ.addEventListener('change', function(){
+    if(!isPhone()) ensureMap();
+    tableMode = desiredTableMode();
+    renderAll();
+    if(map) map.invalidateSize();
+  });
 
   // Background pre-fetch: immediately load events for the next 3 months so the
   // mini-calendar heat map is fully populated and week navigation within that
@@ -1714,7 +1827,8 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   window.addEventListener('popstate',function(ev){
     weekOffset=(ev.state&&typeof ev.state.wo==='number')?ev.state.wo:urlToWeekOffset();
     currentDayIndex=(ev.state&&typeof ev.state.di==='number')?ev.state.di:urlToDayIndex();
-    tableMode = new URLSearchParams(window.location.search).get('mode')==='all' ? 'all' : 'week';
+    if(isPhone()) applyHomeTab(initialHomeTab());
+    tableMode = desiredTableMode();
     document.getElementById('tmt-week').classList.toggle('tmt-active', tableMode==='week');
     document.getElementById('tmt-all').classList.toggle('tmt-active',  tableMode==='all');
     syncMiniCalToWeek();

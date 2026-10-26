@@ -1,4 +1,5 @@
 import { test, expect } from "../../helpers/fixtures";
+import { openHomeTab } from "../../helpers/nav";
 
 // Homepage map (#1435): a locate control on the map itself, and the last map
 // view remembered in this browser. Runs as an anonymous visitor.
@@ -10,6 +11,7 @@ test.describe("Homepage map: locate and remembered view (#1435)", () => {
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
     await page.goto("/");
+    await openHomeTab(page, "map");
     const overlay = page.locator("#map-locate-overlay");
     await expect(overlay).toBeVisible();
     await expect(overlay).toHaveAttribute("aria-label", /.+/);
@@ -23,6 +25,7 @@ test.describe("Homepage map: locate and remembered view (#1435)", () => {
       localStorage.setItem("dansal_map_view", JSON.stringify({ lat: 48.5, lng: 7.5, z: 9 }));
     });
     await page.goto("/");
+    await openHomeTab(page, "map");
     await expect(page.locator("#map-container .leaflet-container, #map-container")).toBeVisible();
     // The view is written back on moveend, so the stored view must stay valid.
     await expect

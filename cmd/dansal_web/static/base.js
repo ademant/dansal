@@ -625,6 +625,28 @@ function dansalLeafletCss(cluster){
 // a script that the page does not have to block on. Returns one cached Promise.
 // Scripts created by a nonce'd script are trusted under strict-dynamic, so no
 // nonce is needed on the injected tags.
+// dansalTabBarKeyboard (#1667): hides a phone tab bar while the on-screen
+// keyboard covers it, and shows it again when the keyboard closes. The keyboard
+// counts as open while a text field has focus and the visual viewport has
+// shrunk well below the window. Without visualViewport, focus alone decides.
+function dansalTabBarKeyboard(bar){
+  var vv=window.visualViewport;
+  function textFocused(){
+    var a=document.activeElement;
+    return !!(a && a.matches && a.matches('input:not([type=checkbox]):not([type=radio]):not([type=file]),select,textarea'));
+  }
+  function update(){
+    bar.classList.toggle('mtabs-away', textFocused() && (!vv || vv.height < window.innerHeight*0.75));
+  }
+  document.addEventListener('focusin', update);
+  document.addEventListener('focusout', function(){ setTimeout(update, 0); });
+  if(vv) vv.addEventListener('resize', update);
+}
+// dansalScrollTo (#1667): scrolls so that the top of el is in view.
+function dansalScrollTo(el){
+  if(!el) return;
+  window.scrollTo(0, el.getBoundingClientRect().top + window.pageYOffset - 8);
+}
 function dansalLoadLeaflet(cluster){
   if(dansalLoadLeaflet.p) return dansalLoadLeaflet.p;
   function load(src){

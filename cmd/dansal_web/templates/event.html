@@ -1258,9 +1258,10 @@
 .tpl-msg{font-size:.82rem}
 .tpl-msg.ok{color:#155724}
 .tpl-msg.err{color:#991b1b}
-/* #1617: phone tab bar for the event page. Above 680px nothing here applies. */
+/* #1617: phone tab bar for the event page. The bar (base.html) shows up to
+   640px, so the tab panels switch at the same width. */
 .evt-tab-empty{color:var(--fg-muted);text-align:center;padding:1rem;font-size:.92rem}
-@media(max-width:680px){
+@media(max-width:640px){
   #evt-tabs:not([data-mtab="general"]) .evt-panel[data-tab="general"],
   #evt-tabs:not([data-mtab="details"]) .evt-panel[data-tab="details"],
   #evt-tabs:not([data-mtab="timetable"]) .evt-panel[data-tab="timetable"],
@@ -1594,7 +1595,7 @@ document.addEventListener('DOMContentLoaded', function(){
     });
     emptyMsg.hidden=!empty;
     if(tab==='location' && window.dansalEvtMap) window.dansalEvtMap.invalidateSize();
-    if(byUser) window.scrollTo(0,0);
+    if(byUser) dansalScrollTo(root);
   }
   btns.forEach(function(b){
     b.addEventListener('click', function(){ show(this.dataset.tab, true); });
@@ -1611,10 +1612,7 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   });
   // The bar steps aside while a form field has focus (on-screen keyboard).
-  root.addEventListener('focusin', function(e){
-    if(e.target.matches('input,select,textarea')) bar.classList.add('mtabs-away');
-  });
-  root.addEventListener('focusout', function(){ bar.classList.remove('mtabs-away'); });
+  dansalTabBarKeyboard(bar);
   show('general', false);
   if(location.hash.length>1){
     var target=document.getElementById(decodeURIComponent(location.hash.slice(1)));

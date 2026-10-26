@@ -372,7 +372,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 </div>
 
 <!-- Phone bottom tab bar (#1613): list is the default, see initialHomeTab() -->
-<div class="mtabs" role="tablist" aria-label="{{$.Strings.T "mtab_label"}}">
+<div class="mtabs mtabs-icons" role="tablist" aria-label="{{$.Strings.T "mtab_label"}}">
   <button type="button" role="tab" class="mtab" id="mtab-list" data-tab="list" aria-controls="mpanel-list" aria-selected="true" tabindex="0"><span class="mtab-ico" aria-hidden="true">☰</span><span class="mtab-label">{{$.Strings.T "mtab_list"}}</span></button>
   <button type="button" role="tab" class="mtab" id="mtab-week" data-tab="week" aria-controls="mpanel-week" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">📅</span><span class="mtab-label">{{$.Strings.T "mtab_calendar"}}</span></button>
   <button type="button" role="tab" class="mtab" id="mtab-map" data-tab="map" aria-controls="mpanel-map" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">🗺</span><span class="mtab-label">{{$.Strings.T "mtab_map"}}</span></button>
@@ -1531,7 +1531,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
       var sp = new URLSearchParams(window.location.search);
       sp.set('view', tab);
       history.replaceState(history.state, '', window.location.pathname + '?' + sp.toString());
-      window.scrollTo(0, 0);
+      dansalScrollTo(document.getElementById('home-tabs'));
     }
     if(tab === 'map'){
       ensureMap().then(function(){ map.invalidateSize(); updateMapMarkers(true); });

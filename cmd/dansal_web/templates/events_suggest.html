@@ -13,7 +13,7 @@
   {{with .Data}}
   {{if .Error}}<p class="form-error" role="alert">{{$.Strings.T .Error}}</p>{{end}}
 
-  <p class="suggest-hint {{if .HintSMTP}}hint-email{{else}}hint-review{{end}}">
+  <p class="suggest-hint {{if .HintSMTP}}hint-email{{else}}hint-review{{end}}" data-wiz-steps="1 6">
     {{if .HintSMTP}}{{$.Strings.T "suggest_hint_email"}}{{else}}{{$.Strings.T "suggest_hint_review"}}{{end}}
   </p>
   {{/* #1468: same remaining-count hint the done page showed, when the
@@ -58,7 +58,7 @@
   {{end}}
   <a href="/events/suggest" class="import-back-link">&#8592; {{$.Strings.T "suggest_tab_import"}}</a>
   {{else}}
-  <div class="suggest-tabs">
+  <div class="suggest-tabs" data-wiz-steps="1">
     <button class="tab-btn active" data-fn="switchTab" data-args='["@this","manual"]'>{{$.Strings.T "suggest_tab_manual"}}</button>
     <button class="tab-btn" data-fn="switchTab" data-args='["@this","import"]'>{{$.Strings.T "suggest_tab_import"}}</button>
   </div>
@@ -1829,14 +1829,15 @@ document.addEventListener('DOMContentLoaded', function(){
     form.addEventListener('change', updateMtabs);
     // The bar steps aside while a field has focus, so it does not sit on top
     // of the on-screen keyboard.
-    form.addEventListener('focusin', function(e){
-      if(e.target.matches('input,select,textarea')) mtabBar.classList.add('mtabs-away');
-    });
-    form.addEventListener('focusout', function(){ mtabBar.classList.remove('mtabs-away'); });
+    dansalTabBarKeyboard(mtabBar);
   }
 
   function render() {
     steps.forEach(function(s){ s.hidden = (parseInt(s.dataset.step, 10) !== current); });
+    // #1667: the approval hint and the import/manual switch belong to particular steps.
+    document.querySelectorAll('[data-wiz-steps]').forEach(function(el){
+      el.hidden = el.dataset.wizSteps.split(' ').indexOf(String(current)) < 0;
+    });
     backBtn.hidden = (current === 1);
     nextBtn.hidden = (current === total);
     arrowBtns.forEach(function(btn, idx){

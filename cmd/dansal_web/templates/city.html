@@ -40,19 +40,38 @@
 
 <script nonce="{{$.Nonce}}" defer src="/static/leaflet/leaflet.js"></script>
 
+{{/* #1675: phone tab bar. Map is the default tab, and the city name above
+     identifies the page on every tab. Panels keep the desktop order; on
+     desktop the bar is hidden and every panel shows. */}}
+<div class="mtab-root" id="city-tabs" data-mtab="map">
+<div class="mtabs mtabs-icons" role="tablist" aria-label="{{$.Strings.T "mtab_label"}}">
+  <button type="button" role="tab" class="mtab{{if not .GeoJSON}} is-empty{{end}}" data-tab="map" aria-controls="city-tabs" aria-selected="true" tabindex="0"><span class="mtab-ico" aria-hidden="true">🗺️</span><span class="mtab-label">{{$.Strings.T "mtab_map"}}</span></button>
+  <button type="button" role="tab" class="mtab{{if not .Events}} is-empty{{end}}" data-tab="calendar" aria-controls="city-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">📅</span><span class="mtab-label">{{$.Strings.T "mtab_calendar"}}</span></button>
+  <button type="button" role="tab" class="mtab{{if and (not .Events) (not .PastEvents)}} is-empty{{end}}" data-tab="events" aria-controls="city-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">🗓️</span><span class="mtab-label">{{$.Strings.T "mtab_events"}}</span></button>
+</div>
+
+<div class="mtab-panel" data-tab="map">
 {{if .GeoJSON}}
 <div id="city-map" class="city-map"></div>
 {{end}}
+</div>
 
+{{if .Events}}
+<div class="mtab-panel" data-tab="calendar">
+{{template "month-calendar" (dict "ID" "city-calendar" "Events" .Events "Strings" $.Strings "Nonce" $.Nonce)}}
+</div>
+{{end}}
+
+<div class="mtab-panel" data-tab="events">
 {{if .Events}}
 <ul class="city-event-list">
   {{range .Events}}{{template "city-event-item" (dict "Event" . "LangCode" $.LangCode "DateFormat" $.DateFormat)}}{{end}}
 </ul>
 
-{{if not .IncludePast}}
-<button type="button" id="city-past-btn" class="btn-secondary">{{$.Strings.T "city_past_events"}}</button>
-<ul id="city-past-list" class="city-event-list" hidden></ul>
-{{end}}
+<form method="get" class="city-past-form">
+  <input type="hidden" name="tab" value="events">
+  <label><input type="checkbox" name="include_past" value="true" id="city-past-check"{{if .IncludePast}} checked{{end}}> {{$.Strings.T "mtab_past"}}</label>
+</form>
 
 {{else}}
 {{/* #1506: no upcoming events — a nearby-radius fallback (#1436) instead of
@@ -73,6 +92,9 @@
 </div>
 {{end}}
 {{end}}
+</div>
+<p class="mtab-empty">{{$.Strings.T "evt_mtab_empty"}}</p>
+</div>
 
 <script nonce="{{$.Nonce}}">
 (function(){
@@ -94,6 +116,7 @@
       // marker bounds are known).
       var map = L.map('city-map').setView([50,10], 5);
       attachTileLayer(map);
+      window.cityMap = map;
       var bounds = [];
       points.forEach(function(p){
         var mk = L.marker([p.lat,p.lng]).addTo(map);
@@ -106,33 +129,23 @@
   });
 {{end}}
 
-  var pastBtn = document.getElementById('city-past-btn');
-  var pastList = document.getElementById('city-past-list');
-  if(pastBtn){
-    pastBtn.addEventListener('click',function(){
-      pastBtn.disabled=true;
-      pastBtn.textContent='…';
-      fetch('/city/{{townSlug .City.Town}}/past-events')
-        .then(function(r){return r.json();})
-        .then(function(evts){
-          pastList.innerHTML='';
-          if(!evts||!evts.length){pastList.innerHTML='<li>—</li>';pastList.hidden=false;return;}
-          evts.forEach(function(e){
-            var li=document.createElement('li');
-            li.className='city-event'+(e.is_cancelled?' cancelled':'');
-            li.innerHTML='<a href="'+e.url+'" class="city-event-link">'
-              +'<span class="city-event-date">'+e.start_time.slice(0,10)+'</span>'
-              +'<span class="city-event-title">'+e.title+'</span>'
-              +(e.venue?'<span class="city-event-venue">'+e.venue+'</span>':'')
-              +'</a>';
-            pastList.appendChild(li);
-          });
-          pastList.hidden=false;
-          pastBtn.hidden=true;
-        })
-        .catch(function(){pastBtn.disabled=false;pastBtn.textContent='{{$.Strings.T "city_past_events"}}';});
-    });
+  // #1675: the past-events checkbox reloads the page with include_past, and
+  // ?tab=events keeps the Events tab open after the reload.
+  var pastCheck = document.getElementById('city-past-check');
+  if(pastCheck){
+    pastCheck.addEventListener('change', function(){ pastCheck.form.submit(); });
   }
+  // #1675: phone tab bar. base.js loads with defer, so dansalMtabs is defined
+  // only after parsing. The map is sized again when its tab opens.
+  document.addEventListener('DOMContentLoaded', function(){
+    var root = document.getElementById('city-tabs');
+    if(!root) return;
+    var t = new URLSearchParams(location.search).get('tab');
+    if(t && root.querySelector('.mtab[data-tab="' + t + '"]')) root.setAttribute('data-mtab', t);
+    dansalMtabs(root, function(tab){
+      if(tab === 'map' && window.cityMap) window.cityMap.invalidateSize();
+    });
+  });
 })();
 </script>
 
@@ -162,7 +175,8 @@
   .city-event-link { grid-template-columns: 1fr; gap: .1rem; }
   .city-event-venue { text-align: left; }
 }
-#city-past-btn { margin: .5rem 0 1rem; }
+.city-past-form { margin: .5rem 0 1rem; font-size: .92rem; }
+.city-past-form label { display: inline-flex; align-items: center; gap: .4rem; min-height: 44px; cursor: pointer; }
 .city-map { height: 300px; border-radius: .4rem; margin-bottom: 1rem; }
 .empty-msg { color: var(--fg-faint); font-size: .9rem; }
 .empty-msg a { color: var(--link); font-weight: 600; }

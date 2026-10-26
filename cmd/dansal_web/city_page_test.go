@@ -63,15 +63,15 @@ func TestCityPageNoUpcomingNearbyHint(t *testing.T) {
 		t.Error("should not fall back to the undefined search_no_results key")
 	}
 	// Past events must render directly, not behind the on-demand button.
-	if strings.Contains(string(body), `id="city-past-btn"`) {
-		t.Error("should not show the on-demand past-events button when there are no upcoming events")
+	if strings.Contains(string(body), `id="city-past-check"`) {
+		t.Error("should not show the include-past checkbox when there are no upcoming events")
 	}
 }
 
-// TestCityPageUpcomingKeepsPastEventsButton covers the unchanged case: a
-// town with upcoming events keeps the existing event list and the on-demand
-// "show past events" button (#1506 only changes the no-upcoming-events path).
-func TestCityPageUpcomingKeepsPastEventsButton(t *testing.T) {
+// TestCityPageUpcomingKeepsPastEventsCheckbox covers the upcoming case: a
+// town with upcoming events keeps the event list and offers past events
+// behind an include-past checkbox (#1506 only changes the no-upcoming path).
+func TestCityPageUpcomingKeepsPastEventsCheckbox(t *testing.T) {
 	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatal(err)
@@ -96,10 +96,17 @@ func TestCityPageUpcomingKeepsPastEventsButton(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, body)
 	}
-	if !strings.Contains(string(body), `id="city-past-btn"`) {
-		t.Error("expected the on-demand past-events button when there are upcoming events")
-	}
-	if !strings.Contains(string(body), "Herbstball") {
-		t.Error("expected the upcoming event to render")
+	// #1675: the past-events button became an include-past checkbox that
+	// reloads the page, and the Events tab stays open after the reload.
+	for _, want := range []string{
+		`id="city-past-check"`,
+		`name="include_past" value="true"`,
+		`<input type="hidden" name="tab" value="events">`,
+		`<div class="mtab-panel" data-tab="calendar">`,
+		"Herbstball",
+	} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("upcoming city page missing %q", want)
+		}
 	}
 }

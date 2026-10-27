@@ -90,6 +90,12 @@ func safeNext(next string) string {
 	return u.String()
 }
 
+// isLocalPath reports whether next is a local path: a leading "/" not followed
+// by "/" or "\\". Login redirects to anything else go to "/" (code scanning #132).
+func isLocalPath(next string) bool {
+	return strings.HasPrefix(next, "/") && !strings.HasPrefix(next, "//") && !strings.HasPrefix(next, "/\\")
+}
+
 // loginMinAge / loginMaxAge are the per-class bounds for the login form token.
 // These are intentionally tight: login forms need only seconds to fill.
 const loginMinAge = 100 * time.Millisecond
@@ -152,6 +158,9 @@ func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		}
 		totpCode := r.FormValue("totp_code")
 		next := safeNext(r.FormValue("next"))
+		if !isLocalPath(next) {
+			next = "/"
+		}
 		ip := getClientIP(r)
 
 		if r.FormValue("phone2") != "" || !consumeFormToken(r.FormValue("_form_token"), ip, loginMinAge, loginFormMaxAge(cfg), cfg.FormTokenBindIP) {

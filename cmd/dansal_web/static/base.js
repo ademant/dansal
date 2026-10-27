@@ -658,6 +658,34 @@ function dansalMtabs(root, onShow){
   var panels=Array.prototype.slice.call(root.querySelectorAll('.mtab-panel'));
   var emptyMsg=root.querySelector('.mtab-empty');
   document.body.classList.add('has-mtabs');
+  // #1681: every tab controls its panels (aria-controls takes a list of ids),
+  // and on phones the panels are tabpanels labelled by their tab. The bar is
+  // hidden on desktop, so the roles are set only while the bar shows.
+  var rootId=root.id || 'mtabs';
+  btns.forEach(function(b){ if(!b.id) b.id=rootId+'-tab-'+b.dataset.tab; });
+  panels.forEach(function(p, i){ if(!p.id) p.id=rootId+'-panel-'+i; });
+  function tabButton(tab){
+    return btns.filter(function(b){ return b.dataset.tab===tab; })[0];
+  }
+  function setAria(phone){
+    btns.forEach(function(b){
+      var ids=panels.filter(function(p){ return p.dataset.tab===b.dataset.tab; })
+        .map(function(p){ return p.id; });
+      b.setAttribute('aria-controls', ids.join(' '));
+    });
+    panels.forEach(function(p){
+      if(phone){
+        p.setAttribute('role', 'tabpanel');
+        p.setAttribute('aria-labelledby', tabButton(p.dataset.tab).id);
+      } else {
+        p.removeAttribute('role');
+        p.removeAttribute('aria-labelledby');
+      }
+    });
+  }
+  var phoneMq=window.matchMedia('(max-width:640px)');
+  setAria(phoneMq.matches);
+  phoneMq.addEventListener('change', function(e){ setAria(e.matches); });
   function show(tab, byUser){
     root.setAttribute('data-mtab', tab);
     var empty=false;

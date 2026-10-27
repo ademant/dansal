@@ -127,3 +127,37 @@ func TestAdminEventsNewVenueBadge(t *testing.T) {
 		t.Error("admin events: missing new-venue badge linking to the venue")
 	}
 }
+
+// TestMatchLocationsLooseFallback covers #1679: a query with one unknown word
+// still finds the venue by its street and town, and a lone unknown word does
+// not match. Strict matches are never diluted by loose ones.
+func TestMatchLocationsLooseFallback(t *testing.T) {
+	muenster := Location{ID: 59, Location: "Münsterkirche St. Vitus", ShortName: "Münsterkirche",
+		Town: "Mönchengladbach", Address: "41 Abteistraße", Zipcode: "41236"}
+	other := Location{ID: 7, Location: "Stadthalle", Town: "Mönchengladbach", Address: "1 Markt"}
+	locs := []Location{muenster, other}
+	names := func(hits []LocationHit) []string {
+		var out []string
+		for _, h := range hits {
+			out = append(out, h.Name)
+		}
+		return out
+	}
+
+	// The prod query from #1679: "Münsterbasilika" is unknown, the rest match.
+	if got := names(matchLocations("Münsterbasilika, Mönchengladbach, Abteistraße", locs)); len(got) != 1 || got[0] != muenster.Location {
+		t.Errorf("loose query: got %q, want the Münsterkirche venue", got)
+	}
+	// A single unknown word alone matches nothing.
+	if got := matchLocations("Münsterbasilika", locs); len(got) != 0 {
+		t.Errorf("single unknown word: got %q, want no hits", names(got))
+	}
+	// Address and zipcode are searchable on their own.
+	if got := names(matchLocations("abteistrasse 41236", locs)); len(got) != 1 || got[0] != muenster.Location {
+		t.Errorf("address/zipcode search: got %q", got)
+	}
+	// A strict match exists, so the loose fallback must not add venues.
+	if got := names(matchLocations("stadthalle mönchengladbach", locs)); len(got) != 1 || got[0] != "Stadthalle" {
+		t.Errorf("strict match diluted: got %q, want only Stadthalle", got)
+	}
+}

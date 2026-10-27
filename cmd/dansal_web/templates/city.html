@@ -45,7 +45,7 @@
      desktop the bar is hidden and every panel shows. */}}
 <div class="mtab-root" id="city-tabs" data-mtab="map">
 <div class="mtabs mtabs-icons" role="tablist" aria-label="{{$.Strings.T "mtab_label"}}">
-  <button type="button" role="tab" class="mtab{{if not .GeoJSON}} is-empty{{end}}" data-tab="map" aria-controls="city-tabs" aria-selected="true" tabindex="0"><span class="mtab-ico" aria-hidden="true">🗺️</span><span class="mtab-label">{{$.Strings.T "mtab_map"}}</span></button>
+  <button type="button" role="tab" class="mtab{{if or (not .GeoJSON) (eq (printf "%s" .GeoJSON) "[]")}} is-empty{{end}}" data-tab="map" aria-controls="city-tabs" aria-selected="true" tabindex="0"><span class="mtab-ico" aria-hidden="true">🗺️</span><span class="mtab-label">{{$.Strings.T "mtab_map"}}</span></button>
   <button type="button" role="tab" class="mtab{{if not .Events}} is-empty{{end}}" data-tab="calendar" aria-controls="city-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">📅</span><span class="mtab-label">{{$.Strings.T "mtab_calendar"}}</span></button>
   <button type="button" role="tab" class="mtab{{if and (not .Events) (not .PastEvents)}} is-empty{{end}}" data-tab="events" aria-controls="city-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">🗓️</span><span class="mtab-label">{{$.Strings.T "mtab_events"}}</span></button>
 </div>

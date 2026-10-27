@@ -110,3 +110,47 @@ func TestCityPageUpcomingKeepsPastEventsCheckbox(t *testing.T) {
 		}
 	}
 }
+
+// TestCityMapTabEmptyWithoutPoints covers #1680: a city whose events have no
+// coordinates has GeoJSON "[]", which is truthy as a string. Its Map tab must
+// still be marked empty.
+func TestCityMapTabEmptyWithoutPoints(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.Exec(`CREATE TABLE site_settings (key TEXT PRIMARY KEY, value TEXT)`)
+	siteCfg = newSiteSettingsCache(db)
+
+	tmpls := loadTemplates()
+	i18n := loadI18n("")
+	cfg := &Config{Domain: "example.test"}
+	req := httptest.NewRequest(http.MethodGet, "/city/koeln", nil)
+	req.Header.Set("Accept-Language", "en")
+
+	render := func(data CityData) string {
+		rec := httptest.NewRecorder()
+		renderTemplate(rec, tmpls.city, tmplData(req, cfg, i18n, "Balfolk in Köln", data))
+		body, _ := io.ReadAll(rec.Body)
+		return string(body)
+	}
+
+	noPoints := render(CityData{
+		City:    City{Town: "Köln", Slug: "koeln"},
+		Events:  []Event{{ID: 500, Title: "Herbstball", StartTime: "2033-05-18T03:33:20Z"}},
+		GeoJSON: "[]",
+	})
+	if !strings.Contains(noPoints, `class="mtab is-empty" data-tab="map"`) {
+		t.Error("map tab must be empty when GeoJSON has no points")
+	}
+
+	withPoints := render(CityData{
+		City:    City{Town: "Köln", Slug: "koeln"},
+		Events:  []Event{{ID: 500, Title: "Herbstball", StartTime: "2033-05-18T03:33:20Z"}},
+		GeoJSON: `[{"id":500,"lat":50.9,"lng":6.9}]`,
+	})
+	if strings.Contains(withPoints, `class="mtab is-empty" data-tab="map"`) {
+		t.Error("map tab must not be empty when GeoJSON has points")
+	}
+}

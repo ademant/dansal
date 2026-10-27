@@ -28,10 +28,17 @@ type LocationHit struct {
 	HasCoord bool   `json:"has_coord"`
 }
 
-// matchLocations returns the top-level venues whose name, short name,
-// aliases or town contain every word of q (diacritics-insensitive). Venues
-// matching on their own names rank before town-only matches. Rooms are
-// skipped: a suggester picks the building.
+// matchLocations returns the top-level venues that match the query
+// (diacritics-insensitive). A venue matches when its name, short name, aliases,
+// town, street address or zipcode contain every word of q. Venues matching on
+// their own names rank before town/address-only matches. Rooms are skipped: a
+// suggester picks the building.
+//
+// #1679: when no venue matches every word, the query is retried loosely: a
+// venue qualifies with at least two words and at least half of the query's
+// words, so "name, town, street" still finds the venue when one word is
+// unknown. Loose matches are offered only when no strict match exists, so the
+// strict results are never diluted.
 func matchLocations(q string, locs []Location) []LocationHit {
 	qw := foldWords(q)
 	if len(strings.Join(qw, "")) < 2 {
@@ -41,38 +48,50 @@ func matchLocations(q string, locs []Location) []LocationHit {
 		hit   LocationHit
 		score int
 	}
-	var out []scored
+	var strict, loose []scored
 	for _, l := range locs {
 		if l.ParentID != nil || l.Location == "" {
 			continue
 		}
 		names := strings.Join(foldWords(strings.Join(append([]string{l.Location, l.ShortName}, l.Aliases...), " ")), " ")
-		all := names + " " + strings.Join(foldWords(l.Town), " ")
+		all := names + " " + strings.Join(foldWords(strings.Join([]string{l.Town, l.Address, l.Zipcode}, " ")), " ")
 		inNames, inAll := true, true
+		matched := 0
 		for _, w := range qw {
+			if strings.Contains(all, w) {
+				matched++
+			} else {
+				inAll = false
+			}
 			if !strings.Contains(names, w) {
 				inNames = false
 			}
-			if !strings.Contains(all, w) {
-				inAll = false
-			}
 		}
-		if !inAll {
+		if !inAll && (matched < 2 || matched*2 < len(qw)) {
 			continue
-		}
-		score := 1
-		if inNames {
-			score = 0
 		}
 		label := cmp.Or(l.ShortName, l.Location)
 		if l.Town != "" {
 			label += ", " + l.Town
 		}
-		out = append(out, scored{LocationHit{
+		hit := LocationHit{
 			ID: l.ID, Name: l.Location, Label: label, Address: l.Address, Zipcode: l.Zipcode,
 			Town: l.Town, Country: l.Country, OsmID: l.OsmID, OsmType: l.OsmType,
 			HasCoord: l.Latitude != nil && l.Longitude != nil,
-		}, score})
+		}
+		if inAll {
+			score := 1
+			if inNames {
+				score = 0
+			}
+			strict = append(strict, scored{hit, score})
+		} else {
+			loose = append(loose, scored{hit, 2 + len(qw) - matched})
+		}
+	}
+	out := strict
+	if len(out) == 0 {
+		out = loose
 	}
 	slices.SortStableFunc(out, func(a, b scored) int {
 		return cmp.Or(cmp.Compare(a.score, b.score), strings.Compare(a.hit.Label, b.hit.Label))

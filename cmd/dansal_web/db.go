@@ -796,14 +796,18 @@ func markEventTransferred(db *sql.DB, eventID, oldOrgID, newOrgID int) error {
 	return err
 }
 
-// getEventDeliveryHistory gets delivery records for an event
-func getEventDeliveryHistory(db *sql.DB, eventID int) ([]struct {
+// deliveredRow is one `delivered` record for an event. OrgID may be a
+// sentinel (see deliveredOrgIsReal).
+type deliveredRow struct {
 	OrgID         int
 	DeliveredAt   string
 	TransferredTo *int
 	TransferredAt *string
 	IsUpdate      bool
-}, error) {
+}
+
+// getEventDeliveryHistory gets delivery records for an event
+func getEventDeliveryHistory(db *sql.DB, eventID int) ([]deliveredRow, error) {
 	rows, err := db.Query(
 		`SELECT org_id, delivered_at, transferred_to, transferred_at, is_update 
 		 FROM delivered WHERE event_id = ? ORDER BY delivered_at`,
@@ -814,22 +818,10 @@ func getEventDeliveryHistory(db *sql.DB, eventID int) ([]struct {
 	}
 	defer rows.Close()
 
-	var history []struct {
-		OrgID         int
-		DeliveredAt   string
-		TransferredTo *int
-		TransferredAt *string
-		IsUpdate      bool
-	}
+	var history []deliveredRow
 
 	for rows.Next() {
-		var h struct {
-			OrgID         int
-			DeliveredAt   string
-			TransferredTo *int
-			TransferredAt *string
-			IsUpdate      bool
-		}
+		var h deliveredRow
 		var transferredTo sql.NullInt64
 		var transferredAt sql.NullString
 

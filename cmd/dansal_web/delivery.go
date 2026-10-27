@@ -32,6 +32,29 @@ const (
 	indexNowCancelledSentinel = -5
 )
 
+// deliveredOrgIsReal reports whether a delivered row names a real org rather
+// than a reserved sentinel: 0 (relay), -1 (tag followers), -4/-5 (IndexNow).
+// Sentinel rows are never the event's original org, so they must not be read
+// as a transfer (#1677).
+func deliveredOrgIsReal(orgID int) bool {
+	return orgID > 0
+}
+
+// findTransferOrigin returns the org that first received the event when that
+// org differs from currentOrgID, i.e. the event was transferred. Sentinel rows
+// are skipped.
+func findTransferOrigin(history []deliveredRow, currentOrgID int) (int, bool) {
+	for _, h := range history {
+		if h.TransferredTo != nil || h.IsUpdate || !deliveredOrgIsReal(h.OrgID) {
+			continue
+		}
+		if h.OrgID != currentOrgID {
+			return h.OrgID, true
+		}
+	}
+	return 0, false
+}
+
 // deliveryBackoff returns the number of seconds to wait before the next retry.
 func deliveryBackoff(attempts int) int64 {
 	switch {
@@ -317,21 +340,9 @@ func deliverUpdateToFollowers(cfg *Config, db *sql.DB, client *DansalClient, eve
 		logging.Errorf("check event history for transfer: %v", err)
 	}
 
-	// Detect organization transfer
-	var oldOrgID *int
-	for _, h := range history {
-		if h.TransferredTo == nil && !h.IsUpdate {
-			// Found a non-update delivery - this is the original org
-			if h.OrgID != *event.OrganizationID {
-				oldOrgID = &h.OrgID
-				break
-			}
-		}
-	}
-
-	if oldOrgID != nil {
-		// Organization changed - handle transfer
-		handleEventTransfer(cfg, db, client, eventID, *oldOrgID, *event.OrganizationID)
+	// Organization changed - handle transfer
+	if oldOrgID, ok := findTransferOrigin(history, *event.OrganizationID); ok {
+		handleEventTransfer(cfg, db, client, eventID, oldOrgID, *event.OrganizationID)
 		return
 	}
 

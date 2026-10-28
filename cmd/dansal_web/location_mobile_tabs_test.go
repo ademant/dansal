@@ -71,7 +71,7 @@ func TestLocationPhoneTabs(t *testing.T) {
 			`<div class="mtab-panel" data-tab="rooms">`,
 			`<div class="mtab-panel" data-tab="calendar">`,
 			`<div class="mtab-phone-only">`,
-			`<p class="loc-future-count">`,
+			`data-go-tab="events">`,
 			`dansalMtabs(root`,
 		} {
 			if !strings.Contains(html, want) {

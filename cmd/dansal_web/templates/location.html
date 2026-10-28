@@ -116,7 +116,7 @@
     <a href="https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&to={{.Latitude}},{{.Longitude}}" target="_blank" rel="noopener" class="loc-map-link loc-osm-link">🗺 OpenStreetMap</a>
   </div>
   {{end}}
-{{if $.Data.Events}}<p class="loc-future-count">{{$.Strings.TF "mtab_future_count" (len $.Data.Events)}}</p>{{end}}
+{{if $.Data.Events}}<p class="loc-future-count mtab-desk-only">{{$.Strings.TF "mtab_future_count" (len $.Data.Events)}}</p><p class="loc-future-count mtab-phone-only"><button type="button" class="evt-venue-link" data-go-tab="events">{{$.Strings.TF "mtab_future_count" (len $.Data.Events)}}</button></p>{{end}}
 </div>
 </div>
 

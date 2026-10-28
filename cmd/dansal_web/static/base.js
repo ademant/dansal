@@ -717,6 +717,10 @@ function dansalMtabs(root, onShow){
     });
   });
   dansalTabBarKeyboard(bar);
+  // #1695: a link inside the page (e.g. "3 events") opens the tab named in data-go-tab.
+  root.querySelectorAll('[data-go-tab]').forEach(function(a){
+    a.addEventListener('click', function(){ show(this.dataset.goTab, true); });
+  });
   show(root.getAttribute('data-mtab') || btns[0].dataset.tab, false);
   return show;
 }

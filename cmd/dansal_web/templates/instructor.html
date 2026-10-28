@@ -26,6 +26,13 @@
 {{end}}
 {{define "content"}}
 {{with .Data}}
+<div class="mtab-root" id="instr-tabs" data-mtab="info">
+<div class="mtabs mtabs-icons" role="tablist" aria-label="{{$.Strings.T "mtab_label"}}">
+  <button type="button" role="tab" class="mtab" data-tab="info" aria-controls="instr-tabs" aria-selected="true" tabindex="0"><span class="mtab-ico" aria-hidden="true">ℹ️</span><span class="mtab-label">{{$.Strings.T "mtab_info"}}</span></button>
+  <button type="button" role="tab" class="mtab{{if not .UpcomingEvents}} is-empty{{end}}" data-tab="calendar" aria-controls="instr-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">📅</span><span class="mtab-label">{{$.Strings.T "mtab_calendar"}}</span></button>
+  <button type="button" role="tab" class="mtab{{if not .Events}} is-empty{{end}}" data-tab="events" aria-controls="instr-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">🗓️</span><span class="mtab-label">{{$.Strings.T "mtab_events"}}</span></button>
+</div>
+<div class="mtab-panel" data-tab="info">
 <div class="musician-header">
   <div>
     <div class="musician-title-row">
@@ -54,21 +61,10 @@
   </div>
 </div>
 {{end}}
+</div>
 
+<div class="mtab-panel" data-tab="calendar">
 <div class="page-section">
-  <div class="events-heading-row">
-    <h2 class="section-heading">{{$.Strings.T "instructor_upcoming_events"}}</h2>
-    {{if .HasPast}}
-    <form method="get" class="past-toggle">
-      {{if .IncludePast}}
-      <button type="submit" name="include_past" value="" class="btn-toggle btn-toggle-active">{{$.Strings.T "filter_include_past"}}</button>
-      {{else}}
-      <button type="submit" name="include_past" value="1" class="btn-toggle">{{$.Strings.T "filter_include_past"}}</button>
-      {{end}}
-    </form>
-    {{end}}
-  </div>
-
   <div class="feed-links">
     <div class="cal-dd">
       <button type="button" class="btn-icon" data-fn="toggleInfoPopup" data-args='["@this"]' title="{{$.Strings.T "cal_subscribe"}}" aria-label="{{$.Strings.T "cal_subscribe"}}">📅</button>
@@ -85,7 +81,24 @@
   {{/* Follow-up to #1161/#1167: rolling monthly calendar, same shared component as /org/{slug}.
       Always upcoming-only, independent of the include_past toggle above. */}}
   {{template "month-calendar" (dict "ID" "instructor-calendar" "Events" .UpcomingEvents "Strings" $.Strings "Nonce" $.Nonce)}}
+</div>
+</div>
 
+<div class="mtab-panel" data-tab="events">
+<div class="page-section">
+  <div class="events-heading-row">
+    <h2 class="section-heading">{{$.Strings.T "instructor_upcoming_events"}}</h2>
+    {{if .HasPast}}
+    <form method="get" class="past-toggle">
+      <input type="hidden" name="tab" value="events">
+      {{if .IncludePast}}
+      <button type="submit" name="include_past" value="" class="btn-toggle btn-toggle-active">{{$.Strings.T "filter_include_past"}}</button>
+      {{else}}
+      <button type="submit" name="include_past" value="1" class="btn-toggle">{{$.Strings.T "filter_include_past"}}</button>
+      {{end}}
+    </form>
+    {{end}}
+  </div>
   {{if .Events}}
   {{/* Map — only rendered if at least one event has coordinates */}}
   <div id="mmap-wrap" hidden>
@@ -115,6 +128,9 @@
   {{end}}
   </ul>
   {{else}}<p class="empty-msg">{{$.Strings.T "instructor_no_events"}}</p>{{end}}
+</div>
+</div>
+<p class="mtab-empty">{{$.Strings.T "evt_mtab_empty"}}</p>
 </div>
 
 {{end}}{{/* .Data */}}
@@ -162,6 +178,7 @@ document.addEventListener('DOMContentLoaded', function(){
   // aborting the rest of this function (including the real setView/fitBounds
   // below, which refines this default once the marker bounds are known).
   var map = L.map('mmap').setView([50,10], 5);
+  window.mmap = map;
   attachTileLayer(map);
 
   var bounds = [];
@@ -182,6 +199,17 @@ document.addEventListener('DOMContentLoaded', function(){
   }
 
   function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+});
+// #1699: phone tab bar, same as the musician page. The include-past form
+// reloads the page, so ?tab= keeps the Events tab open after the reload.
+document.addEventListener('DOMContentLoaded', function(){
+  var root = document.getElementById('instr-tabs');
+  if (!root) return;
+  var t = new URLSearchParams(location.search).get('tab');
+  if (t && root.querySelector('.mtab[data-tab="' + t + '"]')) root.setAttribute('data-mtab', t);
+  dansalMtabs(root, function(tab){
+    if (tab === 'events' && window.mmap) window.mmap.invalidateSize();
+  });
 });
 </script>
 {{end}}

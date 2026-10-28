@@ -3,7 +3,7 @@ module github.com/ademant/dansal
 go 1.27.3
 
 require (
-	github.com/andybalholm/brotli v1.2.6
+	github.com/andybalholm/brotli v1.2.7
 	github.com/arran4/golang-ical v0.3.7
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/gen2brain/avif v0.6.0

@@ -311,8 +311,9 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
 .hm-sym{flex-shrink:0;width:1rem;text-align:center;color:var(--fg-muted);font-size:.8rem}
 .hm-reg{margin-top:.75rem;padding-top:.75rem;border-top:2px solid var(--border);font-size:.88rem}
 .hm-footer{margin-top:1rem;text-align:right;font-size:.82rem}
-#back-to-top{position:fixed;bottom:1.5rem;right:1rem;z-index:99;background:var(--btn-bg);border:1px solid var(--border-mid);color:var(--fg-2);border-radius:50%;width:2.2rem;height:2.2rem;font-size:1.1rem;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s;box-shadow:0 2px 6px rgba(0,0,0,.12)}
-#back-to-top.visible{opacity:1;pointer-events:auto}
+#back-to-top{position:fixed;bottom:1.5rem;right:1rem;z-index:99;background:var(--btn-bg);border:1px solid var(--border-mid);color:var(--fg-2);border-radius:50%;width:2.2rem;height:2.2rem;font-size:1.1rem;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s,visibility .2s;box-shadow:0 2px 6px rgba(0,0,0,.12)}
+/* #1698: hidden means visibility hidden, so a tap under it reaches the page (e.g. the footer help link). */
+#back-to-top.visible{opacity:1;visibility:visible;pointer-events:auto}
 #back-to-top:hover{background:var(--btn-bg-h)}
 .btn-icon{display:inline-block;padding:.25rem .5rem;background:var(--btn-bg);border:1px solid var(--border-mid);border-radius:4px;font-size:1rem;line-height:1;color:var(--fg-2);text-decoration:none;cursor:pointer;vertical-align:middle}
 .btn-icon:hover{background:var(--btn-bg-h);border-color:var(--fg-faint)}
@@ -684,8 +685,10 @@ document.addEventListener('DOMContentLoaded', function(){
     months.push(new Date(d.getFullYear(), d.getMonth() + i, 1));
   }
   document.getElementById('{{.ID}}-wrap').hidden = false;
+  // #1696/#1697: the carousel opens on the first month with an event.
   renderMiniCalendar('{{.ID}}', calEvents, months,
-    {carousel: true, prevId: '{{.ID}}-prev', nextId: '{{.ID}}-next', wrapId: '{{.ID}}-wrap'});
+    {carousel: true, prevId: '{{.ID}}-prev', nextId: '{{.ID}}-next', wrapId: '{{.ID}}-wrap',
+     startIndex: dansalFirstEventMonthIndex(calEvents, months)});
   // #1671: a swipe on phones moves the calendar like its arrow buttons.
   dansalSwipe(document.getElementById('{{.ID}}-wrap'),
     function(){ document.getElementById('{{.ID}}-next').click(); },

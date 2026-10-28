@@ -417,6 +417,22 @@ function nominatimRefine(lat, lon, countryCode, cb){
 // festivalCalendarJSON template func. Shared by /festivals (fixed
 // calendar year, its own month list) and /org/{slug} (#1161, a rolling
 // window of upcoming months) so this rendering logic isn't duplicated.
+// dansalFirstEventMonthIndex (#1696/#1697): index in months of the first month
+// that holds an event start, or -1 when none falls in months.
+function dansalFirstEventMonthIndex(calEvents, months){
+  var best=-1;
+  calEvents.forEach(function(ev){
+    var d=new Date(ev.s);
+    if(isNaN(d)) return;
+    for(var i=0;i<months.length;i++){
+      if(months[i].getFullYear()===d.getFullYear() && months[i].getMonth()===d.getMonth()){
+        if(best<0 || i<best) best=i;
+        break;
+      }
+    }
+  });
+  return best;
+}
 function renderMiniCalendar(containerId, calEvents, months, opts){
   opts=opts||{};
   var cal=document.getElementById(containerId);
@@ -491,16 +507,30 @@ function renderMiniCalendar(containerId, calEvents, months, opts){
       if(prevBtn) prevBtn.disabled=cal.scrollLeft<=2;
       if(nextBtn) nextBtn.disabled=cal.scrollLeft+cal.clientWidth>=cal.scrollWidth-2;
     }
-    if(opts.startMonth){
-      var startIdx=-1;
+    var startIdx=-1;
+    if(opts.startIndex!=null){
+      startIdx=opts.startIndex;
+    } else if(opts.startMonth){
       for(var mi=0;mi<months.length;mi++){
         if(months[mi].getMonth()+1===opts.startMonth){startIdx=mi;break;}
       }
-      if(startIdx>0){
+    }
+    if(startIdx>0){
+      // #1696: a hidden carousel (its tab is not open) has no width yet, so the
+      // scroll waits until the calendar is shown.
+      var placeStart=function(){
+        if(!cal.clientWidth) return false;
         var prevBehavior=cal.style.scrollBehavior;
         cal.style.scrollBehavior='auto';
         cal.scrollLeft=startIdx*step();
         cal.style.scrollBehavior=prevBehavior;
+        return true;
+      };
+      if(!placeStart() && 'IntersectionObserver' in window){
+        var io=new IntersectionObserver(function(entries){
+          if(entries[0].isIntersecting && placeStart()) io.disconnect();
+        });
+        io.observe(cal);
       }
     }
     if(prevBtn) prevBtn.onclick=function(){cal.scrollBy({left:-step(),behavior:'smooth'});};
@@ -645,7 +675,10 @@ function dansalTabBarKeyboard(bar){
 // dansalScrollTo (#1667): scrolls so that the top of el is in view.
 function dansalScrollTo(el){
   if(!el) return;
-  window.scrollTo(0, el.getBoundingClientRect().top + window.pageYOffset - 8);
+  var y=Math.max(0, el.getBoundingClientRect().top + window.pageYOffset - 8);
+  window.scrollTo(0, y);
+  // #1698: remembered so the back-to-top arrow counts scrolling from here.
+  window.dansalScrollAnchor=y;
 }
 // dansalMtabs (#1671-#1675): phone tab bar for the detail pages. root holds the
 // bar (.mtabs with .mtab buttons) and the panels (.mtab-panel[data-tab]). On
@@ -700,7 +733,8 @@ function dansalMtabs(root, onShow){
     panels.forEach(function(p){ p.toggleAttribute('data-off', p.dataset.tab!==tab); });
     if(emptyMsg) emptyMsg.toggleAttribute('data-show', empty);
     if(onShow) onShow(tab);
-    if(byUser) dansalScrollTo(root);
+    // #1698: after a tab switch the breadcrumb is the first visible element.
+    if(byUser) dansalScrollTo(document.querySelector('.breadcrumb')||root);
   }
   btns.forEach(function(b){
     b.addEventListener('click', function(){ show(this.dataset.tab, true); });
@@ -717,6 +751,10 @@ function dansalMtabs(root, onShow){
     });
   });
   dansalTabBarKeyboard(bar);
+  // #1695: a link inside the page (e.g. "3 events") opens the tab named in data-go-tab.
+  root.querySelectorAll('[data-go-tab]').forEach(function(a){
+    a.addEventListener('click', function(){ show(this.dataset.goTab, true); });
+  });
   show(root.getAttribute('data-mtab') || btns[0].dataset.tab, false);
   return show;
 }
@@ -755,7 +793,15 @@ function dansalLoadLeaflet(cluster){
   var btn=document.getElementById('back-to-top');
   var nav=document.querySelector('nav');
   if(!btn||!nav)return;
-  new IntersectionObserver(function(e){btn.classList.toggle('visible',!e[0].isIntersecting);}).observe(nav);
+  // #1698: the arrow appears only once the nav is out of view and the user has
+  // scrolled on well past the last programmatic scroll (a tab switch).
+  function update(){
+    var navGone=nav.getBoundingClientRect().bottom<=0;
+    var fromAnchor=window.pageYOffset-(window.dansalScrollAnchor||0);
+    btn.classList.toggle('visible', navGone && fromAnchor>300);
+  }
+  window.addEventListener('scroll', update, {passive:true});
+  update();
 })();
 var _langPending=null;
 function handleLangChange(sel){

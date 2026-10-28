@@ -38,6 +38,10 @@ GET /cities                 # city directory: every town with at least one geo-t
 GET /city/{slug}            # per-city hub: map + upcoming events in that town; "show past events" loads GET /city/{slug}/past-events on demand
 ```
 
+**Homepage tabs (phones).** Below 640px the homepage shows one of three panels: map, calendar (the week view) or list. Desktop ignores the tabs. The tab is chosen in this order: `?view=map|week|list` (an explicit tab, also written back to the URL when a visitor switches); `?week=` or `?day=` (opens the calendar); `?mode=all` (opens the list); the last tab the visitor chose, kept in the browser's `localStorage` under `dansal_home_tab`; and the phone default, the map.
+
+**Tab selection on musician pages.** `/musicians/{id}` on phones shows Info, Calendar, Events and Meta tabs. `?tab=events` opens the Events tab directly; the past-events toggle (`include_past=1`) keeps it selected after reload. Calendar, Events and Meta are dimmed when they have nothing to show, but can still be selected.
+
 All public. Each event/org/location/musician/instructor page carries `schema.org`
 JSON-LD (`Event`/`Organization`/`Place`/`MusicGroup`/`Person`) and Open Graph
 tags for link previews and search-engine structured data.

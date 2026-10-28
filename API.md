@@ -7,6 +7,7 @@ For the `dansal_web` frontend's own routes (public pages, feeds, `/embed/*` widg
 ## Table of Contents
 
 - [Base URL](#base-url)
+- [Browser access (CORS)](#browser-access-cors)
 - [Authentication](#authentication)
 - [Roles and Permissions](#roles-and-permissions)
 - [Content Negotiation](#content-negotiation)
@@ -52,6 +53,18 @@ Production example:
 ```
 https://api.dansal.example.com
 ```
+
+## Browser access (CORS)
+
+Every response carries `Access-Control-Allow-Origin`. When `server.allowed_origins` in `config.yaml` is set, a request's `Origin` is echoed back only if it matches an entry (an entry `*` allows any origin); otherwise no `Access-Control-Allow-Origin` header is sent. When the list is not set, the origin of `server.base_url` is sent, and `*` only if `base_url` is also empty. Responses with a specific origin add `Vary: Origin`.
+
+Preflight (`OPTIONS` with `Access-Control-Request-Method`) is answered directly with `204`:
+
+- `Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS`
+- `Access-Control-Allow-Headers: Content-Type, Authorization, X-User-Role, X-User-ID`
+- `Access-Control-Max-Age: 86400`
+
+A bare `OPTIONS` request without that header is not a preflight and reaches the normal route, so the write-endpoint schema responders in [Discovering request body shape](#discovering-request-body-shape-options) still work.
 
 ## Authentication
 

@@ -3,7 +3,7 @@
 **Open-source calendar and event platform for folk and social dance communities**
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Go](https://img.shields.io/badge/go-1.26%2B-blue)](https://go.dev/)
+[![Go](https://img.shields.io/badge/go-1.27%2B-blue)](https://go.dev/)
 [![SQLite](https://img.shields.io/badge/database-SQLite-blue)](https://sqlite.org/)
 
 ## 🎯 What is dansal?
@@ -15,7 +15,8 @@ dansal helps dance communities organize, publish, and discover events — from b
 **Event discovery**
 - Interactive map with clustered pins, weekly calendar, and filterable future list
 - Filter by type (ball, workshop, festival, concert, …), dance style, town, and date range
-- Swipe-to-navigate on mobile; synced mini-calendar
+- Phone layout: a bottom tab bar switches the homepage between map, calendar and list; swipe to change the day in the calendar
+- Synced mini-calendar
 - Structured data (JSON-LD Schema.org Event) for rich Google results
 - iCal export per event and per venue
 

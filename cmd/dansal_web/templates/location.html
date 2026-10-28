@@ -138,6 +138,7 @@
 {{template "media-links-list" (dict "S" $.Strings "Links" .Media)}}
 </div>
 
+{{if or .Children .SitePlanURL}}
 <div class="mtab-panel" data-tab="rooms">
 {{if .SitePlanURL}}
 <details class="loc-siteplan">
@@ -164,6 +165,7 @@
 </div>
 {{end}}
 </div>
+{{end}}
 
 <div class="mtab-panel" data-tab="info">
 {{if .ParentID}}

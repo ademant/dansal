@@ -37,10 +37,10 @@ func TestIndexPhoneTabs(t *testing.T) {
 	}
 
 	for _, want := range []string{
-		`id="home-tabs" data-mtab="list"`,
-		`role="tab" class="mtab" id="mtab-list" data-tab="list" aria-controls="mpanel-list" aria-selected="true"`,
+		`id="home-tabs" data-mtab="map"`,
+		`role="tab" class="mtab" id="mtab-list" data-tab="list" aria-controls="mpanel-list" aria-selected="false"`,
 		`id="mtab-week" data-tab="week" aria-controls="mpanel-week" aria-selected="false"`,
-		`id="mtab-map" data-tab="map" aria-controls="mpanel-map" aria-selected="false"`,
+		`id="mtab-map" data-tab="map" aria-controls="mpanel-map" aria-selected="true"`,
 		`id="mpanel-list" data-tab="list" role="tabpanel"`,
 		`id="mpanel-week" data-tab="week" role="tabpanel"`,
 		`id="mpanel-map" data-tab="map" role="tabpanel"`,

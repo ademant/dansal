@@ -1,6 +1,6 @@
 import { test, expect } from "../../helpers/fixtures";
 
-// Phone homepage bottom tab bar (#1613): list first, calendar and map behind
+// Phone homepage bottom tab bar (#1613): map first, list and calendar behind
 // the tabs, the choice remembered, and the desktop layout left alone. The tab
 // bar only shows below 640px, so the phone tests skip on the desktop project.
 
@@ -11,16 +11,16 @@ test.describe("Homepage phone tabs (#1613)", () => {
     return page.locator("#mtab-list").isVisible().catch(() => false);
   }
 
-  test("the list is the default tab and the map and calendar panels are hidden", { tag: "@smoke" }, async ({ page }) => {
+  test("the map is the default tab and the list and calendar panels are hidden", { tag: "@smoke" }, async ({ page }) => {
     await page.goto("/");
     if (!(await isPhoneLayout(page))) test.skip(true, "mobile-only: tab bar");
-    await expect(page.locator("#home-tabs")).toHaveAttribute("data-mtab", "list");
-    await expect(page.locator("#mtab-list")).toHaveAttribute("aria-selected", "true");
-    await expect(page.locator("#mpanel-map")).toBeHidden();
+    await expect(page.locator("#home-tabs")).toHaveAttribute("data-mtab", "map");
+    await expect(page.locator("#mtab-map")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#mpanel-list")).toBeHidden();
     await expect(page.locator("#mpanel-week")).toBeHidden();
   });
 
-  test("the map library loads after the list is shown", async ({ page }) => {
+  test("the map library loads on the first visit", async ({ page }) => {
     const requested: string[] = [];
     page.on("request", (r) => {
       if (r.url().includes("/static/leaflet/leaflet.js")) requested.push(r.url());

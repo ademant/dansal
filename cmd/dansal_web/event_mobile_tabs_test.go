@@ -65,3 +65,32 @@ func TestEventPagePhoneTabs(t *testing.T) {
 		t.Error("the board tab is never grayed out")
 	}
 }
+
+// TestEventVenueLinksToLocationTab covers #1689: the venue name on the Info tab
+// opens the Location tab on the same page.
+func TestEventVenueLinksToLocationTab(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.Exec(`CREATE TABLE site_settings (key TEXT PRIMARY KEY, value TEXT)`)
+	siteCfg = newSiteSettingsCache(db)
+
+	tmpls := loadTemplates()
+	i18n := loadI18n("")
+	cfg := &Config{Domain: "example.test"}
+	req := httptest.NewRequest(http.MethodGet, "/events/1", nil)
+	rec := httptest.NewRecorder()
+	renderTemplate(rec, tmpls.event, tmplData(req, cfg, i18n, "Test", EventData{
+		Event: Event{ID: 1, Title: "Test", Location: &Location{ID: 3, Location: "Saal Nord"}},
+	}))
+	body, _ := io.ReadAll(rec.Body)
+	html := string(body)
+	if strings.Contains(html, "template error") {
+		t.Fatalf("template execution error: %s", html[max(0, len(html)-300):])
+	}
+	if !strings.Contains(html, `<button type="button" class="evt-venue-link" data-go-tab="location">Saal Nord</button>`) {
+		t.Error("venue name on the Info tab must link to the Location tab")
+	}
+}

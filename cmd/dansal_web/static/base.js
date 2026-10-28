@@ -674,9 +674,11 @@ function dansalMtabs(root, onShow){
       b.setAttribute('aria-controls', ids.join(' '));
     });
     panels.forEach(function(p){
-      if(phone){
+      var b=tabButton(p.dataset.tab);
+      // A panel without a tab button (#1690) is not labelled: nothing switches to it.
+      if(phone && b){
         p.setAttribute('role', 'tabpanel');
-        p.setAttribute('aria-labelledby', tabButton(p.dataset.tab).id);
+        p.setAttribute('aria-labelledby', b.id);
       } else {
         p.removeAttribute('role');
         p.removeAttribute('aria-labelledby');

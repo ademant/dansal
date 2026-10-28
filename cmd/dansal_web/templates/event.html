@@ -281,7 +281,7 @@
   </div>
   {{/* #1670: phone info block (General tab): the venue, the watchlist link and
        the notice, under the header. Desktop hides the phone-only parts. */}}
-  {{with .Location}}{{if .Location}}<p class="evt-phone-only evt-panel evt-info-venue" data-tab="general">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</p>{{end}}{{end}}
+  {{with .Location}}{{if .Location}}<p class="evt-phone-only evt-panel evt-info-venue" data-tab="general"><button type="button" class="evt-venue-link" data-go-tab="location">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}</button></p>{{end}}{{end}}
   <button type="button" class="evt-wl-link evt-phone-only evt-panel" data-tab="general" data-wl-star="{{.ID}}" data-fn="watchlistToggle" data-args="[{{.ID}}]" aria-pressed="false"><span class="wl-star-glyph" aria-hidden="true">☆</span> {{$.Strings.T "wl_header_title"}}</button>
   <p class="evt-disclaimer evt-panel" data-tab="general">{{$.Strings.T "evt_disclaimer"}}</p>
   {{/* #1469: visible to every visitor (not just logged-in editors — that's
@@ -412,6 +412,7 @@
         <div id="tt-detail-body"></div>
       </dialog>
       <script nonce="{{$.Nonce}}">
+      var ttOpener=null;
       function openTTDetail(el,hasTime){
         var dlg=document.getElementById('tt-detail-dialog');
         var body=document.getElementById('tt-detail-body');
@@ -421,12 +422,17 @@
           if(s)html='<div class="tt-time">'+s+(e?' – '+e:'')+'</div>';
         }
         body.innerHTML=html+el.innerHTML;
+        // The entry is a div: tabindex -1 lets focus return to it on close.
+        if(!el.hasAttribute('tabindex')) el.tabIndex=-1;
+        ttOpener=el;
         dlg.showModal();
       }
       (function(){
         var dlg=document.getElementById('tt-detail-dialog');
         if(!dlg)return;
         dlg.addEventListener('click',function(e){if(e.target===dlg)dlg.close();});
+        // #1689: closing the popup returns focus to the entry that opened it.
+        dlg.addEventListener('close',function(){ if(ttOpener && ttOpener.focus) ttOpener.focus(); });
       })();
       // Each multi-room day gets its own independent room-pill switcher —
       // scoped per .tt-day so multiple festival days don't collide on ids.
@@ -1045,7 +1051,9 @@
 .btn-cancel-event:hover{background:#ffeaa0;border-color:#c89200}
 .evt-header-meta{display:flex;flex-wrap:wrap;align-items:center;gap:.35rem;color:var(--fg-dim);font-size:.95rem}
 .evt-sep{color:var(--fg-hint)}
-.evt-time{font-weight:600;color:var(--heading)}
+/* #1689: the date reads as plain text, not as a link. */
+.evt-time{font-weight:400;color:var(--fg-2)}
+.evt-venue-link{background:none;border:none;padding:0;font:inherit;color:var(--link);text-decoration:underline;cursor:pointer;min-height:44px;text-align:left}
 .evt-layout{display:grid;grid-template-columns:1fr 260px;gap:2rem;align-items:start}
 @media(max-width:680px){.evt-layout{grid-template-columns:1fr}}
 .evt-section{margin-bottom:1.75rem}
@@ -1119,6 +1127,8 @@
 .tt-detail-dialog{position:fixed;margin:auto;max-width:420px;width:90vw;max-height:80vh;overflow-y:auto;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--fg-2);padding:1.1rem 1.2rem;box-shadow:0 8px 32px rgba(0,0,0,.35)}
 .tt-detail-dialog::backdrop{background:rgba(0,0,0,.45)}
 .tt-detail-dialog .tt-time{font-size:.85rem;font-weight:600;color:var(--fg-dim);margin-bottom:.4rem}
+/* #1689: in the popup the star is part of the body, under the title, not in the corner by the close button. */
+.tt-detail-dialog .tt-star-btn{position:static;display:inline-block;margin-top:.5rem;font-size:1.2rem}
 .tt-detail-close{position:absolute;top:.5rem;right:.6rem;background:none;border:none;font-size:1.3rem;line-height:1;color:var(--fg-faint);cursor:pointer;padding:.2rem .4rem}
 @media(max-width:680px){
   .tt-room-pills{display:flex}
@@ -1619,7 +1629,9 @@ document.addEventListener('DOMContentLoaded', function(){
     });
     emptyMsg.hidden=!empty;
     if(tab==='location' && window.dansalEvtMap) window.dansalEvtMap.invalidateSize();
-    if(byUser) dansalScrollTo(root);
+    // #1689: after a tab change the breadcrumb, not the tab bar, is the first
+    // visible element.
+    if(byUser) dansalScrollTo(document.querySelector('.breadcrumb')||root);
   }
   btns.forEach(function(b){
     b.addEventListener('click', function(){ show(this.dataset.tab, true); });
@@ -1638,6 +1650,10 @@ document.addEventListener('DOMContentLoaded', function(){
   // The bar steps aside while a form field has focus (on-screen keyboard).
   // base.js loads with defer, so the helper exists only once parsing is done.
   document.addEventListener('DOMContentLoaded', function(){ dansalTabBarKeyboard(bar); });
+  // #1689: the venue name on Info opens the Location tab.
+  root.querySelectorAll('[data-go-tab]').forEach(function(b){
+    b.addEventListener('click', function(){ show(this.dataset.goTab, true); });
+  });
   // #1670: a tap on the photo opens it fullscreen, with its aspect ratio kept.
   var lb=document.getElementById('evt-lightbox'), lbImg=document.getElementById('evt-lightbox-img');
   var hero=document.querySelector('.evt-hero-img');

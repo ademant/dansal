@@ -80,3 +80,28 @@ func TestLocationPhoneTabs(t *testing.T) {
 		}
 	})
 }
+
+// TestLocationRoomsPanelOnlyWithRooms covers #1690: the rooms panel renders only
+// when its rooms tab does, so the tab script never meets a panel without a button.
+func TestLocationRoomsPanelOnlyWithRooms(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.Exec(`CREATE TABLE site_settings (key TEXT PRIMARY KEY, value TEXT)`)
+	siteCfg = newSiteSettingsCache(db)
+
+	tmpls := loadTemplates()
+	i18n := loadI18n("")
+	cfg := &Config{Domain: "example.test"}
+	req := httptest.NewRequest(http.MethodGet, "/location/788", nil)
+	rec := httptest.NewRecorder()
+	data := LocationPageData{Location: Location{ID: 788, Location: "Saal ohne Räume"}}
+	renderTemplate(rec, tmpls.location, tmplData(req, cfg, i18n, data.Location.Location, data))
+	body, _ := io.ReadAll(rec.Body)
+	html := string(body)
+	if strings.Contains(html, `data-tab="rooms" aria-controls`) || strings.Contains(html, `<div class="mtab-panel" data-tab="rooms">`) {
+		t.Error("a location without rooms or a site plan must not render a rooms tab or panel")
+	}
+}

@@ -675,7 +675,10 @@ function dansalTabBarKeyboard(bar){
 // dansalScrollTo (#1667): scrolls so that the top of el is in view.
 function dansalScrollTo(el){
   if(!el) return;
-  window.scrollTo(0, el.getBoundingClientRect().top + window.pageYOffset - 8);
+  var y=Math.max(0, el.getBoundingClientRect().top + window.pageYOffset - 8);
+  window.scrollTo(0, y);
+  // #1698: remembered so the back-to-top arrow counts scrolling from here.
+  window.dansalScrollAnchor=y;
 }
 // dansalMtabs (#1671-#1675): phone tab bar for the detail pages. root holds the
 // bar (.mtabs with .mtab buttons) and the panels (.mtab-panel[data-tab]). On
@@ -730,7 +733,8 @@ function dansalMtabs(root, onShow){
     panels.forEach(function(p){ p.toggleAttribute('data-off', p.dataset.tab!==tab); });
     if(emptyMsg) emptyMsg.toggleAttribute('data-show', empty);
     if(onShow) onShow(tab);
-    if(byUser) dansalScrollTo(root);
+    // #1698: after a tab switch the breadcrumb is the first visible element.
+    if(byUser) dansalScrollTo(document.querySelector('.breadcrumb')||root);
   }
   btns.forEach(function(b){
     b.addEventListener('click', function(){ show(this.dataset.tab, true); });
@@ -789,7 +793,15 @@ function dansalLoadLeaflet(cluster){
   var btn=document.getElementById('back-to-top');
   var nav=document.querySelector('nav');
   if(!btn||!nav)return;
-  new IntersectionObserver(function(e){btn.classList.toggle('visible',!e[0].isIntersecting);}).observe(nav);
+  // #1698: the arrow appears only once the nav is out of view and the user has
+  // scrolled on well past the last programmatic scroll (a tab switch).
+  function update(){
+    var navGone=nav.getBoundingClientRect().bottom<=0;
+    var fromAnchor=window.pageYOffset-(window.dansalScrollAnchor||0);
+    btn.classList.toggle('visible', navGone && fromAnchor>300);
+  }
+  window.addEventListener('scroll', update, {passive:true});
+  update();
 })();
 var _langPending=null;
 function handleLangChange(sel){

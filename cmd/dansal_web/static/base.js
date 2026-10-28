@@ -417,6 +417,22 @@ function nominatimRefine(lat, lon, countryCode, cb){
 // festivalCalendarJSON template func. Shared by /festivals (fixed
 // calendar year, its own month list) and /org/{slug} (#1161, a rolling
 // window of upcoming months) so this rendering logic isn't duplicated.
+// dansalFirstEventMonthIndex (#1696/#1697): index in months of the first month
+// that holds an event start, or -1 when none falls in months.
+function dansalFirstEventMonthIndex(calEvents, months){
+  var best=-1;
+  calEvents.forEach(function(ev){
+    var d=new Date(ev.s);
+    if(isNaN(d)) return;
+    for(var i=0;i<months.length;i++){
+      if(months[i].getFullYear()===d.getFullYear() && months[i].getMonth()===d.getMonth()){
+        if(best<0 || i<best) best=i;
+        break;
+      }
+    }
+  });
+  return best;
+}
 function renderMiniCalendar(containerId, calEvents, months, opts){
   opts=opts||{};
   var cal=document.getElementById(containerId);
@@ -491,16 +507,30 @@ function renderMiniCalendar(containerId, calEvents, months, opts){
       if(prevBtn) prevBtn.disabled=cal.scrollLeft<=2;
       if(nextBtn) nextBtn.disabled=cal.scrollLeft+cal.clientWidth>=cal.scrollWidth-2;
     }
-    if(opts.startMonth){
-      var startIdx=-1;
+    var startIdx=-1;
+    if(opts.startIndex!=null){
+      startIdx=opts.startIndex;
+    } else if(opts.startMonth){
       for(var mi=0;mi<months.length;mi++){
         if(months[mi].getMonth()+1===opts.startMonth){startIdx=mi;break;}
       }
-      if(startIdx>0){
+    }
+    if(startIdx>0){
+      // #1696: a hidden carousel (its tab is not open) has no width yet, so the
+      // scroll waits until the calendar is shown.
+      var placeStart=function(){
+        if(!cal.clientWidth) return false;
         var prevBehavior=cal.style.scrollBehavior;
         cal.style.scrollBehavior='auto';
         cal.scrollLeft=startIdx*step();
         cal.style.scrollBehavior=prevBehavior;
+        return true;
+      };
+      if(!placeStart() && 'IntersectionObserver' in window){
+        var io=new IntersectionObserver(function(entries){
+          if(entries[0].isIntersecting && placeStart()) io.disconnect();
+        });
+        io.observe(cal);
       }
     }
     if(prevBtn) prevBtn.onclick=function(){cal.scrollBy({left:-step(),behavior:'smooth'});};

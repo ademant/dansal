@@ -105,3 +105,34 @@ func TestLocationRoomsPanelOnlyWithRooms(t *testing.T) {
 		t.Error("a location without rooms or a site plan must not render a rooms tab or panel")
 	}
 }
+
+// TestLocationCalendarOpensOnFirstEventMonth covers #1696: the location calendar
+// is the shared month calendar, wired to open on the first month with an event.
+func TestLocationCalendarOpensOnFirstEventMonth(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.Exec(`CREATE TABLE site_settings (key TEXT PRIMARY KEY, value TEXT)`)
+	siteCfg = newSiteSettingsCache(db)
+
+	tmpls := loadTemplates()
+	i18n := loadI18n("")
+	cfg := &Config{Domain: "example.test"}
+	req := httptest.NewRequest(http.MethodGet, "/location/4", nil)
+	rec := httptest.NewRecorder()
+	data := LocationPageData{
+		Location: Location{ID: 4, Location: "Bürgerhaus"},
+		Events:   []Event{{ID: 1, Title: "Ball", StartTime: "2033-05-18T03:33:20Z"}},
+	}
+	renderTemplate(rec, tmpls.location, tmplData(req, cfg, i18n, data.Location.Location, data))
+	body, _ := io.ReadAll(rec.Body)
+	html := string(body)
+	if strings.Contains(html, "template error") {
+		t.Fatalf("template execution error: %s", html[max(0, len(html)-300):])
+	}
+	if !strings.Contains(html, `startIndex: dansalFirstEventMonthIndex(calEvents, months)`) {
+		t.Error("location calendar must open on the first month with an event")
+	}
+}

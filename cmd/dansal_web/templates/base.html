@@ -684,8 +684,10 @@ document.addEventListener('DOMContentLoaded', function(){
     months.push(new Date(d.getFullYear(), d.getMonth() + i, 1));
   }
   document.getElementById('{{.ID}}-wrap').hidden = false;
+  // #1696/#1697: the carousel opens on the first month with an event.
   renderMiniCalendar('{{.ID}}', calEvents, months,
-    {carousel: true, prevId: '{{.ID}}-prev', nextId: '{{.ID}}-next', wrapId: '{{.ID}}-wrap'});
+    {carousel: true, prevId: '{{.ID}}-prev', nextId: '{{.ID}}-next', wrapId: '{{.ID}}-wrap',
+     startIndex: dansalFirstEventMonthIndex(calEvents, months)});
   // #1671: a swipe on phones moves the calendar like its arrow buttons.
   dansalSwipe(document.getElementById('{{.ID}}-wrap'),
     function(){ document.getElementById('{{.ID}}-next').click(); },

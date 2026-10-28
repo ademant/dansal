@@ -242,7 +242,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   {{end}}
 </div>
 
-<div class="home-tabs" id="home-tabs" data-mtab="list">
+<div class="home-tabs" id="home-tabs" data-mtab="map">
 <!-- Map -->
 {{/* #1299: the same events already render as accessible text further down
      this page (the weekly table / future list), so the map is a
@@ -372,9 +372,9 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 
 <!-- Phone bottom tab bar (#1613): list is the default, see initialHomeTab() -->
 <div class="mtabs mtabs-icons" role="tablist" aria-label="{{$.Strings.T "mtab_label"}}">
-  <button type="button" role="tab" class="mtab" id="mtab-list" data-tab="list" aria-controls="mpanel-list" aria-selected="true" tabindex="0"><span class="mtab-ico" aria-hidden="true">☰</span><span class="mtab-label">{{$.Strings.T "mtab_list"}}</span></button>
+  <button type="button" role="tab" class="mtab" id="mtab-list" data-tab="list" aria-controls="mpanel-list" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">☰</span><span class="mtab-label">{{$.Strings.T "mtab_list"}}</span></button>
   <button type="button" role="tab" class="mtab" id="mtab-week" data-tab="week" aria-controls="mpanel-week" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">📅</span><span class="mtab-label">{{$.Strings.T "mtab_calendar"}}</span></button>
-  <button type="button" role="tab" class="mtab" id="mtab-map" data-tab="map" aria-controls="mpanel-map" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">🗺</span><span class="mtab-label">{{$.Strings.T "mtab_map"}}</span></button>
+  <button type="button" role="tab" class="mtab" id="mtab-map" data-tab="map" aria-controls="mpanel-map" aria-selected="true" tabindex="0"><span class="mtab-ico" aria-hidden="true">🗺</span><span class="mtab-label">{{$.Strings.T "mtab_map"}}</span></button>
 </div>
 
 <script type="application/json" id="events-geo">{{eventsGeoJSON .Events}}</script>
@@ -452,7 +452,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   function isPhone(){ return PHONE_MQ.matches; }
   // initialHomeTab: ?view= wins, then the week deep links (?week=, ?day=)
   // open the calendar, ?mode=all opens the list, then the last tab the
-  // visitor chose (localStorage), and the list by default.
+  // visitor chose (localStorage), and the map by default.
   function initialHomeTab(){
     var sp = new URLSearchParams(window.location.search);
     var v = sp.get('view');
@@ -463,7 +463,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
       var s = localStorage.getItem('dansal_home_tab');
       if(s === 'list' || s === 'week' || s === 'map') return s;
     }catch(e){}
-    return 'list';
+    return 'map';
   }
   // The table mode a tab needs: the list shows every future event, the
   // calendar only the week. Desktop keeps the mode from the URL.

@@ -1813,8 +1813,12 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   applyFilters();
   applyHomeTab(mobileTab);
   var saveData = !!(navigator.connection && navigator.connection.saveData);
-  if(!isPhone() || mobileTab === 'map') ensureMap();
-  else if(!saveData) whenIdle(ensureMap);
+  // dansalLoadLeaflet lives in base.js, which is deferred: it only exists once
+  // DOMContentLoaded has fired, and this IIFE runs at parse time.
+  document.addEventListener('DOMContentLoaded', function(){
+    if(!isPhone() || mobileTab === 'map') ensureMap();
+    else if(!saveData) whenIdle(ensureMap);
+  });
   PHONE_MQ.addEventListener('change', function(){
     if(!isPhone()) ensureMap();
     tableMode = desiredTableMode();

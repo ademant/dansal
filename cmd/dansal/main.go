@@ -4728,6 +4728,7 @@ func main() {
 	initAvatarCaches(config.Server.ImagesDir)
 	initMetrics()
 	startTokenCleanup()
+	startDBPoolLogger()
 	startScheduledBackup()
 	logging.Infof("Database initialized successfully")
 

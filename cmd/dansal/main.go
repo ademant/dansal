@@ -5128,6 +5128,7 @@ func main() {
 	smux.Handle("DELETE /api/v1/feeds/{id}", auth(deleteFetchSource))
 	smux.Handle("DELETE /api/v1/fetchurl/{id}", auth(deprecatedAlias("/api/v1/feeds/{id}", deleteFetchSource))) // deprecated (#1384)
 	smux.Handle("POST /api/v1/feeds/{id}/fetch", auth(fetchURLByID))
+	smux.Handle("GET /api/v1/feeds/{id}/fetch/{job}", auth(getFetchJob))
 	smux.Handle("POST /api/v1/fetchurl/{id}/fetch", auth(deprecatedAlias("/api/v1/feeds/{id}/fetch", fetchURLByID))) // deprecated (#1384)
 
 	// Pending feed suggestions review (#1333 phase 2) — same admin-or-org-member

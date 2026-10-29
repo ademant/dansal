@@ -486,6 +486,16 @@ func fetchRunResultJSON(result FetchRunResult) map[string]int {
 	}
 }
 
+// fetchRunAllowed reports whether the caller may run feed source id: an admin
+// always may, anyone else only for a source of an organisation they belong to.
+func fetchRunAllowed(r *http.Request, client *DansalClient, su *SessionUser, id int, token string) bool {
+	if su.Role == "admin" {
+		return true
+	}
+	src, err := client.GetFetchSource(r.Context(), id, token)
+	return err == nil && src.OrganizationID != nil && memberOrgSet(r, client, su)[*src.OrganizationID]
+}
+
 func adminFetchurlRunHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		su, ok := requireLogin(w, r)
@@ -497,34 +507,75 @@ func adminFetchurlRunHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 			return
 		}
 		token := getSessionToken(r)
-		if su.Role != "admin" {
-			src, ferr := client.GetFetchSource(r.Context(), id, token)
-			if ferr != nil || src.OrganizationID == nil || !memberOrgSet(r, client, su)[*src.OrganizationID] {
-				forbidden(w, r)
-				return
-			}
-		}
-		result, runErr := client.RunFetchSource(r.Context(), id, token)
-		if _, restricted := robotsNotAcknowledgedMessage(runErr); restricted {
-			// The feed needs an accepted robots.txt restriction before any manual
-			// fetch; the edit page explains and offers the acceptance (#1545).
-			if r.Header.Get("Accept") == "application/json" {
-				writeJSONError(w, r, http.StatusConflict, runErr.Error())
-				return
-			}
-			http.Redirect(w, r, fmt.Sprintf("/admin/fetchurls/%d/edit", id), http.StatusSeeOther)
+		if !fetchRunAllowed(r, client, su, id, token) {
+			forbidden(w, r)
 			return
 		}
 		if r.Header.Get("Accept") == "application/json" {
-			w.Header().Set("Content-Type", "application/json")
-			if runErr != nil {
-				writeJSONError(w, r, http.StatusBadGateway, runErr.Error())
+			// The page polls the job (#1709), so this answers at once with its id.
+			job, err := client.StartFetchSource(r.Context(), id, token)
+			if err != nil {
+				writeJSONError(w, r, http.StatusBadGateway, err.Error())
 				return
 			}
-			json.NewEncoder(w).Encode(fetchRunResultJSON(result))
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusAccepted)
+			json.NewEncoder(w).Encode(map[string]int{"job_id": job.JobID})
+			return
+		}
+		// Without JavaScript the request waits for the run by polling, up to the
+		// web's timeout. The import itself keeps running on the API.
+		_, runErr := client.RunFetchSource(r.Context(), id, token)
+		if _, restricted := robotsNotAcknowledgedMessage(runErr); restricted {
+			// The feed needs an accepted robots.txt restriction before any manual
+			// fetch; the edit page explains and offers the acceptance (#1545).
+			http.Redirect(w, r, fmt.Sprintf("/admin/fetchurls/%d/edit", id), http.StatusSeeOther)
 			return
 		}
 		http.Redirect(w, r, "/admin/fetchurls", http.StatusSeeOther)
+	}
+}
+
+// adminFetchurlRunJobHandler reports a run started by adminFetchurlRunHandler.
+// The page polls it until the state is no longer "running" (#1709).
+func adminFetchurlRunJobHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, ok := intPathValueOr404(w, r, "id")
+		if !ok {
+			return
+		}
+		jobID, ok := intPathValueOr404(w, r, "job")
+		if !ok {
+			return
+		}
+		token := getSessionToken(r)
+		if !fetchRunAllowed(r, client, su, id, token) {
+			forbidden(w, r)
+			return
+		}
+		job, err := client.GetFetchJob(r.Context(), id, jobID, token)
+		if err != nil {
+			writeJSONError(w, r, http.StatusBadGateway, err.Error())
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch job.State {
+		case "ok":
+			res, _ := fetchRunResultFromJob(job)
+			body := map[string]any{"state": "ok"}
+			for k, v := range fetchRunResultJSON(res) {
+				body[k] = v
+			}
+			json.NewEncoder(w).Encode(body)
+		case "error":
+			json.NewEncoder(w).Encode(map[string]string{"state": "error", "error": job.Error, "error_code": job.ErrorCode})
+		default:
+			json.NewEncoder(w).Encode(map[string]string{"state": "running"})
+		}
 	}
 }
 

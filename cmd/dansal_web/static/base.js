@@ -673,6 +673,24 @@ function dansalTabBarKeyboard(bar){
   if(vv) vv.addEventListener('resize', update);
 }
 // dansalScrollTo (#1667): scrolls so that the top of el is in view.
+// dansalRunFetch starts a feed run from the admin "run now" control and polls
+// the job until it finishes (#1709). The POST answers at once with a job id;
+// each poll reports running, ok or error. It resolves with {ok, data}, where
+// ok means the run finished without error, and data is the job's body.
+function dansalRunFetch(url){
+  function poll(jobURL){
+    return new Promise(function(resolve){ setTimeout(resolve, 2000); })
+      .then(function(){ return fetch(jobURL, {headers: {Accept: 'application/json'}}); })
+      .then(function(r){ return r.json().then(function(d){ return {ok: r.ok, data: d}; }); })
+      .then(function(p){
+        if (p.ok && p.data.state === 'running') return poll(jobURL);
+        return {ok: p.ok && p.data.state === 'ok', data: p.data};
+      });
+  }
+  return fetch(url, {method: 'POST', headers: {Accept: 'application/json'}})
+    .then(function(r){ return r.json().then(function(d){ return {ok: r.ok, data: d}; }); })
+    .then(function(res){ return res.ok ? poll(url + '/' + res.data.job_id) : res; });
+}
 function dansalScrollTo(el){
   if(!el) return;
   var y=Math.max(0, el.getBoundingClientRect().top + window.pageYOffset - 8);

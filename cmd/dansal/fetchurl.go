@@ -5,7 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/ademant/dansal/internal/logging"
 	"io"
@@ -2035,69 +2034,4 @@ func bulkAssignFetchSourceOrg(w http.ResponseWriter, r *http.Request) {
 		db.Exec("UPDATE fetch_sources SET organization_id = ? WHERE id = ?", req.OrganizationID, id)
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// POST /api/v1/fetchurl/{id}/fetch
-func fetchURLByID(w http.ResponseWriter, r *http.Request) {
-	callerID, callerRole := callerFromRequest(r)
-	if callerRole == RolePublisher {
-		writeError(w, "Forbidden: publishers may not trigger fetch sources", http.StatusForbidden)
-		return
-	}
-	if callerRole != RoleAdmin && callerRole != RoleUser {
-		writeError(w, "Forbidden", http.StatusForbidden)
-		return
-	}
-
-	id := r.PathValue("id")
-	src, err := scanFetchSource(db.QueryRow(
-		"SELECT "+fetchSourceCols+" FROM fetch_sources WHERE id = ?", id,
-	))
-	if !rowOr404(w, err, "Fetch source not found") {
-		return
-	}
-	if callerRole != RoleAdmin {
-		if !requireExistingOrgMember(w, callerID, nullIntFromPtr(src.OrganizationID)) {
-			return
-		}
-	}
-
-	if !validFetchType(src.Type) {
-		writeError(w, "Unsupported type; use 'ical', 'rss', or 'folkdance-json'", http.StatusBadRequest)
-		return
-	}
-
-	allEvents, counts, err := importFromSource(r.Context(), src)
-	if errors.Is(err, errRobotsNotAcknowledged) {
-		// Not a fetch failure: the feed is refused until someone accepts robots.txt (#1545).
-		writeErrorCode(w, "robots_not_acknowledged", err.Error(), http.StatusConflict)
-		return
-	}
-	if err != nil {
-		recordFetchResult(src, 0, err)
-		logging.Errorf("fetchurl: source_id=%d url=%q type=%s result=error caller=%d err=%v", src.ID, src.URL, src.Type, callerID, err)
-		writeError(w, err.Error(), http.StatusBadGateway)
-		return
-	}
-	recordFetchResult(src, len(allEvents), nil)
-	logging.Infof("fetchurl: source_id=%d url=%q type=%s result=ok events=%d caller=%d", src.ID, src.URL, src.Type, len(allEvents), callerID)
-
-	w.Header().Set("Content-Type", "application/json")
-	if counts.AllNew() && len(allEvents) > 0 {
-		w.WriteHeader(http.StatusCreated)
-	}
-	json.NewEncoder(w).Encode(struct {
-		Events    []Event `json:"events"`
-		New       int     `json:"new"`
-		Updated   int     `json:"updated"`
-		Unchanged int     `json:"unchanged"`
-		Failed    int     `json:"failed"`
-		// TimezoneFallback and Unparsed (#1392) let the admin tell a feed that
-		// was fully understood apart from a few guessed timezones from one that
-		// was partially unparseable. Zero values are omitted so the common,
-		// clean case keeps the response shape it had.
-		TimezoneFallback int `json:"timezone_fallback,omitempty"`
-		Unparsed         int `json:"unparsed,omitempty"`
-	}{Events: allEvents, New: counts.New, Updated: counts.Updated, Unchanged: counts.Unchanged, Failed: counts.Failed,
-		TimezoneFallback: counts.TimezoneFallback, Unparsed: counts.Unparsed})
 }

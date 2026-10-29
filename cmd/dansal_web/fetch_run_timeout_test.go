@@ -3,26 +3,41 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
-// TestRunFetchSourceUsesConfiguredTimeout covers #1395: RunFetchSource used
-// to share fastCallTimeout (15s) with every other DansalClient call, cutting
-// off a slow-but-legitimate feed fetch before the API's own (much longer)
-// allowance had a real chance to finish. It must use FetchRunTimeout
-// instead, and fall back to fastCallTimeout when unset (a client built
-// without it, e.g. in another test, keeps its old behavior).
+// TestRunFetchSourceUsesConfiguredTimeout covers #1395 and #1709: the run is
+// polled for up to FetchRunTimeout, not the shared fastCallTimeout. That
+// timeout ends only the wait. A run still going returns errFetchStillRunning,
+// because the import keeps going as a job on the API.
 func TestRunFetchSourceUsesConfiguredTimeout(t *testing.T) {
-	const handlerDelay = 80 * time.Millisecond
+	origPoll := fetchPollInterval
+	fetchPollInterval = 5 * time.Millisecond
+	t.Cleanup(func() { fetchPollInterval = origPoll })
+
+	const jobDelay = 80 * time.Millisecond
+	var startedNano atomic.Int64
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(handlerDelay)
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"events": []any{}, "new": 1, "updated": 0, "unchanged": 0})
+		if r.Method == http.MethodPost {
+			startedNano.Store(time.Now().UnixNano())
+			w.WriteHeader(http.StatusAccepted)
+			json.NewEncoder(w).Encode(map[string]any{"job_id": 1, "source_id": 19, "state": "running"})
+			return
+		}
+		if time.Since(time.Unix(0, startedNano.Load())) < jobDelay {
+			json.NewEncoder(w).Encode(map[string]any{"job_id": 1, "source_id": 19, "state": "running"})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{"job_id": 1, "source_id": 19, "state": "ok",
+			"result": map[string]any{"events": []any{}, "new": 1, "updated": 0, "unchanged": 0}})
 	}))
 	defer upstream.Close()
 
@@ -34,15 +49,15 @@ func TestRunFetchSourceUsesConfiguredTimeout(t *testing.T) {
 		}
 	}
 
-	t.Run("shorter than the handler delay: times out", func(t *testing.T) {
+	t.Run("shorter than the job: the wait ends, the job is not cancelled", func(t *testing.T) {
 		c := newClient(20 * time.Millisecond)
 		_, err := c.RunFetchSource(context.Background(), 19, "")
-		if err == nil {
-			t.Fatal("expected a timeout error")
+		if !errors.Is(err, errFetchStillRunning) {
+			t.Fatalf("err = %v, want errFetchStillRunning", err)
 		}
 	})
 
-	t.Run("longer than the handler delay: succeeds", func(t *testing.T) {
+	t.Run("longer than the job: succeeds", func(t *testing.T) {
 		c := newClient(2 * time.Second)
 		res, err := c.RunFetchSource(context.Background(), 19, "")
 		if err != nil {
@@ -55,8 +70,8 @@ func TestRunFetchSourceUsesConfiguredTimeout(t *testing.T) {
 
 	t.Run("unset FetchRunTimeout falls back to fastCallTimeout, not zero", func(t *testing.T) {
 		c := newClient(0)
-		// fastCallTimeout (15s) comfortably covers handlerDelay, so this
-		// must succeed rather than failing instantly on a zero timeout.
+		// fastCallTimeout (15s) comfortably covers jobDelay, so this must succeed
+		// rather than giving up instantly on a zero timeout.
 		if _, err := c.RunFetchSource(context.Background(), 19, ""); err != nil {
 			t.Fatalf("RunFetchSource with unset FetchRunTimeout: %v", err)
 		}

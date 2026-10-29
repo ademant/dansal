@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"image"
 	"image/color"
 	"image/png"
@@ -58,7 +59,7 @@ func TestIcalImagePropertyFetchesAnImage(t *testing.T) {
 	defer srv.Close()
 
 	const eventID = 9101
-	attachImagesFromICalEvent(eventID, veventWith(t, "IMAGE;VALUE=URI:"+srv.URL+"/poster.png"))
+	attachImagesFromICalEvent(context.Background(), eventID, veventWith(t, "IMAGE;VALUE=URI:"+srv.URL+"/poster.png"))
 	if !hasImage(eventID) {
 		t.Error("IMAGE URL to a PNG was not stored")
 	}
@@ -73,7 +74,7 @@ func TestIcalImageRefusesNonImageContentType(t *testing.T) {
 	defer srv.Close()
 
 	const eventID = 9102
-	attachImagesFromICalEvent(eventID, veventWith(t, "IMAGE;VALUE=URI:"+srv.URL+"/page.html"))
+	attachImagesFromICalEvent(context.Background(), eventID, veventWith(t, "IMAGE;VALUE=URI:"+srv.URL+"/page.html"))
 	if hasImage(eventID) {
 		t.Error("a text/html response was stored as an image")
 	}

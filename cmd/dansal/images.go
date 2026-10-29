@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/base64"
 	"errors"
@@ -19,6 +20,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	ics "github.com/arran4/golang-ical"
 	"github.com/gen2brain/avif"
@@ -275,29 +277,69 @@ func saveImageFromReader(eventID int, r io.Reader) error {
 // icalImageMaxBytes caps a feed image (#1578). A larger file is refused.
 const icalImageMaxBytes = 10 << 20
 
+// icalImageAttachTimeout bounds the image downloads of one event (#1708). The
+// attach runs after the import commits, so a slow image host delays only that
+// event's picture, not the import.
+const icalImageAttachTimeout = 20 * time.Second
+
 // attachImagesFromICalEvent stores the first usable image of a VEVENT. The
-// common non-standard IMAGE property is tried first, then ATTACH (#1578).
-func attachImagesFromICalEvent(eventID int, vevent *ics.VEvent) {
-	if hasImage(eventID) {
+// common non-standard IMAGE property is tried first, then ATTACH (#1578). It
+// skips when the event already has an image, and writes no debug line for a
+// VEVENT without an image property. It runs after the import transaction
+// commits (#1708), so it never holds the write lock.
+func attachImagesFromICalEvent(ctx context.Context, eventID int, vevent *ics.VEvent) {
+	imageProps := vevent.GetProperties(ics.ComponentProperty("IMAGE"))
+	var attachProps []*ics.IANAProperty
+	for _, prop := range vevent.GetProperties(ics.ComponentPropertyAttach) {
+		if fmttype := prop.ICalParameters["FMTTYPE"]; len(fmttype) > 0 && strings.HasPrefix(fmttype[0], "image/") {
+			attachProps = append(attachProps, prop)
+		}
+	}
+	if len(imageProps) == 0 && len(attachProps) == 0 {
 		return
 	}
-	for _, prop := range vevent.GetProperties(ics.ComponentProperty("IMAGE")) {
-		if len(prop.Value) > 0 && tryAttachImageURL(eventID, prop.Value) {
-			return
+	if hasImage(eventID) {
+		logging.Debugf("image attach: event=%d outcome=exists", eventID)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, icalImageAttachTimeout)
+	defer cancel()
+	start := time.Now()
+	attached := false
+	for _, prop := range imageProps {
+		if len(prop.Value) > 0 && tryAttachImageURL(ctx, eventID, prop.Value) {
+			attached = true
+			break
 		}
 	}
-	for _, prop := range vevent.GetProperties(ics.ComponentPropertyAttach) {
-		fmttype := prop.ICalParameters["FMTTYPE"]
-		if len(fmttype) == 0 || !strings.HasPrefix(fmttype[0], "image/") {
-			continue
+	for _, prop := range attachProps {
+		if attached {
+			break
 		}
-		if tryAttachImage(eventID, prop) {
-			return
-		}
+		attached = tryAttachImage(ctx, eventID, prop)
 	}
+	outcome := "failed"
+	switch {
+	case attached:
+		outcome = "attached"
+	case ctx.Err() != nil:
+		outcome = "timeout"
+	}
+	logging.Debugf("image attach: event=%d outcome=%s duration_ms=%d", eventID, outcome, time.Since(start).Milliseconds())
 }
 
-func tryAttachImage(eventID int, prop *ics.IANAProperty) bool {
+// imageRequest sends a HEAD or GET for a feed image under ctx, so the
+// per-event timeout also stops a slow image host (#1708).
+func imageRequest(ctx context.Context, method, rawURL string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, method, rawURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	return safeClient.Do(req)
+}
+
+func tryAttachImage(ctx context.Context, eventID int, prop *ics.IANAProperty) bool {
 	valueType := ""
 	if vt := prop.ICalParameters["VALUE"]; len(vt) > 0 {
 		valueType = strings.ToUpper(vt[0])
@@ -323,18 +365,18 @@ func tryAttachImage(eventID int, prop *ics.IANAProperty) bool {
 		return true
 	}
 
-	return tryAttachImageURL(eventID, prop.Value)
+	return tryAttachImageURL(ctx, eventID, prop.Value)
 }
 
 // tryAttachImageURL fetches a feed image by URL and stores it. It uses
 // safeClient (no private addresses), checks the type and size with a HEAD
 // first where the server answers it, and caps the download at
 // icalImageMaxBytes (#1578). A refusal is logged and reports false.
-func tryAttachImageURL(eventID int, rawURL string) bool {
+func tryAttachImageURL(ctx context.Context, eventID int, rawURL string) bool {
 	if u, err := url.Parse(rawURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return false
 	}
-	if head, err := safeClient.Head(rawURL); err == nil {
+	if head, err := imageRequest(ctx, http.MethodHead, rawURL); err == nil {
 		head.Body.Close()
 		if head.StatusCode >= 200 && head.StatusCode < 300 {
 			if ct := head.Header.Get("Content-Type"); ct != "" && !strings.HasPrefix(ct, "image/") {
@@ -347,7 +389,7 @@ func tryAttachImageURL(eventID int, rawURL string) bool {
 			}
 		}
 	}
-	resp, err := safeClient.Get(rawURL)
+	resp, err := imageRequest(ctx, http.MethodGet, rawURL)
 	if err != nil {
 		logging.Errorf("iCal image fetch for event %d: %v", eventID, err)
 		return false

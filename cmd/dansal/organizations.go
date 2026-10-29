@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	ics "github.com/arran4/golang-ical"
+
+	"github.com/ademant/dansal/internal/logging"
 )
 
 type Organization struct {
@@ -99,11 +101,13 @@ type OrganizationMergePatchRequest struct {
 
 // ensureOrgFromOrganizer finds or creates an organization from a vevent's ORGANIZER property.
 // Prefers the CN parameter as the org name; falls back to the value with "mailto:" stripped.
-// Returns nil when no usable ORGANIZER is present or on any DB error.
-func ensureOrgFromOrganizer(vevent *ics.VEvent) *int {
+// It returns (nil, nil) when no usable ORGANIZER is present. A database error
+// is logged and returned, not dropped (#1708). q is the caller's querier, so an
+// import passes its transaction and the lookup does not take a second connection.
+func ensureOrgFromOrganizer(q querier, vevent *ics.VEvent) (*int, error) {
 	prop := vevent.GetProperty(ics.ComponentPropertyOrganizer)
 	if prop == nil {
-		return nil
+		return nil, nil
 	}
 
 	name := ""
@@ -114,20 +118,21 @@ func ensureOrgFromOrganizer(vevent *ics.VEvent) *int {
 		name = strings.TrimSpace(strings.TrimPrefix(strings.ToLower(prop.Value), "mailto:"))
 	}
 	if name == "" {
-		return nil
+		return nil, nil
 	}
 
 	var id int
-	err := db.QueryRow("SELECT id FROM organizations WHERE name = ?", name).Scan(&id)
+	err := q.QueryRow("SELECT id FROM organizations WHERE name = ?", name).Scan(&id)
 	if err == sql.ErrNoRows {
-		err = db.QueryRow(
+		err = q.QueryRow(
 			"INSERT INTO organizations (name) VALUES (?) RETURNING id", name,
 		).Scan(&id)
 	}
 	if err != nil {
-		return nil
+		logging.Debugf("organiser lookup: name=%q err=%v", name, err)
+		return nil, err
 	}
-	return &id
+	return &id, nil
 }
 
 // ensureOrgByName finds or creates an organization by name.

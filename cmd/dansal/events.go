@@ -2199,7 +2199,13 @@ func veventsToEventRequests(events []*ics.VEvent, icalOrgID *int) ([]EventCreate
 
 		orgID := icalOrgID
 		if orgID == nil {
-			orgID = ensureOrgFromOrganizer(event)
+			// Not inside a transaction here, so the shared pool is the right querier.
+			var err error
+			orgID, err = ensureOrgFromOrganizer(db, event)
+			if err != nil {
+				logging.Warnf("iCal organiser for event %q not linked: %v", event.GetProperty(ics.ComponentPropertySummary).Value, err)
+				orgID = nil
+			}
 		}
 		var isCancelled bool
 		if p := event.GetProperty(ics.ComponentPropertyStatus); p != nil {
@@ -2350,6 +2356,12 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	var allCreatedEvents []Event
+	// Feed images are fetched after the commit (#1708), not inside the transaction.
+	type pendingImage struct {
+		eventID int
+		vevent  *ics.VEvent
+	}
+	var pendingImages []pendingImage
 	var totalCounts ImportCounts
 	for i, req := range requests {
 		if req.NoLiveMusic && len(req.Musicians) > 0 {
@@ -2380,7 +2392,7 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 		allCreatedEvents = append(allCreatedEvents, createdEvents...)
 		if i < len(vevents) {
 			for _, ev := range createdEvents {
-				attachImagesFromICalEvent(ev.ID, vevents[i])
+				pendingImages = append(pendingImages, pendingImage{eventID: ev.ID, vevent: vevents[i]})
 			}
 		}
 	}
@@ -2388,6 +2400,9 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 	if err := tx.Commit(); err != nil {
 		writeInternalError(w, err)
 		return
+	}
+	for _, p := range pendingImages {
+		attachImagesFromICalEvent(r.Context(), p.eventID, p.vevent)
 	}
 
 	webhookAction := "update"

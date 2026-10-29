@@ -99,14 +99,6 @@ func MetricsMiddleware(smux *http.ServeMux) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
-			sc := &statusCapture{ResponseWriter: w}
-			next.ServeHTTP(sc, r)
-
-			status := sc.status
-			if status == 0 {
-				status = http.StatusOK
-			}
-
 			route := "unknown"
 			if _, pattern := smux.Handler(r); pattern != "" {
 				// Strip leading method prefix added by Go 1.22+ patterns ("GET /path").
@@ -116,6 +108,21 @@ func MetricsMiddleware(smux *http.ServeMux) func(http.Handler) http.Handler {
 					route = pattern
 				}
 			}
+
+			// The route pattern, not r.URL.Path: paths carry magic-link and
+			// manage tokens that must not reach the log (#1706).
+			id := httpReqSeq.Add(1)
+			logging.Debugf("http: req=%d start %s %s", id, r.Method, route)
+			httpInFlight.Add(1)
+			sc := &statusCapture{ResponseWriter: w}
+			next.ServeHTTP(sc, r)
+			httpInFlight.Add(-1)
+
+			status := sc.status
+			if status == 0 {
+				status = http.StatusOK
+			}
+			logging.Debugf("http: req=%d done %d %s %dms", id, status, route, time.Since(start).Milliseconds())
 
 			httpRequestsTotal.WithLabelValues(r.Method, route, strconv.Itoa(status)).Inc()
 			httpRequestDuration.WithLabelValues(r.Method, route).Observe(time.Since(start).Seconds())

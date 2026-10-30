@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/ademant/dansal/internal/logging"
 	"net/http"
+	"net/url"
 	"strconv"
 	"sync"
 	"time"
@@ -94,6 +95,8 @@ func sitemapHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 func buildSitemap(r *http.Request, cfg *Config, client *DansalClient) ([]byte, error) {
 	base := cfg.publicBaseURL()
 	today := time.Now().UTC().Format("2006-01-02")
+	ctx := r.Context()
+	epoch := time.Unix(0, 0)
 
 	urls := []sitemapURL{
 		{Loc: base + "/", LastMod: today, ChangeFreq: "daily", Priority: "1.0"},
@@ -102,6 +105,27 @@ func buildSitemap(r *http.Request, cfg *Config, client *DansalClient) ([]byte, e
 		{Loc: base + "/organizations", ChangeFreq: "weekly", Priority: "0.6"},
 		{Loc: base + "/festivals", ChangeFreq: "weekly", Priority: "0.6"},
 	}
+
+	// /board — lastmod is the newest active post's created_at (daily changing).
+	boardPosts, bErr := client.GetAllContactPosts(ctx, url.Values{})
+	if bErr != nil {
+		logging.Errorf("sitemap: could not load board posts: %v", bErr)
+	}
+	boardLastMod := today
+	for _, p := range boardPosts {
+		if t, err := parseUnixOrRFC3339(p.CreatedAt); err == nil && t.After(epoch) {
+			d := t.UTC().Format("2006-01-02")
+			if d > boardLastMod {
+				boardLastMod = d
+			}
+		}
+	}
+	urls = append(urls, sitemapURL{
+		Loc:        base + "/board",
+		LastMod:    boardLastMod,
+		ChangeFreq: "daily",
+		Priority:   "0.7",
+	})
 
 	// Static/legal pages
 	for _, page := range []string{"/impressum", "/privacy", "/terms"} {
@@ -113,12 +137,10 @@ func buildSitemap(r *http.Request, cfg *Config, client *DansalClient) ([]byte, e
 	}
 
 	// Events — all published (past + future) so archived pages stay indexed.
-	ctx := r.Context()
 	events, err := client.GetAllEvents(ctx)
 	if err != nil {
 		logging.Errorf("sitemap: could not load events: %v", err)
 	}
-	epoch := time.Unix(0, 0)
 	now := time.Now().Unix()
 	for _, e := range events {
 		lastMod := ""

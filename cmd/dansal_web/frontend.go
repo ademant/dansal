@@ -1251,7 +1251,7 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		if ogImg != "" {
 			ogImg += "?format=jpeg"
 		}
-		renderPage(w, cfg, tmpls.event, td, eventMetaDesc(event, lang), ogImg)
+		renderPage(w, cfg, tmpls.event, td, eventMetaDesc(event, epd.posts, lang), ogImg)
 	}
 }
 
@@ -1723,6 +1723,103 @@ func imageProxyHandler(client *DansalClient, prefix, idParam string) http.Handle
 	}
 }
 
+// boardPageTitle returns a dynamic title for the /board page based on which
+// type groups are present in posts. Falls back to the bare nav_board label
+// when there are no posts.
+func boardPageTitle(strs I18nStrings, posts []ContactPost) string {
+	if len(posts) == 0 {
+		return strs.T("nav_board")
+	}
+	var hasRides, hasSleep, hasTickets, hasLostFound bool
+	for _, p := range posts {
+		switch p.Type {
+		case "ride_offer", "ride_request":
+			hasRides = true
+		case "sleep_offer", "sleep_request":
+			hasSleep = true
+		case "ticket_offer", "ticket_request":
+			hasTickets = true
+		case "lost_item", "found_item":
+			hasLostFound = true
+		}
+	}
+	n := 0
+	if hasRides {
+		n++
+	}
+	if hasSleep {
+		n++
+	}
+	if hasTickets {
+		n++
+	}
+	if hasLostFound {
+		n++
+	}
+	key := "board_page_title_mixed"
+	if n == 1 {
+		switch {
+		case hasRides:
+			key = "board_page_title_rides"
+		case hasSleep:
+			key = "board_page_title_sleep"
+		case hasTickets:
+			key = "board_page_title_tickets"
+		case hasLostFound:
+			key = "board_page_title_lostfound"
+		}
+	}
+	return strs.TF(key, len(posts))
+}
+
+// boardMetaDesc builds a meta description for /board from the top events
+// by post count (up to 3 event names + date), truncated to metaDescMaxLen.
+func boardMetaDesc(posts []ContactPost, lang string) string {
+	if len(posts) == 0 {
+		return ""
+	}
+	type evGroup struct {
+		title string
+		start string
+		count int
+	}
+	groups := map[int]*evGroup{}
+	var order []int
+	for _, p := range posts {
+		if p.Event == nil {
+			continue
+		}
+		g, ok := groups[p.EventID]
+		if !ok {
+			g = &evGroup{title: p.Event.Title, start: p.Event.StartTime}
+			groups[p.EventID] = g
+			order = append(order, p.EventID)
+		}
+		g.count++
+	}
+	sort.Slice(order, func(i, j int) bool {
+		return groups[order[i]].count > groups[order[j]].count
+	})
+	var parts []string
+	for i, id := range order {
+		if i >= 3 {
+			break
+		}
+		g := groups[id]
+		dateStr := formatDateStr(lang, siteCfg.DateFormat(), g.start)
+		entry := g.title
+		if dateStr != g.start {
+			entry += " (" + dateStr + ")"
+		}
+		parts = append(parts, entry)
+	}
+	desc := strings.Join(parts, ", ")
+	if more := len(order) - 3; more > 0 {
+		desc += " +" + strconv.Itoa(more)
+	}
+	return truncate(desc, metaDescMaxLen)
+}
+
 type BoardData struct {
 	Posts         []ContactPost
 	TownFilter    string
@@ -1824,7 +1921,8 @@ func boardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		}
 		sort.Strings(towns)
 
-		title := i18n.T(r, "nav_board")
+		strs := i18n.Strings(i18n.detectLang(r))
+		title := boardPageTitle(strs, allPosts)
 		data := BoardData{
 			Posts:         posts,
 			TownFilter:    townFilter,
@@ -1839,7 +1937,9 @@ func boardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			RenewSent:  q.Get("renew") == "1",
 			RenewDone:  q.Get("renewed") == "1",
 		}
-		renderTemplate(w, tmpls.board, tmplData(r, cfg, i18n, title, data))
+		td := tmplData(r, cfg, i18n, title, data)
+		td.MetaDescription = boardMetaDesc(allPosts, i18n.detectLang(r))
+		renderTemplate(w, tmpls.board, td)
 	}
 }
 

@@ -163,7 +163,7 @@
   <button type="button" role="tab" class="mtab{{if not $.Data.Event.Timetable}} is-empty{{end}}" data-tab="timetable" aria-controls="evt-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">🎶</span><span class="mtab-label">{{$.Strings.T "evt_mtab_timetable"}}</span></button>
   <button type="button" role="tab" class="mtab{{if not $.Data.Event.Location}} is-empty{{end}}" data-tab="location" aria-controls="evt-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">📍</span><span class="mtab-label">{{$.Strings.T "evt_mtab_location"}}</span></button>
   <button type="button" role="tab" class="mtab{{if not $.Data.Org}} is-empty{{end}}" data-tab="org" aria-controls="evt-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">🏠</span><span class="mtab-label">{{$.Strings.T "evt_mtab_org"}}</span></button>
-  <button type="button" role="tab" class="mtab" data-tab="board" aria-controls="evt-tabs" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">📌</span><span class="mtab-label">{{$.Strings.T "evt_mtab_board"}}</span></button>
+  <button type="button" role="tab" class="mtab" data-tab="board" aria-controls="evt-tabs" aria-selected="false" tabindex="-1" style="position:relative"><span class="mtab-ico" aria-hidden="true">📌{{if $.Data.ContactPosts}}<span class="mtab-board-badge" aria-hidden="true">{{if gt (len $.Data.ContactPosts) 9}}9+{{else}}{{len $.Data.ContactPosts}}{{end}}</span>{{end}}</span><span class="mtab-label">{{$.Strings.T "evt_mtab_board"}}{{if $.Data.ContactPosts}} <span class="sr-only">({{$.Strings.TF "board_tab_count" (len $.Data.ContactPosts)}})</span>{{end}}</span></button>
 </div>
 <p class="evt-tab-empty" hidden>{{$.Strings.T "evt_mtab_empty"}}</p>
 {{with .Event}}
@@ -1237,6 +1237,8 @@
 .board-filter-bar{display:flex;gap:.4rem;margin-bottom:.75rem;flex-wrap:wrap}
 .board-filter-btn{padding:.3rem .6rem;font-size:1rem;line-height:1;background:var(--bg-card);border:1px solid var(--border-mid);border-radius:6px;cursor:pointer;opacity:.4;filter:grayscale(1)}
 .board-filter-btn.active{opacity:1;filter:none;border-color:var(--link);background:var(--tag-bg)}
+.mtab-board-badge{position:absolute;top:2px;right:2px;min-width:1.1rem;height:1.1rem;padding:0 .25rem;background:#c0392b;color:#fff;border-radius:.6rem;font-size:.65rem;font-weight:700;line-height:1.1rem;text-align:center;pointer-events:none}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 .board-type-tabs{display:flex;flex-wrap:wrap;gap:.4rem}
 .board-type-tab{padding:.35rem .7rem;font-size:.85rem;background:var(--bg-card);border:1px solid var(--border-mid);border-radius:6px;cursor:pointer;color:var(--fg)}
 .board-type-tab.active{border-color:var(--link);background:var(--tag-bg);color:var(--link);font-weight:600}

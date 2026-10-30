@@ -3,6 +3,7 @@ package main
 import (
 	"html"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -80,7 +81,9 @@ var tagDisplayNames = map[string]string{
 // Always leads with the structured part (type tag, date, location, musicians)
 // so every page gets a distinct, meaningful opening; appends text from the
 // free-form description in the remaining character budget (#1720).
-func eventMetaDesc(event Event, lang string) string {
+// posts is the list of active board posts for the event; when non-empty a
+// compact board note ("📌 N") is appended if space remains (#1723).
+func eventMetaDesc(event Event, posts []ContactPost, lang string) string {
 	var parts []string
 
 	// Lead with format/type tag if present.
@@ -149,5 +152,15 @@ func eventMetaDesc(event Event, lang string) string {
 		}
 	}
 
-	return truncate(structured, metaDescMaxLen)
+	base := truncate(structured, metaDescMaxLen)
+
+	// Append a compact board note when active posts exist.
+	if len(posts) > 0 {
+		note := "📌 " + strconv.Itoa(len(posts))
+		combined := base + " · " + note
+		if len([]rune(combined)) <= metaDescMaxLen {
+			return combined
+		}
+	}
+	return base
 }

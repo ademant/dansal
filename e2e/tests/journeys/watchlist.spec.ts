@@ -9,6 +9,13 @@ import { EVENT_HREF_PREFIX } from "../../fixtures/data";
 
 let seed: SeedResult;
 
+// The event page renders the star twice: the desktop header button and the
+// phone-only link in the general panel. CSS shows one and hides the other, so
+// the visible one is the star a visitor can click. Matching on :visible keeps
+// the locator unambiguous without .first() picking a hidden copy.
+const eventStar = (page: import("@playwright/test").Page, id: number) =>
+  page.locator(`[data-wl-star="${id}"]:visible`);
+
 test.describe("Watchlist (#1554)", () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -26,9 +33,9 @@ test.describe("Watchlist (#1554)", () => {
     const headerStar = page.locator("#wl-header-star");
     await expect(headerStar).toHaveText("☆");
 
-    const eventStar = page.locator(`[data-wl-star="${id}"]`);
-    await eventStar.click();
-    await expect(eventStar).toHaveAttribute("aria-pressed", "true");
+    const star = eventStar(page, id);
+    await star.click();
+    await expect(star).toHaveAttribute("aria-pressed", "true");
     await expect(headerStar).toHaveText("★");
 
     const stored = await page.evaluate(() => localStorage.getItem("dansal_watchlist"));
@@ -83,7 +90,7 @@ test.describe("Watchlist (#1554)", () => {
   test("save the list on the server, then load it with the key in another browser", async ({ page, browser }) => {
     const id = seed.eventIds[0];
     await page.goto(`${EVENT_HREF_PREFIX}${id}`);
-    await page.locator(`[data-wl-star="${id}"]`).click();
+    await eventStar(page, id).click();
 
     await page.goto("/watchlist");
     await page.locator(".wl-server button").nth(0).click();
@@ -110,7 +117,7 @@ test.describe("Watchlist (#1554)", () => {
     page.on("pageerror", (e) => errors.push(e.message));
     const id = seed.eventIds[0];
     await page.goto(`/events/${id}`);
-    const star = page.locator(`button[data-wl-star="${id}"]`).first();
+    const star = eventStar(page, id);
     await star.click();
     await expect(star).toHaveText("★");
     expect(errors).toEqual([]);

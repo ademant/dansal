@@ -35,7 +35,8 @@ test.describe("Timetable view", () => {
     // event.html renders each timetable entry twice — once in the compact
     // list (.tt-title) and once in the detail panel (.tt-panel-title) — so
     // one workshop entry legitimately produces two .tt-badge-ws elements.
-    const wsBadge = page.locator(".tt-badge-ws").first();
+    // Scoped to the compact list, which holds exactly one per entry.
+    const wsBadge = page.locator(".tt-title .tt-badge-ws");
     await expect(wsBadge).toBeVisible();
   });
 });

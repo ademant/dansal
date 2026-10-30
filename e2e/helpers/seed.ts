@@ -30,11 +30,20 @@ const ADMIN_SOCKET =
   process.env.ADMIN_SOCKET ?? "/var/lib/dansal/dev/dansal.sock";
 const SUDO = process.env.ADMIN_NO_SUDO === "1" ? "" : "sudo -n ";
 
+// Runs the admin CLI. A failure rethrows with the CLI's stderr in the message:
+// execSync's own message is only "spawnSync ... ETIMEDOUT" or "exit status 1",
+// which hides what the CLI actually said.
 function cli(args: string): string {
-  return execSync(`${SUDO}${ADMIN_CLI} --socket ${ADMIN_SOCKET} ${args}`, {
-    encoding: "utf-8",
-    timeout: 30_000,
-  }).trim();
+  const cmd = `${SUDO}${ADMIN_CLI} --socket ${ADMIN_SOCKET} ${args}`;
+  try {
+    return execSync(cmd, { encoding: "utf-8", timeout: 30_000, stdio: ["ignore", "pipe", "pipe"] }).trim();
+  } catch (err: any) {
+    const stderr = String(err?.stderr ?? "").trim();
+    const reason = err?.code ? ` (${err.code})` : ` (exit ${err?.status ?? "?"})`;
+    throw new Error(
+      `admin CLI failed${reason}: ${args.split(" ")[0]}\n  ${stderr || err?.message || "no output"}`,
+    );
+  }
 }
 
 function extractUserId(output: string): number {

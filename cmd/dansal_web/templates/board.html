@@ -163,6 +163,18 @@
 .board-resend-label{display:block;font-size:.85rem;color:var(--fg-2);margin-bottom:.3rem}
 .board-resend-row{display:flex;gap:.4rem}
 .board-resend-input{flex:1;padding:.35rem .6rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.9rem;background:var(--bg-card);color:var(--fg)}
+/* #1730: the phone bottom bar for /board (four links, board is the current page). */
+.mnav{display:none}
+@media(max-width:640px){
+  body{padding-bottom:calc(4.5rem + env(safe-area-inset-bottom))}
+  #back-to-top{bottom:calc(4.5rem + env(safe-area-inset-bottom) + .5rem)}
+  .nav-board-item{display:none}
+  .mnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:1200;background:var(--bg-card);border-top:1px solid var(--border-mid);box-shadow:0 -2px 8px rgba(0,0,0,.12);padding:0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+  .mnav a{flex:1 1 0;min-width:0;min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.1rem;padding:.3rem .2rem;color:var(--fg-2);font-size:.72rem;line-height:1.2;text-decoration:none}
+  .mnav a .mtab-ico{font-size:1.25rem;line-height:1}
+  .mnav a:focus-visible{outline:2px solid var(--link);outline-offset:-4px}
+  .mnav a[aria-current="page"]{color:var(--link);font-weight:700;box-shadow:inset 0 3px 0 var(--link)}
+}
 </style>
 
 {{$hasGeoPosts := false}}
@@ -283,5 +295,16 @@ function bgcToggle(id, method){
 document.addEventListener('DOMContentLoaded', function(){
   keepFormTokensFresh(document.querySelectorAll('input[name="_form_token"]'));
 });
+</script>
+<!-- #1730: phone bottom bar, same destinations as the homepage tabs. A div, not nav: the global nav{} rule would restyle it. -->
+<div class="mnav" id="board-mnav" role="navigation" aria-label="{{$.Strings.T "mtab_label"}}">
+  <a href="/?view=list"><span class="mtab-ico" aria-hidden="true">☰</span><span class="mtab-label">{{$.Strings.T "mtab_list"}}</span></a>
+  <a href="/?view=week"><span class="mtab-ico" aria-hidden="true">📅</span><span class="mtab-label">{{$.Strings.T "mtab_calendar"}}</span></a>
+  <a href="/?view=map"><span class="mtab-ico" aria-hidden="true">🗺</span><span class="mtab-label">{{$.Strings.T "mtab_map"}}</span></a>
+  {{template "mobile-board-link" (dict "Current" true "Strings" $.Strings)}}
+</div>
+<script nonce="{{$.Nonce}}">
+// base.js is deferred, so the keyboard hide waits for DOMContentLoaded (#1727).
+document.addEventListener('DOMContentLoaded', function(){ dansalTabBarKeyboard(document.getElementById('board-mnav')); });
 </script>
 {{end}}

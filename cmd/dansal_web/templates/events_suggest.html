@@ -1868,8 +1868,8 @@ document.addEventListener('DOMContentLoaded', function(){
     form.addEventListener('input', updateMtabs);
     form.addEventListener('change', updateMtabs);
     // The bar steps aside while a field has focus, so it does not sit on top
-    // of the on-screen keyboard.
-    dansalTabBarKeyboard(mtabBar);
+    // of the on-screen keyboard. base.js is deferred, so wait for it (#1727).
+    document.addEventListener('DOMContentLoaded', function(){ dansalTabBarKeyboard(mtabBar); });
   }
 
   function render() {

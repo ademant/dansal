@@ -5,7 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/ademant/dansal/internal/logging"
 	"io"
@@ -1217,6 +1216,15 @@ func isDBBusy(err error) bool {
 }
 
 func importEntries[T any](ctx context.Context, src FetchSource, entries []T, reqOf func(T) EventCreateRequest, finalize func(tx querier, entry T, td *templateImportData, counts *ImportCounts, allEvents *[]Event) error) ([]Event, ImportCounts, error) {
+	return importEntriesAfterCommit(ctx, src, entries, reqOf, finalize, nil)
+}
+
+// importEntriesAfterCommit is importEntries with a hook for work that must not
+// run inside the import transaction (#1708): afterCommit runs once per entry
+// that committed, after the transaction is committed, with the events that
+// entry created. Network I/O such as feed images belongs there, so it never
+// holds SQLite's write lock.
+func importEntriesAfterCommit[T any](ctx context.Context, src FetchSource, entries []T, reqOf func(T) EventCreateRequest, finalize func(tx querier, entry T, td *templateImportData, counts *ImportCounts, allEvents *[]Event) error, afterCommit func(entry T, evs []Event)) ([]Event, ImportCounts, error) {
 	entries = filterEntriesToWindow(src, entries, reqOf, time.Now())
 	importWriteMu.Lock()
 	db.Exec("UPDATE fetch_sources SET last_fetched_at = ? WHERE id = ?", time.Now().UTC().Unix(), src.ID)
@@ -1226,8 +1234,13 @@ func importEntries[T any](ctx context.Context, src FetchSource, entries []T, req
 	importStart := time.Now().Unix()
 
 	for attempt := 0; ; attempt++ {
-		allEvents, counts, err := importEntriesTx(ctx, src, entries, reqOf, finalize, td)
+		allEvents, counts, committed, err := importEntriesTx(ctx, src, entries, reqOf, finalize, td)
 		if err == nil {
+			if afterCommit != nil {
+				for _, c := range committed {
+					afterCommit(c.entry, c.events)
+				}
+			}
 			go emitImportedEventWebhooks(allEvents, importStart)
 			return allEvents, counts, nil
 		}
@@ -1242,35 +1255,53 @@ func importEntries[T any](ctx context.Context, src FetchSource, entries []T, req
 	}
 }
 
+// committedEntry is one import entry that committed, with the events it created.
+type committedEntry[T any] struct {
+	entry  T
+	events []Event
+}
+
 // importEntriesTx runs one import attempt in a single transaction, under
 // importWriteMu. It returns a fresh result each call, so a retry after a busy
-// error starts from nothing (the transaction was rolled back).
-func importEntriesTx[T any](ctx context.Context, src FetchSource, entries []T, reqOf func(T) EventCreateRequest, finalize func(tx querier, entry T, td *templateImportData, counts *ImportCounts, allEvents *[]Event) error, td *templateImportData) ([]Event, ImportCounts, error) {
+// error starts from nothing (the transaction was rolled back). It logs the
+// time spent waiting for the write lock and the transaction time separately
+// (debug), so a slow import can be told apart from a contended one.
+func importEntriesTx[T any](ctx context.Context, src FetchSource, entries []T, reqOf func(T) EventCreateRequest, finalize func(tx querier, entry T, td *templateImportData, counts *ImportCounts, allEvents *[]Event) error, td *templateImportData) ([]Event, ImportCounts, []committedEntry[T], error) {
+	waitStart := time.Now()
 	importWriteMu.Lock()
 	defer importWriteMu.Unlock()
+	lockWait := time.Since(waitStart)
+	txStart := time.Now()
 
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, ImportCounts{}, err
+		return nil, ImportCounts{}, nil, err
 	}
 	defer tx.Rollback()
 
 	var allEvents []Event
 	var counts ImportCounts
+	var committed []committedEntry[T]
 
 	for _, entry := range entries {
+		before := len(allEvents)
 		if err := withEntrySavepoint(tx, func() error {
 			return finalize(tx, entry, td, &counts, &allEvents)
 		}); err != nil {
 			counts.Failed++
 			logFailedImportEntry(src, reqOf(entry), err)
+			continue
+		}
+		if len(allEvents) > before {
+			committed = append(committed, committedEntry[T]{entry: entry, events: append([]Event(nil), allEvents[before:]...)})
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, ImportCounts{}, err
+		return nil, ImportCounts{}, nil, err
 	}
-	return allEvents, counts, nil
+	logging.Debugf("import tx: source=%d entries=%d lock_wait_ms=%d tx_ms=%d", src.ID, len(entries), lockWait.Milliseconds(), time.Since(txStart).Milliseconds())
+	return allEvents, counts, committed, nil
 }
 
 // importParsedFeed fetches src.URL, converts the body into event requests via
@@ -1674,21 +1705,26 @@ func importICalBody(ctx context.Context, src FetchSource, body []byte) ([]Event,
 	if err != nil {
 		return nil, ImportCounts{}, err
 	}
-	evs, counts, err := importEntries(ctx, src, entries,
+	evs, counts, err := importEntriesAfterCommit(ctx, src, entries,
 		func(e icalImportEntry) EventCreateRequest { return e.req },
 		func(tx querier, e icalImportEntry, td *templateImportData, counts *ImportCounts, allEvents *[]Event) error {
 			req := e.req
 			if req.OrganizationID == nil {
-				req.OrganizationID = ensureOrgFromOrganizer(e.vevent)
+				orgID, err := ensureOrgFromOrganizer(tx, e.vevent)
+				if err != nil {
+					return err
+				}
+				req.OrganizationID = orgID
 			}
-			evs, err := importSingleEvent(tx, req, td, src.TemplateMode, counts, allEvents)
-			if err != nil {
-				return err
+			_, err := importSingleEvent(tx, req, td, src.TemplateMode, counts, allEvents)
+			return err
+		},
+		// Images are fetched after the commit (#1708): a failed or slow image
+		// never rolls back its event or holds the import's write lock.
+		func(e icalImportEntry, created []Event) {
+			for _, ev := range created {
+				attachImagesFromICalEvent(ctx, ev.ID, e.vevent)
 			}
-			for _, ev := range evs {
-				attachImagesFromICalEvent(ev.ID, e.vevent)
-			}
-			return nil
 		})
 	rep.fold(&counts)
 	return evs, counts, err
@@ -1998,69 +2034,4 @@ func bulkAssignFetchSourceOrg(w http.ResponseWriter, r *http.Request) {
 		db.Exec("UPDATE fetch_sources SET organization_id = ? WHERE id = ?", req.OrganizationID, id)
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// POST /api/v1/fetchurl/{id}/fetch
-func fetchURLByID(w http.ResponseWriter, r *http.Request) {
-	callerID, callerRole := callerFromRequest(r)
-	if callerRole == RolePublisher {
-		writeError(w, "Forbidden: publishers may not trigger fetch sources", http.StatusForbidden)
-		return
-	}
-	if callerRole != RoleAdmin && callerRole != RoleUser {
-		writeError(w, "Forbidden", http.StatusForbidden)
-		return
-	}
-
-	id := r.PathValue("id")
-	src, err := scanFetchSource(db.QueryRow(
-		"SELECT "+fetchSourceCols+" FROM fetch_sources WHERE id = ?", id,
-	))
-	if !rowOr404(w, err, "Fetch source not found") {
-		return
-	}
-	if callerRole != RoleAdmin {
-		if !requireExistingOrgMember(w, callerID, nullIntFromPtr(src.OrganizationID)) {
-			return
-		}
-	}
-
-	if !validFetchType(src.Type) {
-		writeError(w, "Unsupported type; use 'ical', 'rss', or 'folkdance-json'", http.StatusBadRequest)
-		return
-	}
-
-	allEvents, counts, err := importFromSource(r.Context(), src)
-	if errors.Is(err, errRobotsNotAcknowledged) {
-		// Not a fetch failure: the feed is refused until someone accepts robots.txt (#1545).
-		writeErrorCode(w, "robots_not_acknowledged", err.Error(), http.StatusConflict)
-		return
-	}
-	if err != nil {
-		recordFetchResult(src, 0, err)
-		logging.Errorf("fetchurl: source_id=%d url=%q type=%s result=error caller=%d err=%v", src.ID, src.URL, src.Type, callerID, err)
-		writeError(w, err.Error(), http.StatusBadGateway)
-		return
-	}
-	recordFetchResult(src, len(allEvents), nil)
-	logging.Infof("fetchurl: source_id=%d url=%q type=%s result=ok events=%d caller=%d", src.ID, src.URL, src.Type, len(allEvents), callerID)
-
-	w.Header().Set("Content-Type", "application/json")
-	if counts.AllNew() && len(allEvents) > 0 {
-		w.WriteHeader(http.StatusCreated)
-	}
-	json.NewEncoder(w).Encode(struct {
-		Events    []Event `json:"events"`
-		New       int     `json:"new"`
-		Updated   int     `json:"updated"`
-		Unchanged int     `json:"unchanged"`
-		Failed    int     `json:"failed"`
-		// TimezoneFallback and Unparsed (#1392) let the admin tell a feed that
-		// was fully understood apart from a few guessed timezones from one that
-		// was partially unparseable. Zero values are omitted so the common,
-		// clean case keeps the response shape it had.
-		TimezoneFallback int `json:"timezone_fallback,omitempty"`
-		Unparsed         int `json:"unparsed,omitempty"`
-	}{Events: allEvents, New: counts.New, Updated: counts.Updated, Unchanged: counts.Unchanged, Failed: counts.Failed,
-		TimezoneFallback: counts.TimezoneFallback, Unparsed: counts.Unparsed})
 }

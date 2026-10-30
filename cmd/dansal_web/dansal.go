@@ -1984,27 +1984,101 @@ type FetchRunResult struct {
 	Unparsed         int
 }
 
+// fetchPollInterval is how often RunFetchSource and the run-now page check a
+// running job (#1709).
+var fetchPollInterval = 2 * time.Second
+
+// errFetchStillRunning means a run was still going when the wait ended. The
+// import keeps running on the API, so this is not a failure.
+var errFetchStillRunning = errors.New("fetch still running")
+
+// FetchJob is a feed run the API executes in the background (#1709).
+// State is "running", "ok" or "error".
+type FetchJob struct {
+	JobID     int             `json:"job_id"`
+	SourceID  int             `json:"source_id"`
+	State     string          `json:"state"`
+	Error     string          `json:"error,omitempty"`
+	ErrorCode string          `json:"error_code,omitempty"`
+	Result    *FetchJobResult `json:"result,omitempty"`
+}
+
+// FetchJobResult is the outcome of a run that finished with State "ok".
+type FetchJobResult struct {
+	Events           []json.RawMessage `json:"events"`
+	New              int               `json:"new"`
+	Updated          int               `json:"updated"`
+	Unchanged        int               `json:"unchanged"`
+	TimezoneFallback int               `json:"timezone_fallback"`
+	Unparsed         int               `json:"unparsed"`
+}
+
+// StartFetchSource starts a run of feed source id on the API and returns its
+// job without waiting for the import (#1709). Poll it with GetFetchJob.
+func (c *DansalClient) StartFetchSource(ctx context.Context, id int, token string) (FetchJob, error) {
+	var job FetchJob
+	err := c.do(ctx, http.MethodPost, fmt.Sprintf("/api/v1/feeds/%d/fetch", id), token, nil, &job, http.StatusAccepted)
+	return job, err
+}
+
+// GetFetchJob returns the current state of a run started by StartFetchSource.
+func (c *DansalClient) GetFetchJob(ctx context.Context, id, jobID int, token string) (FetchJob, error) {
+	var job FetchJob
+	err := c.do(ctx, http.MethodGet, fmt.Sprintf("/api/v1/feeds/%d/fetch/%d", id, jobID), token, nil, &job, http.StatusOK)
+	return job, err
+}
+
+// RunFetchSource starts a run and waits for it by polling, up to
+// FetchRunTimeout (#1395). The timeout only ends the wait: the import is a job
+// on the API and keeps running, so the caller gets errFetchStillRunning rather
+// than a cancelled import (#1709).
 func (c *DansalClient) RunFetchSource(ctx context.Context, id int, token string) (FetchRunResult, error) {
-	var body struct {
-		Events           []json.RawMessage `json:"events"`
-		New              int               `json:"new"`
-		Updated          int               `json:"updated"`
-		Unchanged        int               `json:"unchanged"`
-		TimezoneFallback int               `json:"timezone_fallback"`
-		Unparsed         int               `json:"unparsed"`
+	job, err := c.StartFetchSource(ctx, id, token)
+	if err != nil {
+		return FetchRunResult{}, err
 	}
-	// #1395: a slow-but-legitimate feed can take close to the API's own 30s
-	// allowance -- the shared fastCallTimeout (15s) was cutting those off
-	// before the API's fetch had a real chance to finish.
 	timeout := c.FetchRunTimeout
 	if timeout <= 0 {
 		timeout = fastCallTimeout
 	}
-	if err := c.doWithTimeout(ctx, timeout, http.MethodPost, fmt.Sprintf("/api/v1/feeds/%d/fetch", id), token, nil, &body, http.StatusOK, http.StatusCreated); err != nil {
-		return FetchRunResult{}, err
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+	ticker := time.NewTicker(fetchPollInterval)
+	defer ticker.Stop()
+	for job.State == "running" {
+		select {
+		case <-ctx.Done():
+			return FetchRunResult{}, ctx.Err()
+		case <-deadline.C:
+			return FetchRunResult{}, errFetchStillRunning
+		case <-ticker.C:
+		}
+		if job, err = c.GetFetchJob(ctx, id, job.JobID, token); err != nil {
+			return FetchRunResult{}, err
+		}
 	}
-	return FetchRunResult{Count: len(body.Events), New: body.New, Updated: body.Updated,
-		Unchanged: body.Unchanged, TimezoneFallback: body.TimezoneFallback, Unparsed: body.Unparsed}, nil
+	return fetchRunResultFromJob(job)
+}
+
+// fetchRunResultFromJob turns a finished job into the run result. A feed
+// refused for robots.txt keeps its robots_not_acknowledged code so callers can
+// send the admin to the acceptance form (#1545).
+func fetchRunResultFromJob(job FetchJob) (FetchRunResult, error) {
+	switch job.State {
+	case "ok":
+		var res FetchRunResult
+		if r := job.Result; r != nil {
+			res = FetchRunResult{Count: len(r.Events), New: r.New, Updated: r.Updated, Unchanged: r.Unchanged,
+				TimezoneFallback: r.TimezoneFallback, Unparsed: r.Unparsed}
+		}
+		return res, nil
+	case "error":
+		if job.ErrorCode == "robots_not_acknowledged" {
+			return FetchRunResult{}, &apiHTTPError{StatusCode: http.StatusConflict, Message: job.Error, ErrorCode: job.ErrorCode}
+		}
+		return FetchRunResult{}, errors.New(job.Error)
+	}
+	return FetchRunResult{}, errFetchStillRunning
 }
 
 func (c *DansalClient) BulkDeleteFetchSources(ctx context.Context, ids []int, token string) error {

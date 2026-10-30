@@ -1192,7 +1192,8 @@ GET    /api/v1/feeds/{id}
 POST   /api/v1/feeds
 PATCH  /api/v1/feeds/{id}
 DELETE /api/v1/feeds/{id}
-POST   /api/v1/feeds/{id}/fetch       # trigger a single fetch
+POST   /api/v1/feeds/{id}/fetch       # start a single fetch as a background job (202)
+GET    /api/v1/feeds/{id}/fetch/{job} # poll that job
 POST   /api/v1/feeds/bulk-fetch       # trigger fetch for multiple IDs
 POST   /api/v1/feeds/bulk-delete
 POST   /api/v1/feeds/bulk-assign-org
@@ -1205,6 +1206,14 @@ POST   /api/v1/feeds/suggestions/{id}/reject
 ```
 
 Authentication required except where marked public. Fetch sources are iCal/JSON/RSS feeds imported automatically by the `dansal-fetch` timer.
+
+**Running a fetch is a background job (#1709).** `POST /api/v1/feeds/{id}/fetch` starts the import on the server and answers `202 Accepted` at once with the job, and a `Location` header pointing at `GET /api/v1/feeds/{id}/fetch/{job}`:
+
+```json
+{"job_id": 17, "source_id": 3, "state": "running", "started_at": "2026-10-29T08:00:00Z"}
+```
+
+Poll the job until `state` is no longer `running`. It is `ok` with a `result` (`events`, `new`, `updated`, `unchanged`, `failed`, and `timezone_fallback`/`unparsed` when non-zero), or `error` with `error` and, where a client must react to it, `error_code` (`robots_not_acknowledged`, when the feed is refused until an admin accepts its robots.txt restriction). A job keeps running even if the request that started it is cancelled. Only one run per source is active: a second `POST` while one is running returns that job instead of starting another. Finished jobs stay readable for 10 minutes, and a restart of the server drops them. Only the admin or an organisation member of the source can start or read a job; publishers are refused.
 
 **Note:** until #1384 this collection was `/api/v1/fetchurl` (and `/api/v1/fetchurl-suggestions`); those paths still work as [deprecated aliases](#deprecated-routes).
 

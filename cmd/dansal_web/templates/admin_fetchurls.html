@@ -99,8 +99,7 @@ document.querySelectorAll('.btn-run[data-run-url]').forEach(function(btn) {
     var url = btn.dataset.runUrl;
     var row = btn.closest('tr');
     btn.disabled = true;
-    fetch(url, {method: 'POST', headers: {Accept: 'application/json'}})
-      .then(function(r){ return r.json().then(function(d){ return {ok: r.ok, data: d}; }); })
+    dansalRunFetch(url)
       .then(function(res) {
         if (res.ok) {
           showToast(res.data.count + ' {{.Strings.T "fetch_run_result"}}: ' +

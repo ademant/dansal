@@ -152,8 +152,7 @@ function showToast(msg, ok) {
   btn.addEventListener('click', function() {
     var url = btn.dataset.runUrl;
     btn.disabled = true;
-    fetch(url, {method: 'POST', headers: {Accept: 'application/json'}})
-      .then(function(r){ return r.json().then(function(d){ return {ok: r.ok, data: d}; }); })
+    dansalRunFetch(url)
       .then(function(res) {
         if (res.ok) {
           showToast(res.data.count + ' {{$.Strings.T "fetch_run_result"}}: ' +

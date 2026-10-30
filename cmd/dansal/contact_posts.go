@@ -1179,6 +1179,22 @@ func listAllContactPosts(w http.ResponseWriter, r *http.Request) {
 		query += " AND lower(l.town)=lower(?)"
 		args = append(args, town)
 	}
+	if orgIDs := q["organization_id"]; len(orgIDs) > 0 {
+		ph := make([]string, 0, len(orgIDs))
+		for _, s := range orgIDs {
+			if id, err := strconv.Atoi(s); err == nil && id > 0 {
+				ph = append(ph, "?")
+				args = append(args, id)
+			}
+		}
+		if len(ph) > 0 {
+			query += " AND e.organization_id IN (" + strings.Join(ph, ",") + ")"
+		}
+	}
+	if q.Get("upcoming") == "1" {
+		query += " AND COALESCE(NULLIF(e.end_time,0), e.start_time) > ?"
+		args = append(args, now)
+	}
 	if search := strings.TrimSpace(q.Get("q")); search != "" {
 		query += ` AND (lower(cp.message) LIKE lower(?) ESCAPE '\' OR lower(cp.nickname) LIKE lower(?) ESCAPE '\')`
 		like := "%" + escapeLike(search) + "%"

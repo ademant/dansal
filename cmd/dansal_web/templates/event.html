@@ -1,9 +1,8 @@
 {{template "base" .}}
 {{define "head_extra"}}{{with .Data.Event}}
-<meta property="og:type" content="event">
 {{- if .StartTime}}<meta property="event:start_time" content="{{.StartTime}}">{{end}}
 {{- if .EndTime}}<meta property="event:end_time" content="{{.EndTime}}">{{end}}
-<script type="application/ld+json">
+{{$ev := .}}<script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@graph": [
@@ -28,7 +27,8 @@
     {{- if and .Latitude .Longitude}}, "geo": {"@type": "GeoCoordinates", "latitude": {{.Latitude}}, "longitude": {{.Longitude}}}{{end}}
   }{{end}}
   {{- end}}
-  {{- with .URL}}, "url": "{{.}}"{{end}}
+  , "url": "{{$.CanonicalURL}}"
+  {{- with .URL}}, "sameAs": ["{{.}}"]{{end}}
   {{- $img := .ImageURL}}
   {{- if not $img}}{{if or $.Data.SeriesImageURL (and $.Data.Org $.Data.Org.ImageURL)}}{{$img = printf "/api/v1/event-banner/%d" .ID}}{{end}}{{end}}
   {{- if not $img}}{{$img = $.OGImage}}{{end}}
@@ -59,15 +59,16 @@
   {{- with .Pricing}}
   {{- $curr := .Currency}}{{if not $curr}}{{$curr = "EUR"}}{{end}}
   {{- $validFrom := isoDate $.Data.Event.CreatedAt}}
-  {{- if eq .Type "free"}}, "isAccessibleForFree": true, "offers": {"@type": "Offer", "price": 0, "priceCurrency": "{{$curr}}", "availability": "https://schema.org/InStock", "validFrom": "{{$validFrom}}", "url": "{{$offersURL}}"}
+  {{- $avail := "https://schema.org/InStock"}}{{if eq $ev.Availability "sold_out"}}{{$avail = "https://schema.org/SoldOut"}}{{end}}
+  {{- if eq .Type "free"}}, "isAccessibleForFree": true, "offers": {"@type": "Offer", "price": 0, "priceCurrency": "{{$curr}}", "availability": "{{$avail}}", "validFrom": "{{$validFrom}}", "url": "{{$offersURL}}"}
   {{- else if eq .Type "donation"}}
     {{- /* #1293: never assert isAccessibleForFree either way for a
          donation event — no one checks payment at the door (so "false" is
          wrong), but badging it "free" risks an in-person donation ask
          reading as a bait-and-switch (so "true" is equally wrong). Only
          emit an Offer when there's an actual suggested amount to report. */}}
-    {{- if gt .Amount 0.0}}, "offers": {"@type": "Offer", "price": {{.Amount}}, "priceCurrency": "{{$curr}}", "availability": "https://schema.org/InStock", "validFrom": "{{$validFrom}}", "url": "{{$offersURL}}"}{{end}}
-  {{- else if eq .Type "single"}}, "offers": {"@type": "Offer", "price": {{.Amount}}, "priceCurrency": "{{$curr}}", "availability": "https://schema.org/InStock", "validFrom": "{{$validFrom}}", "url": "{{$offersURL}}"}
+    {{- if gt .Amount 0.0}}, "offers": {"@type": "Offer", "price": {{.Amount}}, "priceCurrency": "{{$curr}}", "availability": "{{$avail}}", "validFrom": "{{$validFrom}}", "url": "{{$offersURL}}"}{{end}}
+  {{- else if eq .Type "single"}}, "offers": {"@type": "Offer", "price": {{.Amount}}, "priceCurrency": "{{$curr}}", "availability": "{{$avail}}", "validFrom": "{{$validFrom}}", "url": "{{$offersURL}}"}
   {{- else if eq .Type "multiple"}}
     {{- $low := 0.0}}{{$high := 0.0}}{{$first := true}}
     {{- range .Prices}}
@@ -77,13 +78,13 @@
         {{- if gt .Amount $high}}{{$high = .Amount}}{{end}}
       {{- end}}
     {{- end}}
-    {{- if not $first}}, "offers": {"@type": "AggregateOffer", "lowPrice": {{$low}}, "highPrice": {{$high}}, "priceCurrency": "{{$curr}}", "offerCount": {{len .Prices}}, "availability": "https://schema.org/InStock", "validFrom": "{{$validFrom}}", "url": "{{$offersURL}}"}{{end}}
+    {{- if not $first}}, "offers": {"@type": "AggregateOffer", "lowPrice": {{$low}}, "highPrice": {{$high}}, "priceCurrency": "{{$curr}}", "offerCount": {{len .Prices}}, "availability": "{{$avail}}", "validFrom": "{{$validFrom}}", "url": "{{$offersURL}}"}{{end}}
   {{- end}}
   {{- else}}
   {{- /* #1293: no structured Pricing at all, but a real ticket/registration
        link exists — surface it without fabricating a price or availability
        the site doesn't actually know. */}}
-  {{- if .BookingURL}}, "offers": {"@type": "Offer", "url": "{{.BookingURL}}", "availability": "https://schema.org/InStock"}{{end}}
+  {{- if .BookingURL}}, "offers": {"@type": "Offer", "url": "{{.BookingURL}}", "availability": "{{if eq $ev.Availability "sold_out"}}https://schema.org/SoldOut{{else}}https://schema.org/InStock{{end}}"}{{end}}
   {{- end}}
   {{- /* Public import credit (#1485, compliance G9 phase-67) */}}
   {{- if .FetchSourceID}}
@@ -117,7 +118,7 @@
     {"@type": "ListItem", "position": 1, "name": "{{$.Strings.T "nav_events"}}", "item": "https://{{$.Domain}}/"}
     {{- $pos := 2}}
     {{- if $.Data.Org}}, {"@type": "ListItem", "position": {{$pos}}, "name": "{{$.Data.Org.Name}}", "item": "https://{{$.Domain}}/org/{{$.Data.OrgSlug}}"}{{$pos = add $pos 1}}{{end}}
-    {{- with .Location}}, {"@type": "ListItem", "position": {{$pos}}, "name": "{{.Location}}", "item": "https://{{$.Domain}}/location/{{.ID}}"}{{$pos = add $pos 1}}{{end}}
+    {{- with .Location}}, {"@type": "ListItem", "position": {{$pos}}, "name": "{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{with .Town}}, {{.}}{{end}}", "item": "https://{{$.Domain}}/location/{{.ID}}"}{{$pos = add $pos 1}}{{end}}
     , {"@type": "ListItem", "position": {{$pos}}, "name": "{{.Title}}", "item": "{{$.CanonicalURL}}"}
   ]
 }
@@ -854,7 +855,17 @@
 
 {{/* ── Contact board ──────────────────────────────────────────── */}}
 <section class="board-section evt-panel" data-tab="board">
-  <h2>{{$.Strings.T "board_title"}}</h2>
+  {{- $bc := parseBoardCounts .Event.BoardCounts}}
+  {{- $boardTitle := $.Strings.T "board_title"}}
+  {{- if $bc.Total}}
+    {{- $hasRide := gt $bc.Rides 0}}{{$hasSleep := gt $bc.Sleeps 0}}{{$hasTicket := gt $bc.Tickets 0}}{{$hasLost := gt $bc.Lost 0}}
+    {{- if and $hasTicket (not (or $hasRide $hasSleep $hasLost))}}{{$boardTitle = $.Strings.TF "board_title_tickets" .Event.Title}}
+    {{- else if and $hasRide (not (or $hasSleep $hasTicket $hasLost))}}{{$boardTitle = $.Strings.TF "board_title_rides" .Event.Title}}
+    {{- else if and $hasSleep (not (or $hasRide $hasTicket $hasLost))}}{{$boardTitle = $.Strings.TF "board_title_sleep" .Event.Title}}
+    {{- else}}{{$boardTitle = $.Strings.TF "board_title_mixed" .Event.Title}}
+    {{- end}}
+  {{- end}}
+  <h2>{{$boardTitle}}</h2>
 
   {{if .BoardPosted}}
   {{if .BoardTelegramURL}}
@@ -895,7 +906,7 @@
         <span class="board-type-icon">{{if eq .Type "ride_offer"}}🚗{{else if eq .Type "ride_request"}}🚗{{else if eq .Type "sleep_offer"}}🏠{{else if eq .Type "sleep_request"}}🏠{{else if eq .Type "ticket_offer"}}🎟️{{else if eq .Type "ticket_request"}}🎟️{{else if eq .Type "lost_item"}}🔍{{else}}📦{{end}}</span>
         <span class="board-type-label">{{if eq .Type "ride_offer"}}{{$.Strings.T "board_ride_offer"}}{{else if eq .Type "ride_request"}}{{$.Strings.T "board_ride_request"}}{{else if eq .Type "sleep_offer"}}{{$.Strings.T "board_sleep_offer"}}{{else if eq .Type "sleep_request"}}{{$.Strings.T "board_sleep_request"}}{{else if eq .Type "ticket_offer"}}{{$.Strings.T "board_ticket_offer"}}{{else if eq .Type "ticket_request"}}{{$.Strings.T "board_ticket_request"}}{{else if eq .Type "lost_item"}}{{$.Strings.T "board_lost_item"}}{{else}}{{$.Strings.T "board_found_item"}}{{end}}</span>
         {{if and .City (or (eq .Type "ride_offer") (eq .Type "ride_request") (eq .Type "sleep_offer") (eq .Type "sleep_request"))}}<span class="board-city">{{.City}}</span>{{end}}
-        {{if not (or (eq .Type "lost_item") (eq .Type "found_item"))}}<span class="board-persons">· {{.Persons}} {{if or (eq .Type "ticket_offer") (eq .Type "ticket_request")}}{{$.Strings.T "board_type_group_tickets"}}{{else}}{{$.Strings.T "board_persons"}}{{end}}</span>{{end}}
+        {{if not (or (eq .Type "lost_item") (eq .Type "found_item"))}}<span class="board-persons">· {{if or (eq .Type "ticket_offer") (eq .Type "ticket_request")}}{{$.Strings.TF "board_persons_tickets" .Persons}}{{else}}{{$.Strings.TF "board_persons_n" .Persons}}{{end}}</span>{{end}}
         <span class="board-nick">· {{.Nickname}}</span>
       </div>
       {{if .Message}}<p class="board-message">{{.Message}}</p>{{end}}

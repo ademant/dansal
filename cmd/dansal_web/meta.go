@@ -77,20 +77,15 @@ var tagDisplayNames = map[string]string{
 }
 
 // eventMetaDesc returns a concise meta description for an event page.
-// If the event has a description, it is used (markdown-stripped). Otherwise
-// a unique description is assembled from structured fields (type tag, date,
-// location, musicians/instructors) so that every page gets a distinct value.
+// Always leads with the structured part (type tag, date, location, musicians)
+// so every page gets a distinct, meaningful opening; appends text from the
+// free-form description in the remaining character budget (#1720).
 func eventMetaDesc(event Event, lang string) string {
-	if event.Description != "" {
-		return metaDesc(event.Description, metaDescMaxLen)
-	}
-
 	var parts []string
 
 	// Lead with format/type tag if present.
 	for _, tag := range event.Tags {
 		if name, ok := tagDisplayNames[tag]; ok {
-			// Append level qualifier if any.
 			for _, t2 := range event.Tags {
 				switch t2 {
 				case "beginners", "intermediate", "advanced":
@@ -113,45 +108,46 @@ func eventMetaDesc(event Event, lang string) string {
 	// Location name + city.
 	if event.Location != nil {
 		loc := event.Location.Location
+		if event.Location.ShortName != "" {
+			loc = event.Location.ShortName
+		}
 		if event.Location.Town != "" {
 			loc += ", " + event.Location.Town
 		}
 		parts = append(parts, loc)
 	}
 
-	desc := strings.Join(parts, " · ")
+	structured := strings.Join(parts, " · ")
 
-	// Musicians (up to 3).
-	if len(event.Musicians) > 0 {
-		names := make([]string, 0, min(3, len(event.Musicians)))
-		for i, m := range event.Musicians {
-			if i >= 3 {
-				break
-			}
-			names = append(names, m.Bandname)
+	// Musicians / instructors (up to 3).
+	var performers []string
+	for i, m := range event.Musicians {
+		if i >= 3 {
+			performers = append(performers, "…")
+			break
 		}
-		suffix := ""
-		if len(event.Musicians) > 3 {
-			suffix = "…"
+		performers = append(performers, m.Bandname)
+	}
+	for i, inst := range event.Instructors {
+		if i >= 3 {
+			performers = append(performers, "…")
+			break
 		}
-		desc += ". " + strings.Join(names, ", ") + suffix
+		performers = append(performers, inst.Name)
+	}
+	if len(performers) > 0 {
+		structured += ". " + strings.Join(performers, ", ")
 	}
 
-	// Instructors (up to 3).
-	if len(event.Instructors) > 0 {
-		names := make([]string, 0, min(3, len(event.Instructors)))
-		for i, inst := range event.Instructors {
-			if i >= 3 {
-				break
-			}
-			names = append(names, inst.Name)
+	// Fill remaining budget from free-form description.
+	if event.Description != "" {
+		plain := plainTextDesc(event.Description)
+		used := len([]rune(structured))
+		remaining := metaDescMaxLen - used - 2 // " – " separator
+		if remaining > 30 {
+			structured += " – " + truncate(plain, remaining)
 		}
-		suffix := ""
-		if len(event.Instructors) > 3 {
-			suffix = "…"
-		}
-		desc += ". " + strings.Join(names, ", ") + suffix
 	}
 
-	return truncate(desc, metaDescMaxLen)
+	return truncate(structured, metaDescMaxLen)
 }

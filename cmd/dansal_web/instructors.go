@@ -25,7 +25,9 @@ func instructorsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			return
 		}
 		title := i18n.T(r, "instructors_title")
-		renderTemplate(w, tmpls.instructors, tmplData(r, cfg, i18n, title, InstructorsPageData{Instructors: instructors}))
+		td := tmplData(r, cfg, i18n, title, InstructorsPageData{Instructors: instructors})
+		td.MetaDescription = i18n.Strings(i18n.detectLang(r)).TF("meta_desc_instructors", len(instructors))
+		renderTemplate(w, tmpls.instructors, td)
 	}
 }
 

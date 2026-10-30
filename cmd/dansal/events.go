@@ -122,6 +122,16 @@ type Event struct {
 	PricingJSON            string `json:"-"`
 	TimetableTracksJSON    string `json:"-"`
 	TimetableRoomOrderJSON string `json:"-"`
+	// BoardCounts (#1716) is a compact "R,S,T,L" string of active (verified,
+	// unexpired) board-post counts per type group: rides, sleeps, tickets,
+	// lost/found. Denormalized onto every list-endpoint row via a scalar
+	// subquery so event cards can show a badge without a separate call.
+	// "0,0,0,0" when none; omitempty → absent when all zero.
+	BoardCounts string `json:"board_counts,omitempty"`
+	// BoardLatestAt (#1722) is the Unix epoch of the newest active board post
+	// for this event, used by the sitemap to set a more accurate lastmod when
+	// a post was created after the event was last edited.
+	BoardLatestAt int64 `json:"board_latest_at,omitempty"`
 	// ChangedAtEpoch is the raw changed_at scanEventRow already reads (ChangedAt
 	// is the formatted-for-display string derived from it) — getEvent uses this
 	// for its ETag instead of a second query for the same column (#1248).
@@ -428,7 +438,7 @@ func parseTimeToUnix(s string) (int64, error) {
 // SELECT used by all event list / single-event queries.
 // Dance names are aggregated once via a derived table JOIN rather than a
 // correlated subquery, so GROUP_CONCAT runs O(n) total instead of O(n) per row.
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, e.no_live_music, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, COALESCE(e.short_code,''), COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(NULLIF(l.address,''), lp.address, ''), COALESCE(NULLIF(l.zipcode,''), lp.zipcode, ''), e.organization_id, COALESCE(json(e.pricing),''), e.location_id, COALESCE(NULLIF(l.town,''), lp.town, ''), COALESCE(NULLIF(l.country,''), lp.country, ''), COALESCE(NULLIF(l.country_code,''), lp.country_code, ''), COALESCE(NULLIF(l.region,''), lp.region, ''), COALESCE(l.latitude, lp.latitude), COALESCE(l.longitude, lp.longitude), COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(json(e.attributes),'{}'), COALESCE(NULLIF(e.contact_name,''), o.contact_name, ''), COALESCE(NULLIF(e.contact_email,''), o.contact_email, ''), COALESCE(NULLIF(l.parking,''), lp.parking, ''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,''), e.created_by_id, l.osm_id, COALESCE(l.osm_type,''), COALESCE(NULLIF(l.geohash,''), lp.geohash, ''), e.series_id, e.needs_duplicate_review, e.duplicate_of_id, l.parent_id, e.previous_start_time, COALESCE(e.suggester_email,''), COALESCE(e.suggester_name,''), COALESCE(e.pending_edit_json,''), COALESCE(e.pending_edit_submitted_at,0), COALESCE(e.image_ai_generated,0), e.email_verified, COALESCE((SELECT image_ai_generated FROM event_series WHERE id = e.series_id), 0), COALESCE((SELECT cadence FROM event_series WHERE id = e.series_id), ''), COALESCE(json(e.timetable_tracks),''), COALESCE(json(e.timetable_room_order),''), COALESCE(e.reservation_requested,0), COALESCE((SELECT attribution FROM fetch_sources WHERE id = e.fetch_source_id), ''), COALESCE((SELECT licence FROM fetch_sources WHERE id = e.fetch_source_id), ''), COALESCE((SELECT terms_url FROM fetch_sources WHERE id = e.fetch_source_id), '') FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN locations lp ON l.parent_id = lp.id LEFT JOIN organizations o ON e.organization_id = o.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, e.no_live_music, COALESCE((SELECT GROUP_CONCAT(et.tag, ',') FROM event_tags et WHERE et.event_id = e.id), ''), e.is_published, COALESCE(e.short_code,''), COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(NULLIF(l.address,''), lp.address, ''), COALESCE(NULLIF(l.zipcode,''), lp.zipcode, ''), e.organization_id, COALESCE(json(e.pricing),''), e.location_id, COALESCE(NULLIF(l.town,''), lp.town, ''), COALESCE(NULLIF(l.country,''), lp.country, ''), COALESCE(NULLIF(l.country_code,''), lp.country_code, ''), COALESCE(NULLIF(l.region,''), lp.region, ''), COALESCE(l.latitude, lp.latitude), COALESCE(l.longitude, lp.longitude), COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE(dn.dance_names,''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0), COALESCE(e.food,''), COALESCE(e.drink,''), COALESCE(l.attributes,'{}'), COALESCE(json(e.attributes),'{}'), COALESCE(NULLIF(e.contact_name,''), o.contact_name, ''), COALESCE(NULLIF(e.contact_email,''), o.contact_email, ''), COALESCE(NULLIF(l.parking,''), lp.parking, ''), COALESCE(l.floor_condition,''), COALESCE(e.floor_condition,''), e.created_by_id, l.osm_id, COALESCE(l.osm_type,''), COALESCE(NULLIF(l.geohash,''), lp.geohash, ''), e.series_id, e.needs_duplicate_review, e.duplicate_of_id, l.parent_id, e.previous_start_time, COALESCE(e.suggester_email,''), COALESCE(e.suggester_name,''), COALESCE(e.pending_edit_json,''), COALESCE(e.pending_edit_submitted_at,0), COALESCE(e.image_ai_generated,0), e.email_verified, COALESCE((SELECT image_ai_generated FROM event_series WHERE id = e.series_id), 0), COALESCE((SELECT cadence FROM event_series WHERE id = e.series_id), ''), COALESCE(json(e.timetable_tracks),''), COALESCE(json(e.timetable_room_order),''), COALESCE(e.reservation_requested,0), COALESCE((SELECT attribution FROM fetch_sources WHERE id = e.fetch_source_id), ''), COALESCE((SELECT licence FROM fetch_sources WHERE id = e.fetch_source_id), ''), COALESCE((SELECT terms_url FROM fetch_sources WHERE id = e.fetch_source_id), ''), COALESCE((SELECT CAST(SUM(CASE WHEN type IN ('ride_offer','ride_request') THEN 1 ELSE 0 END) AS TEXT)||','||CAST(SUM(CASE WHEN type IN ('sleep_offer','sleep_request') THEN 1 ELSE 0 END) AS TEXT)||','||CAST(SUM(CASE WHEN type IN ('ticket_offer','ticket_request') THEN 1 ELSE 0 END) AS TEXT)||','||CAST(SUM(CASE WHEN type IN ('lost_item','found_item') THEN 1 ELSE 0 END) AS TEXT) FROM contact_posts WHERE event_id=e.id AND email_verified=1 AND expires_at>strftime('%s','now')),'0,0,0,0'), COALESCE((SELECT MAX(CAST(strftime('%s',created_at) AS INTEGER)) FROM contact_posts WHERE event_id=e.id AND email_verified=1 AND expires_at>strftime('%s','now')),0) FROM events e LEFT JOIN locations l ON e.location_id = l.id LEFT JOIN (SELECT ed.event_id, GROUP_CONCAT(d.name,',') AS dance_names FROM event_dances ed JOIN dances d ON d.id=ed.dance_id GROUP BY ed.event_id) dn ON dn.event_id = e.id LEFT JOIN locations lp ON l.parent_id = lp.id LEFT JOIN organizations o ON e.organization_id = o.id`
 
 // boolToInt is the SQLite integer for a flag column.
 func boolToInt(b bool) int {
@@ -529,6 +539,8 @@ func scanEventRow(s scanner) (Event, error) {
 	var createdByID, seriesID, duplicateOfID, locParentID, previousStartTime sql.NullInt64
 	var needsDuplicateReviewInt int
 	var pendingEditSubmittedEpoch int64
+	var boardCountsStr string
+	var boardLatestAt int64
 	if err := s.Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &hasFestivalInt, &isCancelledInt, &noLiveMusicInt, &event.TagsJSON, &isPublishedInt,
 		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &loc.Location,
@@ -544,7 +556,8 @@ func scanEventRow(s scanner) (Event, error) {
 		&needsDuplicateReviewInt, &duplicateOfID, &locParentID, &previousStartTime,
 		&event.SuggesterEmail, &event.SuggesterName, &event.PendingEditJSON, &pendingEditSubmittedEpoch,
 		&imageAIGeneratedInt, &emailVerifiedInt, &seriesImageAIGeneratedInt, &event.SeriesCadence, &event.TimetableTracksJSON, &event.TimetableRoomOrderJSON, &reservationRequestedInt,
-		&event.SourceAttribution, &event.SourceLicence, &event.SourceTermsURL); err != nil {
+		&event.SourceAttribution, &event.SourceLicence, &event.SourceTermsURL,
+		&boardCountsStr, &boardLatestAt); err != nil {
 		return Event{}, err
 	}
 	if previousStartTime.Valid {
@@ -586,6 +599,10 @@ func scanEventRow(s scanner) (Event, error) {
 	event.EmailVerified = emailVerifiedInt == 1
 	event.SeriesImageAIGenerated = seriesImageAIGeneratedInt == 1
 	event.ReservationRequested = reservationRequestedInt == 1
+	if boardCountsStr != "0,0,0,0" && boardCountsStr != "" {
+		event.BoardCounts = boardCountsStr
+	}
+	event.BoardLatestAt = boardLatestAt
 	if evtAttrsJSON != "" && evtAttrsJSON != "{}" {
 		json.Unmarshal([]byte(evtAttrsJSON), &event.Attributes)
 	}

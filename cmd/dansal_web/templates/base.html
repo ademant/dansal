@@ -99,6 +99,7 @@
     --badge-warn-bg:#2e2408;--badge-warn-fg:#d0a840;
     --badge-danger-bg:#2a1318;--badge-danger-fg:#f08088;
     --badge-info-bg:#0d2540;--badge-info-fg:#5ab8ff;
+    --badge-board-bg:#0d2030;--badge-board-fg:#6aabf5;
   }
 }
 /* Dark-mode map tiles (#1169): CARTO's free dark_all basemap now requires a
@@ -320,6 +321,8 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
 .entity-meta{font-size:.8rem;color:var(--fg-muted)}
 .food-icon{font-size:1rem;margin:0 .1rem;cursor:default}
 .fee-sym{display:inline-block;padding:.1rem .35rem;border-radius:3px;font-size:.78rem;font-weight:600}
+.board-badge{display:inline-block;padding:.1rem .3rem;border-radius:3px;font-size:.78rem;font-weight:500;background:var(--badge-board-bg,#e8f4fd);color:var(--badge-board-fg,#1a6496);text-decoration:none;margin:0 .1rem}
+.board-badge:hover{text-decoration:underline}
 .fee-free{background:#d1fae5;color:#065f46}
 .fee-donation{background:#fef3c7;color:#92400e}
 .fee-paid{background:#e5e7eb;color:#374151}
@@ -656,6 +659,7 @@ var DANSAL_TILE_TOKEN="{{$.TileToken}}";
 {{- if eq $floor "sand"}}<span class="food-icon" title="{{$s.T "floor_sand"}}">🏖</span>{{end -}}
 {{- if eq $floor "pavement"}}<span class="food-icon" title="{{$s.T "floor_pavement"}}">🛣</span>{{end -}}
 {{- if $ev.Pricing}}{{if eq $ev.Pricing.Type "free"}}<span class="fee-sym fee-free" title="{{$s.T "filter_fee_free"}}">0€</span>{{else if eq $ev.Pricing.Type "donation"}}<span class="fee-sym fee-donation" title="{{$s.T "filter_fee_donation"}}">♥</span>{{else if or (eq $ev.Pricing.Type "single") (eq $ev.Pricing.Type "multiple")}}<span class="fee-sym fee-paid" title="{{$s.T "filter_fee_paid"}}">€</span>{{end}}{{end -}}
+{{- $bc := parseBoardCounts $ev.BoardCounts}}{{if $bc.Total}}<a href="/events/{{$ev.ID}}#board" class="board-badge" aria-label="{{$s.TF "board_badge_label" $bc.Total}}">{{if $bc.Rides}}🚗 {{$bc.Rides}} {{end}}{{if $bc.Sleeps}}🏠 {{$bc.Sleeps}} {{end}}{{if $bc.Tickets}}🎟️ {{$bc.Tickets}} {{end}}{{if $bc.Lost}}🔍 {{$bc.Lost}}{{end}}</a>{{end -}}
 {{end}}
 
 {{/* Rolling 6-month carousel calendar (#1161, #1167, plus reuse on location/musician/instructor pages). Takes a dict:

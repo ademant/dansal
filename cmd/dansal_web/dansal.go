@@ -507,7 +507,11 @@ type Event struct {
 	// BoardUpdatedAt (#1279): newest created_at across this event's visible
 	// board posts/images, set only by the single-event GET. See
 	// eventHandler's conditional-GET check in frontend.go.
-	BoardUpdatedAt         string `json:"board_updated_at,omitempty"`
+	BoardUpdatedAt string `json:"board_updated_at,omitempty"`
+	// BoardCounts (#1716) and BoardLatestAt (#1722) — see cmd/dansal's doc
+	// comments. BoardCounts is "0,0,0,0" when none (omitempty → absent in JSON).
+	BoardCounts            string `json:"board_counts,omitempty"`
+	BoardLatestAt          int64  `json:"board_latest_at,omitempty"`
 	CreatedAt              string `json:"created_at"`
 	Source                 string `json:"source,omitempty"`
 	SourceURL              string `json:"source_url,omitempty"`
@@ -1185,10 +1189,33 @@ func (c *DansalClient) BulkEventConflicts(ctx context.Context, payload map[strin
 	return out.Conflicts, nil
 }
 
-// GetAllEvents fetches all published events including past ones; used by the sitemap.
+// getAllEventsPaged fetches all events matching baseURL by paging through
+// limit=1000 chunks until a short page, preventing the default 100-row API
+// cap from silently truncating large result sets (#1719).
+func (c *DansalClient) getAllEventsPaged(ctx context.Context, baseURL string) ([]Event, error) {
+	sep := "&"
+	if !strings.Contains(baseURL, "?") {
+		sep = "?"
+	}
+	var all []Event
+	for offset := 0; ; offset += apiListLimit {
+		var page []Event
+		u := fmt.Sprintf("%s%slimit=%d&offset=%d", baseURL, sep, apiListLimit, offset)
+		if err := c.get(ctx, u, &page); err != nil {
+			return nil, err
+		}
+		all = append(all, page...)
+		if len(page) < apiListLimit {
+			break
+		}
+	}
+	return all, nil
+}
+
+// GetAllEvents fetches all published events including past ones; used by the
+// sitemap. Pages through the API to avoid the 100-row default cap (#1719).
 func (c *DansalClient) GetAllEvents(ctx context.Context) ([]Event, error) {
-	var events []Event
-	return events, c.get(ctx, "/api/v1/events?is_published=true&include_past=true", &events)
+	return c.getAllEventsPaged(ctx, "/api/v1/events?is_published=true&include_past=true")
 }
 
 // EventFilter is a typed builder for the /api/v1/events query string. Public
@@ -2136,8 +2163,7 @@ func (c *DansalClient) GetEventsByOrg(ctx context.Context, orgID int) ([]Event, 
 }
 
 func (c *DansalClient) GetAllEventsByOrg(ctx context.Context, orgID int) ([]Event, error) {
-	var events []Event
-	return events, c.get(ctx, fmt.Sprintf("/api/v1/events?is_published=true&include_past=true&organization_id=%d&with_musicians=true", orgID), &events)
+	return c.getAllEventsPaged(ctx, fmt.Sprintf("/api/v1/events?is_published=true&include_past=true&organization_id=%d&with_musicians=true", orgID))
 }
 
 func (c *DansalClient) GetMusiciansByOrg(ctx context.Context, orgID int) ([]Musician, error) {

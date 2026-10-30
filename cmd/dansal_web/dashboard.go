@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"github.com/ademant/dansal/internal/logging"
 	"net/http"
 	"net/url"
@@ -30,6 +31,19 @@ type DashboardData struct {
 	OrgLocations   map[int][]Location
 	OrgFutureCount map[int]int
 	LocFutureCount map[int]map[int]int
+	// BoardAlerts (#1717) are upcoming board posts grouped by event, one row
+	// per (event × type-group), sorted by event start ascending. Empty when
+	// the user has no orgs or none of their upcoming events have active posts.
+	BoardAlerts []DashBoardAlert
+}
+
+// DashBoardAlert is one line in the dashboard board-posts section.
+type DashBoardAlert struct {
+	EventID    int
+	EventTitle string
+	StartTime  string
+	TypeGroup  string // "ride", "sleep", "ticket", "lost"
+	Count      int
 }
 
 func dashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -171,6 +185,59 @@ func dashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalC
 			}
 		}
 
+		// Board alerts (#1717): fetch active, upcoming board posts for the user's
+		// orgs and group them by event × type-group for the dashboard section.
+		var boardAlerts []DashBoardAlert
+		if len(userOrgIDs) > 0 {
+			params := url.Values{}
+			params.Set("upcoming", "1")
+			for _, oid := range userOrgIDs {
+				params.Add("organization_id", strconv.Itoa(oid))
+			}
+			posts, err := client.GetAllContactPosts(ctx, params)
+			if err != nil {
+				logging.Errorf("dashboard: could not load board posts: %v", err)
+			} else if len(posts) > 0 {
+				type key struct {
+					eventID   int
+					typeGroup string
+				}
+				type evtMeta struct{ title, startTime string }
+				counts := make(map[key]int)
+				metas := make(map[int]evtMeta)
+				for _, p := range posts {
+					g := "ride"
+					switch p.Type {
+					case "sleep_offer", "sleep_request":
+						g = "sleep"
+					case "ticket_offer", "ticket_request":
+						g = "ticket"
+					case "lost_item", "found_item":
+						g = "lost"
+					}
+					counts[key{p.EventID, g}]++
+					if _, ok := metas[p.EventID]; !ok && p.Event != nil {
+						metas[p.EventID] = evtMeta{p.Event.Title, p.Event.StartTime}
+					}
+				}
+				for k, n := range counts {
+					m := metas[k.eventID]
+					boardAlerts = append(boardAlerts, DashBoardAlert{
+						EventID: k.eventID, EventTitle: m.title,
+						StartTime: m.startTime, TypeGroup: k.typeGroup, Count: n,
+					})
+				}
+				sort.Slice(boardAlerts, func(i, j int) bool {
+					si, sj := boardAlerts[i].StartTime, boardAlerts[j].StartTime
+					if si != sj {
+						return si < sj
+					}
+					return fmt.Sprintf("%d%s", boardAlerts[i].EventID, boardAlerts[i].TypeGroup) <
+						fmt.Sprintf("%d%s", boardAlerts[j].EventID, boardAlerts[j].TypeGroup)
+				})
+			}
+		}
+
 		// Presets: templates the user has access to (own + orgs they belong to;
 		// all orgs for admins, matching adminTemplatesHandler's scope), split
 		// into pinned (shown on the dashboard) and unpinned (the "add" dropdown).
@@ -210,6 +277,7 @@ func dashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalC
 			OrgLocations:      orgLocations,
 			OrgFutureCount:    orgFutureCount,
 			LocFutureCount:    locFutureCount,
+			BoardAlerts:       boardAlerts,
 		}))
 	}
 }

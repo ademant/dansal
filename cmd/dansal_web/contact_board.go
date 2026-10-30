@@ -280,6 +280,9 @@ func contactManageGetHandler(cfg *Config, db *sql.DB, tmpls *Templates, client *
 		}
 		if post.JustVerified && post.FirstPost {
 			go triggerBoardOpenNote(cfg, db, client, post.EventID)
+			// Ping IndexNow so search engines re-crawl the event page promptly
+			// (#1722): the board section heading and board content just changed.
+			go notifyIndexNow(cfg.publicBaseURL(), siteCfg.IndexNowKey(), []int{post.EventID})
 		}
 
 		flash := flashTake(r.URL.Query().Get("msg"))

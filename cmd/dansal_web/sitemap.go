@@ -119,11 +119,21 @@ func buildSitemap(r *http.Request, cfg *Config, client *DansalClient) ([]byte, e
 		logging.Errorf("sitemap: could not load events: %v", err)
 	}
 	epoch := time.Unix(0, 0)
+	now := time.Now().Unix()
 	for _, e := range events {
 		lastMod := ""
+		// BoardLatestAt (#1722): a new board post is fresh content; use it when
+		// it's newer than the last event edit so search engines re-crawl promptly.
+		if e.BoardLatestAt > 0 {
+			boardT := time.Unix(e.BoardLatestAt, 0)
+			lastMod = boardT.UTC().Format("2006-01-02")
+		}
 		if e.ChangedAt != "" && e.ChangedAt != "0" {
 			if t, err := parseUnixOrRFC3339(e.ChangedAt); err == nil && t.After(epoch) {
-				lastMod = t.UTC().Format("2006-01-02")
+				d := t.UTC().Format("2006-01-02")
+				if lastMod == "" || d > lastMod {
+					lastMod = d
+				}
 			}
 		}
 		if lastMod == "" && e.CreatedAt != "" {
@@ -131,9 +141,12 @@ func buildSitemap(r *http.Request, cfg *Config, client *DansalClient) ([]byte, e
 				lastMod = t.UTC().Format("2006-01-02")
 			}
 		}
+		// Priority: upcoming events rank higher than past ones; cancelled lowest.
 		priority := "0.8"
 		if e.IsCancelled {
 			priority = "0.3"
+		} else if st, err := parseUnixOrRFC3339(e.StartTime); err == nil && st.Unix() < now {
+			priority = "0.4"
 		}
 		urls = append(urls, sitemapURL{
 			Loc:        base + fmt.Sprintf("/events/%d", e.ID),

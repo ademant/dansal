@@ -341,6 +341,24 @@ var tmplFuncsMisc = template.FuncMap{
 		json.Unmarshal([]byte(s), &m)
 		return m
 	},
+	// parseBoardCounts (#1716) parses the compact "R,S,T,L" board-counts string
+	// (rides, sleeps, tickets, lost/found) into named fields. Returns a zero
+	// struct when s is empty or "0,0,0,0", so templates can guard on .Total.
+	"parseBoardCounts": func(s string) struct {
+		Rides, Sleeps, Tickets, Lost, Total int
+	} {
+		type bc struct{ Rides, Sleeps, Tickets, Lost, Total int }
+		if s == "" || s == "0,0,0,0" {
+			return bc{}
+		}
+		parts := strings.SplitN(s, ",", 4)
+		if len(parts) < 4 {
+			return bc{}
+		}
+		atoi := func(x string) int { n, _ := strconv.Atoi(x); return n }
+		r, sl, t, l := atoi(parts[0]), atoi(parts[1]), atoi(parts[2]), atoi(parts[3])
+		return bc{Rides: r, Sleeps: sl, Tickets: t, Lost: l, Total: r + sl + t + l}
+	},
 	"add": func(a, b int) int { return a + b },
 	// intInSlice reports whether id appears in list — used to pre-check a
 	// multi-select org checkbox against either a previously-submitted

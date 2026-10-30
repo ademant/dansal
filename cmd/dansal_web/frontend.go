@@ -1072,6 +1072,15 @@ func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClien
 			}
 		}
 		title := i18n.T(r, "events_title")
+		// Count unique towns from loaded events for the meta description (#1720).
+		towns := make(map[string]bool)
+		for _, ev := range events {
+			if ev.Location != nil && ev.Location.Town != "" {
+				towns[ev.Location.Town] = true
+			}
+		}
+		td := tmplData(r, cfg, i18n, title, IndexData{})
+		td.MetaDescription = i18n.Strings(i18n.detectLang(r)).TF("meta_desc_index", client.EventsTotal(), len(towns))
 		holidayDates := template.JS("[]")
 		if hc := siteCfg.HolidayCountry(); hc != "" {
 			now := time.Now()
@@ -1093,7 +1102,8 @@ func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClien
 		if tpl := siteCfg.HomeIntro(i18n.detectLang(r)); tpl != "" {
 			homeIntro = fmt.Sprintf(tpl, effectiveSiteName(cfg))
 		}
-		renderTemplate(w, tmpls.index, tmplData(r, cfg, i18n, title, IndexData{Events: events, TotalEvents: client.EventsTotal(), OrgMap: orgMap, TagMap: tagMap, FederatedEvents: fedEvents, Dances: dances, HolidayDates: holidayDates, ExternalOverlayJSON: template.JS(currentExternalOverlayJSON()), HomeIntro: homeIntro}))
+		td.Data = IndexData{Events: events, TotalEvents: client.EventsTotal(), OrgMap: orgMap, TagMap: tagMap, FederatedEvents: fedEvents, Dances: dances, HolidayDates: holidayDates, ExternalOverlayJSON: template.JS(currentExternalOverlayJSON()), HomeIntro: homeIntro}
+		renderTemplate(w, tmpls.index, td)
 	}
 }
 
@@ -1231,13 +1241,15 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			ShowOrgUpcoming:        epd.showOrgUpcoming,
 			ShowVenueUpcoming:      epd.showVenueUpcoming,
 		})
-		// OGImage fallback: event → generated series/org banner overlay
-		// (#1072, #1082, #1083). The generated banner is used whenever a
-		// series or org banner would otherwise apply, since it carries a
-		// per-event date/title signal a plain reused banner doesn't.
+		// OGImage: use JPEG variant so WhatsApp/Facebook/some messengers can
+		// render it (#1721). The generated banner is used when no event image
+		// exists but a series/org image would apply.
 		ogImg := event.ImageURL
 		if ogImg == "" && (epd.seriesImageURL != "" || (epd.org != nil && epd.org.ImageURL != "")) {
 			ogImg = fmt.Sprintf("/api/v1/event-banner/%d", event.ID)
+		}
+		if ogImg != "" {
+			ogImg += "?format=jpeg"
 		}
 		renderPage(w, cfg, tmpls.event, td, eventMetaDesc(event, lang), ogImg)
 	}
@@ -1580,6 +1592,7 @@ func orgsHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient
 		title := i18n.T(r, "orgs_title")
 		td := tmplData(r, cfg, i18n, title, OrgsListData{Items: items, MapPins: mapPins})
 		td.Hreflang = true
+		td.MetaDescription = i18n.Strings(i18n.detectLang(r)).TF("meta_desc_orgs", len(orgs))
 		renderTemplate(w, tmpls.orgs, td)
 	}
 }

@@ -148,7 +148,12 @@ func festivalsPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 		mapEvents = append(mapEvents, folded...)
 
 		title := i18n.T(r, "festivals_title")
-		renderTemplate(w, tmpls.festivals, tmplData(r, cfg, i18n, title, FestivalsData{
+		lang := i18n.detectLang(r)
+		strs := i18n.Strings(lang)
+		metaDesc := strs.TF("meta_desc_festivals", len(yearEvents), year, year+1)
+		td := tmplData(r, cfg, i18n, title, FestivalsData{})
+		td.MetaDescription = metaDesc
+		td.Data = FestivalsData{
 			Year:         year,
 			PrevYear:     year - 1,
 			NextYear:     year + 1,
@@ -157,6 +162,7 @@ func festivalsPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			MapEvents:    mapEvents,
 			OrgMap:       orgMapByID(orgs),
 			TagMap:       tagMap,
-		}))
+		}
+		renderTemplate(w, tmpls.festivals, td)
 	}
 }

@@ -216,6 +216,17 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
   #week-main{touch-action:pan-y}
   body.has-mtabs #back-to-top{bottom:calc(4.5rem + env(safe-area-inset-bottom) + .5rem)}
 }
+/* #1730: the bottom bar is a fixed wrapper around the tablist and the board link. */
+.mtabs-wrap{display:none}
+@media(max-width:640px){
+  .mtabs-wrap{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:1200;background:var(--bg-card);border-top:1px solid var(--border-mid);box-shadow:0 -2px 8px rgba(0,0,0,.12);padding:0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+  .mtabs-wrap .mtabs{position:static;flex:1 1 0;min-width:0;background:none;border:none;box-shadow:none;padding:0}
+  .mtab-link{flex:0 0 4.5rem;min-width:0;min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.1rem;padding:.3rem .2rem;color:var(--fg-2);font-size:.72rem;line-height:1.2;text-decoration:none}
+  .mtab-link .mtab-ico{font-size:1.25rem;line-height:1}
+  .mtab-link:focus-visible{outline:2px solid var(--link);outline-offset:-4px}
+  .mtab-link[aria-current="page"]{color:var(--link);font-weight:700;box-shadow:inset 0 3px 0 var(--link)}
+  .nav-board-item{display:none}
+}
 </style>
 {{end}}
 {{define "nav_info"}}{{with .Data.HomeIntro}}
@@ -370,11 +381,15 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 </section>
 </div>
 
-<!-- Phone bottom tab bar (#1613): list is the default, see initialHomeTab() -->
+<!-- Phone bottom tab bar (#1613): list is the default, see initialHomeTab().
+     The board link (#1730) sits beside the tablist, not in it: tablist children must be tabs. -->
+<div class="mtabs-wrap">
 <div class="mtabs mtabs-icons" role="tablist" aria-label="{{$.Strings.T "mtab_label"}}">
   <button type="button" role="tab" class="mtab" id="mtab-list" data-tab="list" aria-controls="mpanel-list" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">☰</span><span class="mtab-label">{{$.Strings.T "mtab_list"}}</span></button>
   <button type="button" role="tab" class="mtab" id="mtab-week" data-tab="week" aria-controls="mpanel-week" aria-selected="false" tabindex="-1"><span class="mtab-ico" aria-hidden="true">📅</span><span class="mtab-label">{{$.Strings.T "mtab_calendar"}}</span></button>
   <button type="button" role="tab" class="mtab" id="mtab-map" data-tab="map" aria-controls="mpanel-map" aria-selected="true" tabindex="0"><span class="mtab-ico" aria-hidden="true">🗺</span><span class="mtab-label">{{$.Strings.T "mtab_map"}}</span></button>
+</div>
+{{template "mobile-board-link" (dict "Current" false "Strings" $.Strings)}}
 </div>
 
 <script type="application/json" id="events-geo">{{eventsGeoJSON .Events}}</script>

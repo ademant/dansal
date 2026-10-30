@@ -411,7 +411,7 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
         </div>
         <div class="nav-divider"></div>
         <div class="nav-section">
-          <a href="/board">{{.Strings.T "nav_board"}}</a>
+          <a href="/board" class="nav-board-item">{{.Strings.T "nav_board"}}</a>
           <a href="/festivals">{{.Strings.T "nav_festivals"}}</a>
         </div>
         <div class="nav-divider"></div>
@@ -437,7 +437,7 @@ footer{color:var(--fg-hint);font-size:.8rem;padding:.75rem 1rem;border-top:1px s
         <div class="nav-section">
           <a href="/">{{.Strings.T "nav_events"}}</a>
           <a href="/agenda">{{.Strings.T "agenda_nav"}}</a>
-          <a href="/board">{{.Strings.T "nav_board"}}</a>
+          <a href="/board" class="nav-board-item">{{.Strings.T "nav_board"}}</a>
           <a href="/festivals">{{.Strings.T "nav_festivals"}}</a>
           <a href="/cities">{{.Strings.T "cities_title"}}</a>
           <a href="/musicians">{{.Strings.T "nav_musicians"}}</a>
@@ -668,6 +668,9 @@ var DANSAL_TILE_TOKEN="{{$.TileToken}}";
      upcoming-only slice, not the toggled display list), Strings, Nonce.
      Shared by org.html, location.html, musician.html, instructor.html so
      the carousel behavior (#1167) can't drift between pages. */}}
+{{/* #1730: the board entry of the phone bottom bar, shared by the homepage and /board.
+      Current marks the board page's own entry with aria-current. */}}
+{{define "mobile-board-link"}}<a class="mtab-link" href="/board"{{if .Current}} aria-current="page"{{end}}><span class="mtab-ico" aria-hidden="true">📌</span><span class="mtab-label">{{.Strings.T "nav_board"}}</span></a>{{end}}
 {{define "month-calendar"}}
 {{$calEvents := festivalCalendarJSON .Events}}
 <div class="fest-calendar-wrap" id="{{.ID}}-wrap" hidden>

@@ -24,8 +24,12 @@ func newErrorID() string {
 func writeJSONError(w http.ResponseWriter, r *http.Request, status int, msg string) {
 	id := newErrorID()
 	// Server errors are Error, other client errors Debug; 401 and 403 are not
-	// logged (#1646).
+	// logged (#1646). Client-cancelled requests (context done) are Debug
+	// regardless of status to avoid noisy 5xx alerts for routine disconnects
+	// (#1715).
 	switch {
+	case r.Context().Err() != nil:
+		logging.Debugf("error_id=%s status=%d method=%s path=%s: %s", id, status, r.Method, r.URL.Path, msg)
 	case status >= 500:
 		logging.Errorf("error_id=%s status=%d method=%s path=%s: %s", id, status, r.Method, r.URL.Path, msg)
 	case status != http.StatusUnauthorized && status != http.StatusForbidden:
@@ -41,10 +45,12 @@ func writeJSONError(w http.ResponseWriter, r *http.Request, status int, msg stri
 // can quote it when reporting issues.
 func logHTTPError(w http.ResponseWriter, r *http.Request, msg string, code int) {
 	id := newErrorID()
-	if code >= 500 {
-		logging.Errorf("error_id=%s status=%d method=%s path=%s: %s", id, code, r.Method, r.URL.Path, msg)
-	} else {
+	// Downgrade to Debug when the client cancelled the request (#1715) — the
+	// context cancellation is the cause, not a real server error.
+	if r.Context().Err() != nil || code < 500 {
 		logging.Debugf("error_id=%s status=%d method=%s path=%s: %s", id, code, r.Method, r.URL.Path, msg)
+	} else {
+		logging.Errorf("error_id=%s status=%d method=%s path=%s: %s", id, code, r.Method, r.URL.Path, msg)
 	}
 	http.Error(w, msg+" (error_id: "+id+")", code)
 }

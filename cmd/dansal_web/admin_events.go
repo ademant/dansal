@@ -785,14 +785,6 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 		ctx := r.Context()
 		token := getSessionToken(r)
 
-		ph := make([]string, len(ids))
-		qargs := make([]interface{}, len(ids))
-		for i, id := range ids {
-			ph[i] = "?"
-			qargs[i] = id
-		}
-		inClause := "(" + strings.Join(ph, ",") + ")"
-
 		// Determine base from API (newest user-edited, or newest by created_at).
 		type evMeta struct {
 			id        int
@@ -869,6 +861,10 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 		for _, m := range base.Musicians {
 			musicianSet[m.ID] = true
 		}
+		danceNameSet := make(map[string]bool)
+		for _, n := range base.DanceNames {
+			danceNameSet[n] = true
+		}
 		// #1427: series are assigned by hand in dansal, the duplicate usually
 		// comes from outside — the merged event keeps whichever series one of
 		// the merged events had.
@@ -918,6 +914,9 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 			for _, m := range ev.Musicians {
 				musicianSet[m.ID] = true
 			}
+			for _, n := range ev.DanceNames {
+				danceNameSet[n] = true
+			}
 			// Prefer a richer location over a stub: coords beat no-coords;
 			// a non-"Unknown" name beats "Unknown".
 			if locationQuality(ev.Location) > locationQuality(base.Location) {
@@ -935,22 +934,24 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 			mids = append(mids, id)
 		}
 
-		drows, qErr := db.QueryContext(ctx,
-			"SELECT DISTINCT dance_id FROM event_dances WHERE event_id IN "+inClause,
-			qargs...)
+		// event_dances lives only in the API's calendar.db, not in web.db.
+		// Resolve dance names (already collected from each event above) to IDs
+		// via the API. Abort if the lookup fails to avoid silently wiping dances.
+		allDances, err := client.GetDances(ctx)
+		if err != nil {
+			logging.Errorf("merge events: could not load dance styles: %v", err)
+			http.Error(w, "could not load dance styles", http.StatusBadGateway)
+			return
+		}
+		danceByName := make(map[string]int, len(allDances))
+		for _, d := range allDances {
+			danceByName[d.Name] = d.ID
+		}
 		var danceIDs []int
-		if qErr != nil {
-			logging.Errorf("admin event save: could not query dance ids: %v", qErr)
-		} else if drows != nil {
-			for drows.Next() {
-				var did int
-				if err := drows.Scan(&did); err != nil {
-					logging.Errorf("admin event save: could not scan dance id: %v", err)
-					continue
-				}
-				danceIDs = append(danceIDs, did)
+		for name := range danceNameSet {
+			if id, ok := danceByName[name]; ok {
+				danceIDs = append(danceIDs, id)
 			}
-			drows.Close()
 		}
 
 		req := EventUpdateReq{

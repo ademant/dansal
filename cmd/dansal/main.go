@@ -4704,7 +4704,14 @@ func main() {
 
 	dsn := fmt.Sprintf("%s?_journal_mode=WAL&_synchronous=NORMAL&_busy_timeout=5000&_txlock=immediate&_foreign_keys=ON&_cache_size=-8000&_temp_store=memory&_mmap_size=134217728",
 		config.Server.DBPath)
-	db, err = sql.Open("sqlite3", dsn)
+	// #1732: at debug level open through the tracking driver, which records
+	// where each open result set and transaction was started (dbtrack.go).
+	driverName := "sqlite3"
+	if logging.Debugging() {
+		driverName = trackedDriverName
+		trackingDB = true
+	}
+	db, err = sql.Open(driverName, dsn)
 	if err != nil {
 		log.Fatal(err)
 	}

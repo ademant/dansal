@@ -564,12 +564,12 @@ func restoreDB(srcPath string) error {
 	defer destConn.Close()
 
 	return srcConn.Raw(func(srcRaw any) error {
-		src, ok := srcRaw.(*sqlite3.SQLiteConn)
+		src, ok := unwrapDriverConn(srcRaw).(*sqlite3.SQLiteConn)
 		if !ok {
 			return fmt.Errorf("unexpected driver type")
 		}
 		return destConn.Raw(func(destRaw any) error {
-			dst, ok := destRaw.(*sqlite3.SQLiteConn)
+			dst, ok := unwrapDriverConn(destRaw).(*sqlite3.SQLiteConn)
 			if !ok {
 				return fmt.Errorf("unexpected driver type")
 			}

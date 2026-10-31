@@ -115,6 +115,11 @@ func SetLevel(name string) error {
 	return nil
 }
 
+// Debugging reports whether debug records are written. Callers use it to
+// switch on diagnostics that cost something, such as tracking open database
+// result sets (#1732).
+func Debugging() bool { return level.Level() <= slog.LevelDebug }
+
 // ParseLevel maps a config value to a slog level.
 func ParseLevel(name string) (slog.Level, error) {
 	switch strings.ToLower(strings.TrimSpace(name)) {

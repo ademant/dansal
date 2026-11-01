@@ -34,6 +34,7 @@ func startDBPoolLogger() {
 				(s.WaitDuration - prev.WaitDuration).Milliseconds(),
 				httpInFlight.Load())
 			prev = s
+			logTrackedDB()
 		}
 	}()
 }

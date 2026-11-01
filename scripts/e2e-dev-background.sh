@@ -120,7 +120,11 @@ PY
 # True when the API answers its health endpoint and the admin socket exists.
 # Args: none. Uses $API_URL and $ADMIN_SOCKET from the worker environment.
 healthy() {
-  curl -fsS -m 5 "$API_URL/api/v1/health" >/dev/null 2>&1 && [[ -S "$ADMIN_SOCKET" ]]
+  # The socket is owned by the dansal user and its directory is not readable by
+  # the runner, so test it with the same sudo the admin CLI uses (seed.ts).
+  local sock_test=(test -S "$ADMIN_SOCKET")
+  if [[ "${ADMIN_NO_SUDO:-}" != "1" ]]; then sock_test=(sudo -n "${sock_test[@]}"); fi
+  curl -fsS -m 5 "$API_URL/api/v1/health" >/dev/null 2>&1 && "${sock_test[@]}"
 }
 
 # Retries healthy() three times, 10 s apart. Returns 1 if it never passes.

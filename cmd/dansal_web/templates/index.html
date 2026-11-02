@@ -1275,8 +1275,6 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
       .setView(savedView?[savedView.lat,savedView.lng]:[50,10], savedView?savedView.z:5);
     if(savedView) mapFitted=true;
     map.on('moveend',function(){ writeMapView(map.getCenter(), map.getZoom()); });
-    attachTileLayer(map);
-    detabifyHiddenMap(map);
     clusterGroup = L.markerClusterGroup({maxClusterRadius:40});
     map.addLayer(clusterGroup);
     eventsGeo.forEach(function(e){
@@ -1291,6 +1289,15 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
       m.bindPopup(buildPopup(e),{maxWidth:300});
       allMarkers[e.id] = m;
     });
+    // #1755: fit to the markers before the tile layer is attached, while the
+    // map is on screen. Otherwise the tiles for the default zoom 5 are
+    // requested and then the fit to the markers asks for another zoom level,
+    // so a cold visit fetches two sets of tiles and the load event waits for
+    // both. A hidden map (phone list tab) has no size yet, so it is fitted
+    // when its tab opens instead (setMobileTab). A remembered view is kept.
+    if(!savedView && document.getElementById('map-container').offsetWidth > 0) updateMapMarkers(true);
+    attachTileLayer(map);
+    detabifyHiddenMap(map);
     var locateToView=function(pos){ map.setView([pos.coords.latitude, pos.coords.longitude], 10); };
     setupGeoButton(document.getElementById('map-locate-btn'), document.getElementById('map-geo-hint'), locateToView);
     // #1435: the same locate action on the map itself (outside the aria-hidden map).
@@ -1557,7 +1564,9 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
       dansalScrollTo(document.getElementById('home-tabs'));
     }
     if(tab === 'map'){
-      ensureMap().then(function(){ map.invalidateSize(); updateMapMarkers(true); });
+      // Fit only when the map has never been fitted (a hidden phone map, see
+      // initMap); a remembered view or the visitor's own pan/zoom stays (#1750).
+      ensureMap().then(function(){ map.invalidateSize(); updateMapMarkers(false); });
       return;
     }
     var m = desiredTableMode();
@@ -1805,7 +1814,9 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     if(!mapLoad){
       mapLoad = dansalLoadLeaflet(true).then(function(){
         initMap();
-        if(!isPhone() || mobileTab === 'map') updateMapMarkers(true);
+        // #1750: refit only if the map is not fitted yet. A remembered view
+        // (mapFitted set in initMap) must survive the load.
+        if(!isPhone() || mobileTab === 'map') updateMapMarkers(false);
       });
     }
     return mapLoad;

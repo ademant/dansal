@@ -30,6 +30,7 @@
     <td class="col-actions cell-actions" style="white-space:nowrap">
       {{if .CanEdit}}
       <a href="/admin/organizations/{{.Org.ID}}/edit" class="btn-icon" title="{{$.Strings.T "admin_edit"}}" aria-label="{{$.Strings.T "admin_edit"}}">✏️</a>
+      <a href="/admin/organizations/{{.Org.ID}}/merge" class="btn-icon" title="{{$.Strings.T "org_merge_link"}}" aria-label="{{$.Strings.T "org_merge_link"}}">🔀</a>
       {{if .FetchSources}}
       <form method="post" action="/admin/organizations/{{.Org.ID}}/run-feeds" style="display:inline">
         <button type="submit" class="btn-icon btn-run" title="{{$.Strings.T "org_run_feeds"}}" aria-label="{{$.Strings.T "org_run_feeds"}}">🔄</button>

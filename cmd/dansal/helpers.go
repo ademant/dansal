@@ -53,14 +53,26 @@ func forEachAdmin(fn func(id int, email, chatID, matrixID string, matrixVerified
 		return
 	}
 	defer rows.Close()
+	// Read every row first. fn may use the database (sendMatrixMessage does),
+	// and calling it while rows is open holds one pool connection per admin
+	// and needs a second one: with the pool full the API stops serving (#1736).
+	type admin struct {
+		id             int
+		email, chatID  string
+		matrixID       string
+		matrixVerified bool
+	}
+	var admins []admin
 	for rows.Next() {
-		var id int
-		var email, chatID, matrixID string
-		var matrixVerified bool
-		if err := rows.Scan(&id, &email, &chatID, &matrixID, &matrixVerified); err != nil {
+		var a admin
+		if err := rows.Scan(&a.id, &a.email, &a.chatID, &a.matrixID, &a.matrixVerified); err != nil {
 			continue
 		}
-		fn(id, email, chatID, matrixID, matrixVerified)
+		admins = append(admins, a)
+	}
+	rows.Close()
+	for _, a := range admins {
+		fn(a.id, a.email, a.chatID, a.matrixID, a.matrixVerified)
 	}
 }
 

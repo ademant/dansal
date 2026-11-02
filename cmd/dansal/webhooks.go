@@ -330,12 +330,23 @@ func dispatchEventWebhooks(eventID int, orgID *int, action string, actorID int) 
 		changed = time.Unix(changedEpoch, 0).UTC()
 	}
 
+	// Select the hooks first and release the rows before any delivery starts:
+	// deliverWebhook uses the pool, and the loop must not hold a connection
+	// while it runs (#1736).
+	var hookIDs []int
 	for rows.Next() {
 		var id int
 		var types string
 		if rows.Scan(&id, &types) != nil || !webhookWantsType(types, eventType) {
 			continue
 		}
+		hookIDs = append(hookIDs, id)
+	}
+	rows.Close()
+	if len(hookIDs) == 0 {
+		return
+	}
+	for _, id := range hookIDs {
 		body, _ := json.Marshal(webhookPayload{
 			Event: eventType, Resource: "event", ResourceID: eventID, Action: action,
 			ChangedAt: changed.Format(time.RFC3339), OrganizationID: orgID,

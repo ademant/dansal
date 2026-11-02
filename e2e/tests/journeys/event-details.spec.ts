@@ -2,6 +2,7 @@ import { test, expect, gotoAndMeasure } from "../../helpers/fixtures";
 import { fullSeed, SeedResult } from "../../helpers/seed";
 import { AUTH_FILE } from "../../helpers/auth";
 import { EVENT_HREF_PREFIX } from "../../fixtures/data";
+import { isPhone } from "../../helpers/nav";
 
 let seed: SeedResult;
 
@@ -45,6 +46,11 @@ test.describe("Event details page", () => {
     // organizer bio/notes further down the page — that ambiguity made this
     // a Playwright strict-mode violation once the org sidebar started
     // rendering its own .md-content description too.
+    // #1748: on phones the description is in the Details tab, which is not the
+    // default tab, so open it first (desktop shows every panel).
+    if (isPhone(page)) {
+      await page.locator('.mtab[data-tab="details"]').click();
+    }
     const desc = page.locator(".evt-description");
     await expect(desc).toBeVisible();
   });

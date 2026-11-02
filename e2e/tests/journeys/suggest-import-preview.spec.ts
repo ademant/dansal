@@ -37,6 +37,7 @@
  * single project, when iterating on this spec.
  */
 import { test, expect } from "@playwright/test";
+import { isPhone } from "../../helpers/nav";
 
 const WEB_BASE = process.env.BASE_URL ?? "http://localhost:8080";
 
@@ -101,7 +102,13 @@ test("import preview: arrows, prefilled date and date field all render", async (
       arrows,
       "import mode must render the six wizard progress arrows (#1388)"
     ).toHaveCount(6);
-    await expect(arrows.first()).toBeVisible();
+    // #1748: the progress arrows are hidden below 640px by design (the wizard
+    // CSS in events_suggest.html), so on phones they must stay hidden.
+    if (isPhone(page)) {
+      await expect(arrows.first()).toBeHidden();
+    } else {
+      await expect(arrows.first()).toBeVisible();
+    }
 
     // ── #1389/#1390: the prefilled date is visible ─────────────────────
     // The date row lives on wizard step 2; only step 1 is visible on load,

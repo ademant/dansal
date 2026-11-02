@@ -21,7 +21,7 @@ import (
 // typo3WrappedICalFixture mirrors the real laks_calendar export: a full HTML
 // document with BEGIN:VCALENDAR...END:VCALENDAR embedded in the body. DTSTART
 // has no TZID/Z suffix (a floating local time), matching the real response.
-const typo3WrappedICalFixture = `<!DOCTYPE html>
+const typo3WrappedICalFixtureTemplate = `<!DOCTYPE html>
 <html lang="de">
 <head><title>Hessen Szene: Hessen Szene</title></head>
 <body>
@@ -35,8 +35,8 @@ BEGIN:VEVENT
 CLASS:PUBLIC
 UID:veranstaltungskalender-133315
 SUMMARY:Folkwards! Tanzworkshop
-DTSTAMP:20260926T194910Z
-DTSTART:20261101T150000
+DTSTAMP:@START@
+DTSTART:@START@
 LOCATION:Kulturcafé-Saal\, Darmstädter Straße 31\, 64521 Groß-Gerau
 PRIORITY:5
 SEQUENCE:0
@@ -44,6 +44,12 @@ END:VEVENT
 END:VCALENDAR
   </div>
 </body></html>`
+
+// typo3WrappedICalFixture is the template with the event dated 30 days ahead.
+// The import keeps only events inside the fetch window (365 days ahead by
+// default), so a fixed date would make these tests fail once it passed.
+var typo3WrappedICalFixture = strings.ReplaceAll(typo3WrappedICalFixtureTemplate, "@START@",
+	time.Now().UTC().AddDate(0, 0, 30).Format("20060102T150000"))
 
 func TestExtractVCalendarBody(t *testing.T) {
 	wellFormed := []byte("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n")

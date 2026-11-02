@@ -175,7 +175,9 @@ test.describe("Index page: discovery mechanics", () => {
 
     // Jumping via a mini-cal week-row should land on the same week and also
     // refresh the map.
-    const nextRow = page.locator("#week-mini-cal tr.mc-week").nth(1);
+    // #1751: the row after the selected week, not the second row. The
+    // selected week is not always row 0 of the mini-calendar.
+    const nextRow = page.locator("#week-mini-cal tr.mc-sel + tr.mc-week");
     await nextRow.click();
     await page.waitForTimeout(300);
     expect(await weekLabel.textContent()).not.toBe(initialLabel);

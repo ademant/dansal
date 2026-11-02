@@ -22,7 +22,6 @@
   <p class="suggest-hint suggest-hint-left">{{if gt .Left 0}}{{$.Strings.TF "suggest_done_left_hint" .Left}}{{else}}{{$.Strings.TF "suggest_done_cap_hint" .Cap}}{{end}}</p>
   {{end}}
 
-  {{if not .ManageToken}}
   <!-- Phone step bar (#1616): icon tabs at the bottom, with an "edited" dot
        and the word in the accessible name. Shown on phones only (base.html). -->
   <div class="mtabs mtabs-icons" id="wiz-mtabs" role="tablist" aria-label="{{$.Strings.T "suggest_step_bar_label"}}">
@@ -45,6 +44,8 @@
     <button type="button" class="wiz-arrow" data-step="5">{{$.Strings.T "suggest_step_timetable"}}</button>
     <button type="button" class="wiz-arrow" data-step="6">{{$.Strings.T "suggest_step_contact"}}</button>
   </nav>
+  {{/* #1769: the step bar and arrows render on manage links too; only the import/manual switch is create-only. */}}
+  {{if not .ManageToken}}
   {{if .IsImportMode}}
   {{if gt (len .PreviewEvents) 1}}
   <div class="import-picker">

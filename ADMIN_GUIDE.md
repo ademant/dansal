@@ -294,10 +294,32 @@ dansal_admin --config /etc/dansal/prod/config.yaml backup --output /tmp/dansal-b
 # Encrypted backup (AES-256-GCM)
 dansal_admin --config /etc/dansal/prod/config.yaml password-backup
 
-# Incremental backup since a given time
-dansal_admin --config /etc/dansal/prod/config.yaml \
-  incremental-backup --since 2025-01-01T00:00:00Z
+# Incremental backup (images changed since the previous archive)
+dansal_admin --config /etc/dansal/prod/config.yaml backup --mode incremental
+
+# Cumulative backup (images changed since the last full)
+dansal_admin --config /etc/dansal/prod/config.yaml backup --mode cumulative
 ```
+
+### Backup modes and public-key encryption (#1765)
+
+```yaml
+server:
+  backup_mode: full                 # full | incremental | cumulative (what the nightly timer does)
+  backup_encryption_public_key:     # encrypt every archive to these recipients
+    - "age1…"                       # age key
+    - "ssh-ed25519 AAAA… admin"     # SSH key (ssh-rsa needs >= 2048 bits)
+  # backup_encryption_public_key_file: /etc/dansal/prod/backup-recipients.txt
+  # backup_include_credentials: true   # keep password hashes in public-key archives only
+```
+
+Recipient types the Debian `age` 1.2.1 can decrypt are accepted; post-quantum and plugin recipients are refused. The server keeps only public keys, so keep an identity (an age key or the SSH private key) somewhere else, and a second offline recipient. Decrypt with the Debian tools:
+
+```bash
+age -d -i identity.key archive.tar.zst.age | zstd -dc | tar -t
+```
+
+Manual passphrase archives: `dansal_admin backup --passphrase-prompt` (or `--passphrase-file`). They are age passphrase archives, and `age -d` decrypts them too.
 
 ### Restore
 

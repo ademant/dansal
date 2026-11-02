@@ -346,38 +346,45 @@ Restoring config and the database does not require a service restart — config 
 ### backup
 
 ```
-dansal_admin backup [--output PATH]
+dansal_admin backup [--mode full|incremental|cumulative] [--output DIR]
+                    [--passphrase-file F | --passphrase-prompt]
 ```
 
-Create a full unencrypted backup.
+Create a backup archive (#1765). Every archive holds `calendar.db` and `web.db` (consistent snapshots), the instance config, nginx and systemd files, and the images.
 
-`--output` defaults to `./dansal-backup-<timestamp>.tar.gz`.
+| mode | images stored | base |
+|---|---|---|
+| `full` | all | none; starts a new chain |
+| `incremental` | changed since the previous archive of any kind | previous archive |
+| `cumulative` | changed since the last full | last full |
 
----
+Without `--mode`, the mode comes from `server.backup_mode` (default `full`). The nightly timer runs `backup` with no mode, so it follows the config. Incremental and cumulative need an earlier full in the same directory, and fail with a message naming the missing full otherwise.
 
-### incremental-backup
-
-```
-dansal_admin incremental-backup --since RFC3339 [--output PATH]
-```
-
-Create a backup that includes only image files modified after `--since`. The database and config are always included in full.
+Encryption: `server.backup_encryption_public_key` encrypts every archive to the configured recipients (`age1…`, `ssh-ed25519`, `ssh-rsa` ≥ 2048 bits). `--passphrase-file` or `--passphrase-prompt` encrypts one archive with a passphrase (age passphrase mode). With a public key configured, a passphrase needs `--passphrase-file`.
 
 ```
-dansal_admin incremental-backup --since 2026-05-01T00:00:00Z
+dansal_admin backup --mode cumulative
+dansal_admin backup --mode full --passphrase-prompt
 ```
 
-`--output` defaults to `./dansal-incremental-<timestamp>.tar.gz`.
+Output: `dansal-<mode>-<timestamp>.tar.zst`, with `.age` (age encrypted) or `.enc` (symmetric key file) appended. A manifest copy (`<archive>.manifest.json`) sits next to each archive; it is unencrypted and needed to resolve chains.
 
 ---
 
 ### restore
 
 ```
-dansal_admin restore --input PATH
+dansal_admin restore --input PATH|DIR [--identity F] [--passphrase-file F] [--to DIR] [--wipe-credentials]
 ```
 
-Restore from a `.tar.gz` archive. Images are overlaid (existing files not in the archive are kept). Prints a summary: `config=true db=true images=N`.
+A directory restores its newest archive together with the chain it depends on. A file restores that archive and the archives it depends on. Chains are applied oldest first, so the images end up exactly as they were at the last backup; images the final backup no longer has are removed.
+
+- `calendar.db` is restored live via the SQLite online backup API.
+- `web.db`, config, nginx and systemd files go to `--to DIR` only. Without `--to` they are listed as not restored, and nothing is written to `/etc`.
+- `.age` archives need `--identity` (an age identity file or an SSH private key) or `--passphrase-file`.
+- Legacy `.tar.gz` archives restore as before, with overlaid images.
+
+Prints a summary: `restored: archives=N db=true images=N removed=N`.
 
 ---
 

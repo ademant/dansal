@@ -64,11 +64,12 @@
       <form id="inv-pw-form">
         <div class="invite-field">
           <label for="inv-password">{{$.Strings.T "invite_password"}}</label>
-          <input id="inv-password" type="password" autocomplete="new-password" minlength="8">
+          <input id="inv-password" type="password" autocomplete="new-password" {{template "password-attrs" $}} aria-describedby="pw-hint">
+          {{template "password-rules" $}}
         </div>
         <div class="invite-field">
           <label for="inv-password-confirm">{{$.Strings.T "invite_password_confirm"}}</label>
-          <input id="inv-password-confirm" type="password" autocomplete="new-password" minlength="8">
+          <input id="inv-password-confirm" type="password" autocomplete="new-password" {{template "password-attrs" $}}>
         </div>
         <button type="submit" class="btn-primary">{{$.Strings.T "invite_submit_password"}}</button>
       </form>

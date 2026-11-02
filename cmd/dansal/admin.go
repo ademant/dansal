@@ -583,6 +583,13 @@ func adminCreateUser(req adminRequest) adminResponse {
 	if !validateRole(role) {
 		return adminResponse{OK: false, Error: "invalid role: use admin, user, or publisher"}
 	}
+	if req.Password != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := validatePassword(ctx, req.Password); err != nil {
+			return adminResponse{OK: false, Error: err.Error()}
+		}
+	}
 	passwordHash, err := hashPassword(req.Password)
 	if err != nil {
 		return adminResponse{OK: false, Error: "internal error"}
@@ -622,8 +629,8 @@ func adminSetPassword(req adminRequest) adminResponse {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if isPasswordPwned(ctx, req.Password) {
-		return adminResponse{OK: false, Error: "Password has appeared in a data breach; choose a different one"}
+	if err := validatePassword(ctx, req.Password); err != nil {
+		return adminResponse{OK: false, Error: err.Error()}
 	}
 	passwordHash, err := hashPassword(req.Password)
 	if err != nil {

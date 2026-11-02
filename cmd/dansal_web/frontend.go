@@ -25,6 +25,8 @@ type webContextKey int
 const ctxDashboardAttention webContextKey = 1
 
 type TemplateData struct {
+	// PasswordPolicy drives the password hints and minlength/maxlength (#1739).
+	PasswordPolicy PasswordPolicy
 	// PublishFlash (#1413): one-time warning after publishing events with an
 	// unusual date, read from ?pubmsg= for logged-in users; see base.html.
 	PublishFlash           []PublishedUnusualEvent
@@ -215,23 +217,24 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 	}
 
 	return TemplateData{
-		PublishFlash: publishFlash,
-		Title:        title,
-		Domain:       cfg.Domain,
-		SiteName:     siteName,
-		User:         user,
-		Strings:      strs,
-		LangCode:     lang,
-		Languages:    i18n.Options(lang),
-		Contact:      contact,
-		ImpressumURL: impressumURL,
-		PrivacyURL:   privacyURL,
-		TermsURL:     termsURL,
-		Data:         data,
-		BannerHeight: bannerHeight,
-		BannerSrcset: bannerSrcsetVal,
-		LogoHeight:   logoHeight,
-		DarkMode:     cfg.DarkMode,
+		PasswordPolicy: currentPasswordPolicy(),
+		PublishFlash:   publishFlash,
+		Title:          title,
+		Domain:         cfg.Domain,
+		SiteName:       siteName,
+		User:           user,
+		Strings:        strs,
+		LangCode:       lang,
+		Languages:      i18n.Options(lang),
+		Contact:        contact,
+		ImpressumURL:   impressumURL,
+		PrivacyURL:     privacyURL,
+		TermsURL:       termsURL,
+		Data:           data,
+		BannerHeight:   bannerHeight,
+		BannerSrcset:   bannerSrcsetVal,
+		LogoHeight:     logoHeight,
+		DarkMode:       cfg.DarkMode,
 		TimeFormat: func() string {
 			if tf := siteCfg.TimeFormatSite(); tf != "" {
 				return tf

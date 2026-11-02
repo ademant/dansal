@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -3661,28 +3662,55 @@ func (c *DansalClient) MatrixLogin(ctx context.Context, token, homeserver, usern
 
 // DansalInfo mirrors the ServiceInfo struct from the dansal API.
 type DansalInfo struct {
-	Service                  string `json:"service"`
-	Version                  string `json:"version"`
-	BuildTime                string `json:"build_time"`
-	TotalEvents              int    `json:"total_events"`
-	PublishedEvents          int    `json:"published_events"`
-	UpcomingEvents           int    `json:"upcoming_events"`
-	TotalUsers               int    `json:"total_users"`
-	BoardEntries             int    `json:"board_entries"`
-	TotalOrganizations       int    `json:"total_organizations"`
-	TotalLocations           int    `json:"total_locations"`
-	DBSizeBytes              int64  `json:"db_size_bytes"`
-	ImagesSizeBytes          int64  `json:"images_size_bytes"`
-	SelfRegistrationEnabled  bool   `json:"self_registration_enabled"`
-	TelegramChannelAvailable bool   `json:"telegram_channel_available"`
+	Service                  string         `json:"service"`
+	Version                  string         `json:"version"`
+	BuildTime                string         `json:"build_time"`
+	TotalEvents              int            `json:"total_events"`
+	PublishedEvents          int            `json:"published_events"`
+	UpcomingEvents           int            `json:"upcoming_events"`
+	TotalUsers               int            `json:"total_users"`
+	BoardEntries             int            `json:"board_entries"`
+	TotalOrganizations       int            `json:"total_organizations"`
+	TotalLocations           int            `json:"total_locations"`
+	DBSizeBytes              int64          `json:"db_size_bytes"`
+	ImagesSizeBytes          int64          `json:"images_size_bytes"`
+	SelfRegistrationEnabled  bool           `json:"self_registration_enabled"`
+	TelegramChannelAvailable bool           `json:"telegram_channel_available"`
+	PasswordPolicy           PasswordPolicy `json:"password_policy"`
 }
 
 func (c *DansalClient) GetServiceInfo(ctx context.Context) (DansalInfo, error) {
 	return cached(&c.mu, &c.infoCache, 10*time.Minute, func() (DansalInfo, error) {
 		var info DansalInfo
-		return info, c.get(ctx, "/api/v1/info", &info)
+		err := c.get(ctx, "/api/v1/info", &info)
+		if err == nil {
+			setPasswordPolicy(info.PasswordPolicy)
+		}
+		return info, err
 	})
 }
+
+// PasswordPolicy is the instance's password rules (#1739), as /api/v1/info
+// reports them. The forms show these rules before submission.
+type PasswordPolicy struct {
+	MinLength      int  `json:"min_length"`
+	MaxLength      int  `json:"max_length"`
+	RequireClasses int  `json:"require_classes"`
+	CheckBreached  bool `json:"check_breached"`
+}
+
+// passwordPolicyState holds the last policy the API reported. Until the first
+// info fetch it holds the API defaults, so the forms never show an empty rule.
+var passwordPolicyState atomic.Pointer[PasswordPolicy]
+
+func init() {
+	p := PasswordPolicy{MinLength: 8, MaxLength: 128, CheckBreached: true}
+	passwordPolicyState.Store(&p)
+}
+
+func setPasswordPolicy(p PasswordPolicy) { passwordPolicyState.Store(&p) }
+
+func currentPasswordPolicy() PasswordPolicy { return *passwordPolicyState.Load() }
 
 type PendingRegistration struct {
 	ID                  int    `json:"id"`

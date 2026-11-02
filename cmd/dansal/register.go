@@ -494,12 +494,8 @@ func registerPasswordHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "pending_id and verification_token are required", http.StatusBadRequest)
 		return
 	}
-	if len(req.Password) < 8 {
-		writeError(w, "Password must be at least 8 characters", http.StatusUnprocessableEntity)
-		return
-	}
-	if isPasswordPwned(r.Context(), req.Password) {
-		writeError(w, "This password has appeared in a data breach. Please choose a different password.", http.StatusUnprocessableEntity)
+	if err := validatePassword(r.Context(), req.Password); err != nil {
+		writePasswordError(w, err, http.StatusUnprocessableEntity)
 		return
 	}
 

@@ -469,6 +469,12 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Display name is already taken", http.StatusConflict)
 		return
 	}
+	if req.Password != "" {
+		if err := validatePassword(r.Context(), req.Password); err != nil {
+			writePasswordError(w, err, http.StatusUnprocessableEntity)
+			return
+		}
+	}
 	passwordHash, err := hashPassword(req.Password)
 	if err != nil {
 		writeInternalError(w, err)

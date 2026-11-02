@@ -5,16 +5,24 @@ StartLimitIntervalSec=60
 StartLimitBurst=5
 
 [Service]
-Type=simple
+# Type=notify: the API reports READY=1 once it listens, and pings the watchdog
+# only while the database pool can serve a query (#1742). A hung pool ends in
+# a restart after WatchdogSec. GOTRACEBACK=all makes the watchdog's SIGABRT
+# dump every goroutine to the journal.
+Type=notify
+NotifyAccess=main
 User=dansal
 Group=dansal
 SyslogIdentifier=dansal@%i
 ExecStartPre=/usr/lib/dansal/dansal_preflight /etc/dansal/%i/config.yaml
 ExecStart=/usr/lib/dansal/%i/dansal --config /etc/dansal/%i/config.yaml
 ExecReload=/bin/kill -HUP $MAINPID
-Restart=on-failure
+Restart=always
 RestartSec=5
+TimeoutStartSec=300
 TimeoutStopSec=35
+WatchdogSec=120
+Environment=GOTRACEBACK=all
 
 RuntimeDirectory=dansal/%i
 RuntimeDirectoryMode=0750

@@ -31,6 +31,24 @@ func (s I18nStrings) TF(key string, args ...any) string {
 	return fmt.Sprintf(s.T(key), args...)
 }
 
+// TN returns the singular form key+"_one" when n is 1 and the language defines
+// one, otherwise the plural form under key itself. The plural form stays the
+// base key so existing strings need no rename.
+func (s I18nStrings) TN(key string, n int) string {
+	if n == 1 {
+		if v, ok := s[key+"_one"]; ok {
+			return v
+		}
+	}
+	return s.T(key)
+}
+
+// TNF is TN followed by fmt.Sprintf, for count-bearing strings such as
+// "%d Eintrag" / "%d Einträge".
+func (s I18nStrings) TNF(key string, n int, args ...any) string {
+	return fmt.Sprintf(s.TN(key, n), args...)
+}
+
 type LangOption struct {
 	Code   string
 	Flag   string

@@ -1769,14 +1769,17 @@ func boardPageTitle(strs I18nStrings, posts []ContactPost) string {
 			key = "board_page_title_lostfound"
 		}
 	}
-	return strs.TF(key, len(posts))
+	return strs.TNF(key, len(posts), len(posts))
 }
 
-// boardMetaDesc builds a meta description for /board from the top events
-// by post count (up to 3 event names + date), truncated to metaDescMaxLen.
-func boardMetaDesc(posts []ContactPost, lang string) string {
+// boardMetaDesc builds a meta description for /board: a fixed lead saying what
+// the board is, then the top events by post count (up to 3 names + dates),
+// truncated to metaDescMaxLen. With no posts it is just the lead, so the page
+// never gets an empty description (#1741).
+func boardMetaDesc(posts []ContactPost, strs I18nStrings, lang string) string {
+	lead := strs.T("board_meta_lead")
 	if len(posts) == 0 {
-		return ""
+		return lead
 	}
 	type evGroup struct {
 		title string
@@ -1817,7 +1820,10 @@ func boardMetaDesc(posts []ContactPost, lang string) string {
 	if more := len(order) - 3; more > 0 {
 		desc += " +" + strconv.Itoa(more)
 	}
-	return truncate(desc, metaDescMaxLen)
+	if desc == "" {
+		return lead
+	}
+	return truncate(lead+" "+desc, metaDescMaxLen)
 }
 
 type BoardData struct {
@@ -1938,7 +1944,7 @@ func boardHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			RenewDone:  q.Get("renewed") == "1",
 		}
 		td := tmplData(r, cfg, i18n, title, data)
-		td.MetaDescription = boardMetaDesc(allPosts, i18n.detectLang(r))
+		td.MetaDescription = boardMetaDesc(allPosts, strs, i18n.detectLang(r))
 		renderTemplate(w, tmpls.board, td)
 	}
 }

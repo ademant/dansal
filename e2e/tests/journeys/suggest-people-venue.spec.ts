@@ -50,7 +50,14 @@ test("help buttons and the musician list with status chips", async ({ browser })
   const fresh = `E2E New Band ${Date.now()}`;
   const input = page.locator("#sg-musicians");
   await input.fill(`${known!.toLowerCase()}, ${fresh}`);
+  // #1757: the lookup fires on blur. Wait for its response so a slow server
+  // shows as a slow response, not as a chip that never gets its class.
+  const lookup = page.waitForResponse(
+    (r) => r.request().method() === "GET" && new URL(r.url()).pathname === "/search/people",
+    { timeout: 30_000 }
+  );
   await input.press("Tab");
+  expect((await lookup).status(), "/search/people response").toBe(200);
   const chips = page.locator("#sg-musician-chips .musician-chip");
   await expect(chips).toHaveCount(2);
   await expect(chips.nth(0)).toHaveClass(/is-known/);

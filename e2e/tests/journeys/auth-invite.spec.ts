@@ -71,7 +71,16 @@ test.describe("Invitation-link registration", () => {
       await invitePage.fill("#inv-email", email);
       await invitePage.fill("#inv-password", password);
       await invitePage.fill("#inv-password-confirm", password);
+      // #1757: wait for the redeem response itself, not a fixed UI time. A slow
+      // API (pool queueing, #1752) then shows as a slow response, and a failed
+      // redeem as a non-200 status with its message, not as a URL timeout.
+      const redeemed = invitePage.waitForResponse(
+        (r) => r.request().method() === "POST" && new URL(r.url()).pathname === `/invites/${invite.token}/password`,
+        { timeout: 30_000 }
+      );
       await invitePage.locator("#inv-pw-form button[type=submit]").click();
+      const redeemResp = await redeemed;
+      expect(redeemResp.status(), `redeem response: ${await redeemResp.text()}`).toBe(200);
 
       // The page shows a success message, then JS navigates after ~1.2s.
       await invitePage.waitForURL((url) => url.pathname === "/dashboard", { timeout: 10_000 });

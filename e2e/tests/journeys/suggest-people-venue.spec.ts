@@ -1,6 +1,7 @@
 import { test, expect } from "../../helpers/fixtures";
 import type { Browser, Page } from "@playwright/test";
 import { randomFutureDate, isoDate, EVENT_DATE_MIN_DAYS, EVENT_DATE_MAX_DAYS } from "../../fixtures/data";
+import { wizGo, wizNext } from "../../helpers/nav";
 
 // Suggest wizard as an anonymous visitor (nothing is submitted, so no review
 // queue clutter):
@@ -99,10 +100,10 @@ test("venue picker: known venue chip, new-venue block with address warning", asy
 
   // Step 1 → 3 (title + a future date are needed to move on).
   await page.fill("#wiz-title", `E2E venue picker ${Date.now()}`);
-  await page.locator("#wiz-next").click();
+  await wizNext(page);
   const d = isoDate(randomFutureDate(EVENT_DATE_MIN_DAYS, EVENT_DATE_MAX_DAYS));
   await page.evaluate((iso) => (window as any).sgDateApply(iso, iso), d);
-  await page.locator("#wiz-next").click();
+  await wizNext(page);
   await expect(page.locator('.wiz-step[data-step="3"]')).toBeVisible();
 
   const hits = await (await page.request.get(`/search/locations?q=Testville`)).json();
@@ -125,14 +126,22 @@ test("venue picker: known venue chip, new-venue block with address warning", asy
   await name.fill("76227 Karlsruhe-Durlach, Pfinztalstraße 9");
   await expect(page.locator("#sg-venue-name-note")).toBeVisible();
 
-  // Name + town are required for a new venue.
-  await page.locator("#wiz-next").click();
+  // Name + town are required for a new venue. Navigation is not gated any
+  // more (#1666): Next moves on, and the send button is what waits for the
+  // required steps. The venue error text is only set by the send-time check
+  // (sgVenueValid), which a disabled send button never reaches. So the
+  // check here is: the send button is disabled, and the error is not shown.
+  await wizNext(page);
+  await expect(page.locator('.wiz-step[data-step="4"]')).toBeVisible();
+  await expect(page.locator('#wiz-form button[type="submit"]')).toBeDisabled();
+  await wizGo(page, 3);
   await expect(page.locator('.wiz-step[data-step="3"]')).toBeVisible();
-  await expect(page.locator("#sg-venue-err")).toBeVisible();
+  await expect(page.locator("#sg-venue-new")).toBeVisible();
+  await expect(page.locator("#sg-venue-err")).toBeHidden();
 
   await name.fill("Karlsburg Durlach");
   await expect(page.locator("#sg-venue-name-note")).toBeHidden();
   await page.fill("#sg-town", "Karlsruhe");
-  await page.locator("#wiz-next").click();
+  await wizNext(page);
   await expect(page.locator('.wiz-step[data-step="4"]')).toBeVisible();
 });

@@ -37,7 +37,7 @@
  * single project, when iterating on this spec.
  */
 import { test, expect } from "@playwright/test";
-import { isPhone } from "../../helpers/nav";
+import { isPhone, wizNext } from "../../helpers/nav";
 
 const WEB_BASE = process.env.BASE_URL ?? "http://localhost:8080";
 
@@ -113,7 +113,7 @@ test("import preview: arrows, prefilled date and date field all render", async (
     // ── #1389/#1390: the prefilled date is visible ─────────────────────
     // The date row lives on wizard step 2; only step 1 is visible on load,
     // so advance before touching anything in it.
-    await page.locator("#wiz-next").click();
+    await wizNext(page);
     await page.locator("#sg-date-text").waitFor({ state: "visible" });
 
     // Ground truth is the server-written hidden input; the button and the new

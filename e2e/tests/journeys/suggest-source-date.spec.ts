@@ -1,5 +1,6 @@
 import { test, expect } from "../../helpers/fixtures";
 import { randomFutureDate, isoDate, EVENT_DATE_MIN_DAYS, EVENT_DATE_MAX_DAYS } from "../../fixtures/data";
+import { wizNext } from "../../helpers/nav";
 
 // #1417: the suggest wizard keeps the date the imported source names and
 // warns when the typed date moves away from it, with a one-click fix.
@@ -37,7 +38,7 @@ test("import: editing the date away from the source warns; 'use source date' fix
   await expect(page.locator("#sg-date-from")).toHaveValue(day);
 
   // To step 2, move the date one week later.
-  await page.locator("#wiz-next").click();
+  await wizNext(page);
   const later = new Date(day + "T12:00:00");
   later.setDate(later.getDate() + 7);
   const laterIso = isoDate(later);

@@ -53,6 +53,23 @@ export function isPhone(page: Page): boolean {
   return (page.viewportSize()?.width ?? 1024) <= 640;
 }
 
+// wizGo moves the suggest wizard to step n with the control the viewport
+// shows. The Next/Back buttons were removed (#1666, c73865b5, and a Go test
+// asserts they stay gone): desktop uses the progress arrows, phones the step
+// tabs. #1747: the tests clicked #wiz-next and waited 90 s for it.
+export async function wizGo(page: Page, step: number): Promise<void> {
+  const sel = isPhone(page)
+    ? `#wiz-mtabs .mtab[data-step="${step}"]`
+    : `#wiz-arrows .wiz-arrow[data-step="${step}"]`;
+  await page.locator(sel).click();
+}
+
+// wizNext moves the suggest wizard to the step after the one on screen.
+export async function wizNext(page: Page): Promise<void> {
+  const current = await page.locator(".wiz-step:not([hidden])").first().getAttribute("data-step");
+  await wizGo(page, Number(current) + 1);
+}
+
 // expectEventListVisible asserts whichever of the two mutually-exclusive
 // event-list containers the current viewport actually renders is visible
 // (#event-table on desktop, #event-tiles below 640px — see the .table-wrap/

@@ -32,6 +32,7 @@ import { test, expect } from "@playwright/test";
 import { clearMailbox, waitForManageToken } from "../../helpers/mailbox";
 import { skipWithoutMailbox } from "../../helpers/mailguard";
 import { getTokenFromCookie } from "../../helpers/seed";
+import { wizNext } from "../../helpers/nav";
 
 const WEB_BASE = process.env.BASE_URL ?? "http://localhost:8080";
 const API_BASE = process.env.API_URL ?? "http://localhost:8000";
@@ -85,7 +86,7 @@ async function submitWizardOnCurrentPage(
   // Only step 1 has a Next-click guard (title must be non-empty); later steps
   // advance freely.
   for (let i = 0; i < 5; i++) {
-    await page.locator("#wiz-next").click();
+    await wizNext(page);
   }
 
   // Step 6: fill email (required when HintSMTP is true). On the ?next=1 page
@@ -182,7 +183,7 @@ async function submitManageUpdate(
 
   // Navigate to step 4 (description) — 3 Next clicks from step 1
   for (let i = 0; i < 3; i++) {
-    await page.locator("#wiz-next").click();
+    await wizNext(page);
   }
   await page.fill('textarea[name="description"]', description);
   if (contactEmail !== undefined) {
@@ -191,7 +192,7 @@ async function submitManageUpdate(
 
   // Navigate to step 6 — 2 more Next clicks
   for (let i = 0; i < 2; i++) {
-    await page.locator("#wiz-next").click();
+    await wizNext(page);
   }
 
   // Submit
@@ -280,7 +281,7 @@ test("suggest-wizard: URL fields are full-width and the import URL has a label",
   await page.click('.tab-btn[data-args=\'["@this","manual"]\']');
   await page.fill("#wiz-title", "E2E URL width probe");
   for (let i = 0; i < 3; i++) {
-    await page.click("#wiz-next");
+    await wizNext(page);
   }
   const website = page.locator('.wiz-step[data-step="4"] input[name="url"][type="url"]');
   await expect(website).toBeVisible();

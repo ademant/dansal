@@ -6,6 +6,7 @@
  */
 import { test, expect } from "../../helpers/fixtures";
 import { getTokenFromCookie } from "../../helpers/seed";
+import { isPhone } from "../../helpers/nav";
 
 const API_BASE = process.env.API_URL ?? "http://localhost:8000";
 
@@ -38,6 +39,11 @@ test.describe("Musician media links (#1360)", () => {
     ]);
 
     await page.goto(`/musicians/${id}`);
+    // #1748: the links sit in the Links (meta) tab; on phones that tab is not
+    // the default, so open it first.
+    if (isPhone(page)) {
+      await page.locator('.mtab[data-tab="meta"]').click();
+    }
     const section = page.locator(".media-links");
     await expect(section).toBeVisible();
     await expect(section.locator(".media-notice")).toBeVisible();

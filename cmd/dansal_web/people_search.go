@@ -5,8 +5,10 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 	"unicode"
 
+	"github.com/ademant/dansal/internal/logging"
 	"golang.org/x/text/unicode/norm"
 )
 
@@ -268,16 +270,26 @@ func peopleSearchHandler(client *DansalClient) http.HandlerFunc {
 			writeJSONError(w, r, http.StatusBadRequest, "1–20 name parameters required")
 			return
 		}
+		// #1756: per-call timing at debug level. A cached list returns in
+		// microseconds, a call that queued behind the API's pool does not.
+		started := time.Now()
 		musicians, err := client.GetMusicians(r.Context())
+		tMusicians := time.Since(started)
 		if err != nil {
+			logging.Debugf("people search: kind=%s names=%d musicians=%s outcome=error", kind, len(names), tMusicians)
 			writeJSONError(w, r, http.StatusBadGateway, "could not load musicians")
 			return
 		}
+		instructorsStart := time.Now()
 		instructors, err := client.GetInstructors(r.Context())
+		tInstructors := time.Since(instructorsStart)
 		if err != nil {
+			logging.Debugf("people search: kind=%s names=%d musicians=%s instructors=%s outcome=error", kind, len(names), tMusicians, tInstructors)
 			writeJSONError(w, r, http.StatusBadGateway, "could not load instructors")
 			return
 		}
+		logging.Debugf("people search: kind=%s names=%d musicians=%s instructors=%s total=%s outcome=ok status=200",
+			kind, len(names), tMusicians, tInstructors, time.Since(started))
 		writeJSONResponse(w, http.StatusOK, matchPeople(names, kind, peopleEntriesFrom(musicians, instructors)))
 	}
 }

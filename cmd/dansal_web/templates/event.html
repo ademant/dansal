@@ -1305,7 +1305,9 @@
   .evt-phone-only{display:block}
   .evt-wl-link{display:flex}
   .evt-header [data-fn="historyBack"]{display:none}
-  .evt-header > [data-wl-star]{display:none}
+  /* #1749: only the header star; the Info-tab watchlist link is also a
+     [data-wl-star] child of .evt-header and must stay visible on phones. */
+  .evt-header > .btn-icon[data-wl-star]{display:none}
   #evt-tabs:not([data-mtab="general"]) .evt-hero,
   #evt-tabs:not([data-mtab="general"]) .evt-header-meta{display:none}
   #evt-tabs:not([data-mtab="general"]) .evt-header h1{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}

@@ -32,8 +32,11 @@ export async function clickEventInTable(
   // same rows as .event-tile <a> cards instead (buildTile() in index.html —
   // shared by both #event-tiles in "all" mode and the mobile week view), so
   // a desktop-only tr.event-row selector never finds anything there.
-  const tile = page.locator(`.event-tile:has-text("${title}")`).first();
-  if (await tile.isVisible().catch(() => false)) {
+  // Pick the container by viewport, then wait for it. A plain isVisible()
+  // check runs before the tiles are rendered and falls through to the
+  // desktop table on phones (#1748, discover.spec.ts:53).
+  if (isPhone(page)) {
+    const tile = page.locator(`.event-tile:has-text("${title}")`).first();
     await tile.click();
   } else {
     const row = page.locator(`tr.event-row:has-text("${title}")`);
@@ -43,6 +46,13 @@ export async function clickEventInTable(
   await expect(page.locator("h1")).toContainText(title);
 }
 
+// isPhone reports whether the test viewport is phone-sized (<= 640px, the
+// breakpoint where index.html swaps the table for tiles and the event and
+// musician pages move content into tabs).
+export function isPhone(page: Page): boolean {
+  return (page.viewportSize()?.width ?? 1024) <= 640;
+}
+
 // expectEventListVisible asserts whichever of the two mutually-exclusive
 // event-list containers the current viewport actually renders is visible
 // (#event-table on desktop, #event-tiles below 640px — see the .table-wrap/
@@ -50,12 +60,9 @@ export async function clickEventInTable(
 // only one is ever unhidden, so a plain #event-table assertion always fails
 // on mobile.
 export async function expectEventListVisible(page: Page): Promise<void> {
-  const tiles = page.locator("#event-tiles");
-  if (await tiles.isVisible().catch(() => false)) {
-    await expect(tiles).toBeVisible();
-  } else {
-    await expect(page.locator("#event-table")).toBeVisible();
-  }
+  // Viewport, not isVisible(): the tiles may not be rendered yet (#1748).
+  const target = isPhone(page) ? "#event-tiles" : "#event-table";
+  await expect(page.locator(target)).toBeVisible();
 }
 
 export async function searchFilter(

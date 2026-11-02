@@ -103,7 +103,14 @@ test.describe("Watchlist (#1554)", () => {
     const second = await other.newPage();
     await second.goto("/watchlist");
     await second.locator("#wl-key-in").fill(key);
+    // #1749 (desktop row miss): the list is filled by POST /watchlist/events
+    // after the key is loaded. Wait for that response, not a fixed UI timeout.
+    const listed = second.waitForResponse(
+      (r) => r.request().method() === "POST" && new URL(r.url()).pathname === "/watchlist/events",
+      { timeout: 30_000 }
+    );
     await second.locator(".wl-server button").nth(1).click();
+    expect((await listed).status(), "/watchlist/events response").toBe(200);
     await expect(
       second.locator("#wl-list li.wl-row").filter({ hasText: seed.eventTitles[0] })
     ).toBeVisible();

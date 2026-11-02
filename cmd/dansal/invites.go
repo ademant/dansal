@@ -450,7 +450,11 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// #1756: phase timings at debug level. Begin waits for a pool connection,
+	// so tBegin shows pool contention separately from the work done under it.
+	started := time.Now()
 	tx, err := db.Begin()
+	tBegin := time.Since(started)
 	if err != nil {
 		writeError(w, "Internal server error", http.StatusInternalServerError)
 		return
@@ -466,16 +470,20 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 		emailVal = req.Email
 	}
 	if isDisplayNameTaken(req.DisplayName, 0) {
+		logging.Debugf("invite redeem: id=%d begin=%s outcome=display-name-taken", invite.ID, tBegin)
 		writeError(w, "Display name is already taken", http.StatusConflict)
 		return
 	}
 	if req.Password != "" {
 		if err := validatePassword(r.Context(), req.Password); err != nil {
+			logging.Debugf("invite redeem: id=%d begin=%s outcome=password-rejected", invite.ID, tBegin)
 			writePasswordError(w, err, http.StatusUnprocessableEntity)
 			return
 		}
 	}
+	hashStart := time.Now()
 	passwordHash, err := hashPassword(req.Password)
+	tHash := time.Since(hashStart)
 	if err != nil {
 		writeInternalError(w, err)
 		return
@@ -496,10 +504,13 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 
 	tx.Exec("UPDATE invite_links SET used_at=? WHERE id=?", time.Now().UTC().Unix(), invite.ID)
 
+	commitStart := time.Now()
 	if err := tx.Commit(); err != nil {
 		writeError(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
+	logging.Debugf("invite redeem: id=%d begin=%s hash=%s commit=%s total=%s outcome=created status=201",
+		invite.ID, tBegin, tHash, time.Since(commitStart), time.Since(started))
 
 	logging.Infof("invite: new user %q (role=%s) registered via invite link id=%d", req.Email, invite.Role, invite.ID)
 

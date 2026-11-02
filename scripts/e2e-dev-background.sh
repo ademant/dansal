@@ -148,7 +148,10 @@ if [[ "${1:-}" == "--worker" ]]; then
   shift
   cd "$root/e2e"
 
-  export BASE_URL=https://dev.balfolk.jetzt
+  # The local web frontend. dev.balfolk.jetzt is a different server (its DNS
+  # does not point at this machine), so a suite aimed at it cannot log in with
+  # a magic link minted here. Set BASE_URL to override.
+  export BASE_URL="${BASE_URL:-http://127.0.0.1:8080}"
   export API_URL=http://127.0.0.1:8000
   export ADMIN_CLI=/usr/lib/dansal/dev/dansal_admin
   export ADMIN_SOCKET=/var/lib/dansal/dev/dansal.sock

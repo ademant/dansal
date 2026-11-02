@@ -3349,6 +3349,7 @@ type AdminOrgDashboardData struct {
 	FilterLocationNames []string
 	TotalCount          int
 	IsMember            bool   // admin or member of this org
+	IsAdmin             bool   // merge is admin-only (org members cannot merge)
 	NewEventOrgID       int    // org to pre-assign "new event" to
 	NewEventOrgName     string // org name shown on the button when not a member
 	OrgLocations        []Location
@@ -3578,6 +3579,7 @@ func adminOrgDashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 			FilterLocationNames: filterLocationNames,
 			TotalCount:          total,
 			IsMember:            isMember,
+			IsAdmin:             su.Role == "admin",
 			NewEventOrgID:       newEventOrgID,
 			NewEventOrgName:     newEventOrgName,
 			OrgLocations:        orgLocations,

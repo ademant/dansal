@@ -1053,6 +1053,20 @@ func adminDeleteAllEvents(req adminRequest) adminResponse {
 }
 
 func adminExportLocationsGeoJSON(req adminRequest) adminResponse {
+	// Organisation assignments in one query, read before the locations result
+	// set opens. Querying per location inside that loop needed a second pool
+	// connection for every row, which is the deadlock in #1736.
+	orgsByLocation := map[int][]int{}
+	if orgRows, err := db.Query("SELECT location_id, organization_id FROM location_organizations ORDER BY location_id, organization_id"); err == nil {
+		for orgRows.Next() {
+			var lid, oid int
+			if orgRows.Scan(&lid, &oid) == nil {
+				orgsByLocation[lid] = append(orgsByLocation[lid], oid)
+			}
+		}
+		orgRows.Close()
+	}
+
 	rows, err := db.Query(`SELECT id, location, COALESCE(short_name,''), COALESCE(address,''),
 		COALESCE(zipcode,''), COALESCE(town,''), COALESCE(country,''),
 		COALESCE(country_code,''), COALESCE(region,''), 
@@ -1097,16 +1111,7 @@ func adminExportLocationsGeoJSON(req adminRequest) adminResponse {
 			loc.UpdatedAt = int64(updatedAt.Int64)
 		}
 
-		// Get organization assignments for deduplication
-		orgRows, _ := db.Query("SELECT organization_id FROM location_organizations WHERE location_id=? ORDER BY organization_id", loc.ID)
-		if orgRows != nil {
-			for orgRows.Next() {
-				var oid int
-				orgRows.Scan(&oid)
-				loc.OrganizationIDs = append(loc.OrganizationIDs, oid)
-			}
-			orgRows.Close()
-		}
+		loc.OrganizationIDs = orgsByLocation[loc.ID]
 
 		features = append(features, locationGeoJSONFeature(loc))
 	}

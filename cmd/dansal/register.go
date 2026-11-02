@@ -899,12 +899,23 @@ func notifyApprovers(pendingID int) {
 			orgID.Int64,
 		)
 		if err == nil {
-			defer orgRows.Close()
+			// Collect the members before notifying: notifyUser may query the
+			// database, and it must not run while this result set holds a
+			// connection (#1736).
+			type member struct {
+				email, chatID, matrixID string
+				matrixVerified          bool
+			}
+			var members []member
 			for orgRows.Next() {
-				var email, chatID, matrixID string
-				var matrixVerified bool
-				orgRows.Scan(&email, &chatID, &matrixID, &matrixVerified)
-				notifyUser(chatID, matrixID, matrixVerified, email, "New registration request for your organisation", msg)
+				var m member
+				if orgRows.Scan(&m.email, &m.chatID, &m.matrixID, &m.matrixVerified) == nil {
+					members = append(members, m)
+				}
+			}
+			orgRows.Close()
+			for _, m := range members {
+				notifyUser(m.chatID, m.matrixID, m.matrixVerified, m.email, "New registration request for your organisation", msg)
 			}
 		}
 	}

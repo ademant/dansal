@@ -222,6 +222,17 @@ func tileProxyHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			return
 		}
 
+		// #1755: one debug line per tile, so a slow map can be told apart as
+		// a cache miss (slow upstream) or a cache hit. cache is "error" unless
+		// a path below sets it.
+		started := time.Now()
+		cache := "error"
+		var upstream time.Duration
+		defer func() {
+			logging.Debugf("tiles: %s z=%d x=%d y=%d%s cache=%s upstream_ms=%d total_ms=%d",
+				scheme, z, x, y, retina, cache, upstream.Milliseconds(), time.Since(started).Milliseconds())
+		}()
+
 		cacheDir := cfg.TileCacheDir
 		if cacheDir == "" {
 			cacheDir = defaultTileCacheDir(cfg)
@@ -244,6 +255,7 @@ func tileProxyHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		if wantsAVIF {
 			if fi, err := os.Stat(avifPath); err == nil && time.Since(fi.ModTime()) < tileCacheMaxAge {
 				if data, err := os.ReadFile(avifPath); err == nil {
+					cache = "hit"
 					writeTileResponse(w, "image/avif", data)
 					return
 				}
@@ -251,12 +263,15 @@ func tileProxyHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		}
 		if fi, err := os.Stat(pngPath); err == nil && time.Since(fi.ModTime()) < tileCacheMaxAge {
 			if data, err := os.ReadFile(pngPath); err == nil {
+				cache = "hit"
 				writeTileResponse(w, "image/png", data)
 				return
 			}
 		}
 
 		upstreamURL := fmt.Sprintf(tpl, z, x, y)
+		cache = "miss"
+		upstreamStart := time.Now()
 
 		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 		defer cancel()
@@ -278,6 +293,7 @@ func tileProxyHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			return
 		}
 		data, err := io.ReadAll(io.LimitReader(resp.Body, tileCacheMaxBytes))
+		upstream = time.Since(upstreamStart)
 		if err != nil {
 			http.Error(w, "tile fetch error", http.StatusBadGateway)
 			return

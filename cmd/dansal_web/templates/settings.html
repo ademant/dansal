@@ -242,13 +242,15 @@
       {{end}}
       <label for="new_password">{{$.Strings.T "settings_password_new"}}</label>
       {{if .User.HasPassword}}
-      <input id="new_password" type="password" name="new_password" autocomplete="new-password" minlength="8">
+      <input id="new_password" type="password" name="new_password" autocomplete="new-password" {{template "password-attrs" $}} aria-describedby="pw-hint">
+        {{template "password-rules" $}}
         {{if or .Passkeys .OIDCIdentities}}
         <p class="hint">{{$.Strings.T "settings_password_remove_hint"}}</p>
         {{end}}
       {{else}}
-      <input id="new_password" type="password" name="new_password" required autocomplete="new-password" minlength="8">
-      <p class="hint">{{$.Strings.T "settings_password_set_hint"}}</p>
+      <input id="new_password" type="password" name="new_password" required autocomplete="new-password" {{template "password-attrs" $}} aria-describedby="pw-hint">
+      <p class="hint" id="pw-hint">{{$.Strings.T "settings_password_set_hint"}}</p>
+      {{template "password-rules" $}}
       {{end}}
       <div class="form-actions">
         <button type="submit">{{$.Strings.T "settings_password_save_btn"}}</button>

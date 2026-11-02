@@ -640,6 +640,8 @@ var DANSAL_TILE_TOKEN="{{$.TileToken}}";
 {{/* #1421: what follows an admin form's save-error text — the API's own
      validation message (English, as sent) and the error reference to quote.
      Called with (dict "D" .ErrorDetail "R" .ErrorRef "S" $.Strings). */}}
+{{define "password-attrs"}}minlength="{{.PasswordPolicy.MinLength}}"{{with .PasswordPolicy.MaxLength}} maxlength="{{.}}"{{end}}{{end}}
+{{define "password-rules"}}<p class="hint" id="pw-hint">{{.Strings.TF "pw_hint_min" .PasswordPolicy.MinLength}}{{with .PasswordPolicy.MaxLength}} {{$.Strings.TF "pw_hint_max" .}}{{end}}{{if .PasswordPolicy.RequireClasses}} {{.Strings.TF "pw_hint_classes" .PasswordPolicy.RequireClasses}}{{end}}{{if .PasswordPolicy.CheckBreached}} {{.Strings.T "pw_hint_breached"}}{{end}}</p>{{end}}
 {{define "save-error-extra"}}{{with .D}} {{.}}{{end}}{{with .R}} <small class="form-error-ref">({{$.S.T "admin_save_error_ref"}}: {{.}})</small>{{end}}{{end}}
 {{define "event-attr-icons"}}
 {{- $ev := .Event}}{{$s := .Strings -}}

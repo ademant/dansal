@@ -23,6 +23,8 @@ type ServiceInfo struct {
 	ImagesSizeBytes          int64  `json:"images_size_bytes"`
 	SelfRegistrationEnabled  bool   `json:"self_registration_enabled"`
 	TelegramChannelAvailable bool   `json:"telegram_channel_available"`
+	// PasswordPolicy lets the web forms show the rules before submission (#1739).
+	PasswordPolicy PasswordConfig `json:"password_policy"`
 }
 
 // GET /api/v1/info
@@ -77,6 +79,7 @@ func getInfo(w http.ResponseWriter, r *http.Request) {
 		ImagesSizeBytes:          imagesSize,
 		SelfRegistrationEnabled:  selfRegEnabled(),
 		TelegramChannelAvailable: config.Server.TelegramBotToken != "",
+		PasswordPolicy:           activePasswordPolicy(),
 	}
 
 	writeJSON(w, info)

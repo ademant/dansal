@@ -163,7 +163,7 @@ GET /api/v1/info
 GET /api/v1/health
 ```
 
-Both are public. `/api/v1/info` returns server version and build metadata. `/api/v1/health` returns 200 OK when the server is running.
+Both are public. `/api/v1/info` returns server version and build metadata. `/api/v1/health` checks the database: it returns 200 with `"db":"ok"` when a pool connection answers `SELECT 1`, and 503 with `"status":"error"` and the reason otherwise. The systemd watchdog uses the same check.
 
 ## Vocabulary
 

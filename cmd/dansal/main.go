@@ -4764,11 +4764,7 @@ func main() {
 	smux.HandleFunc("GET /api/v1/info", getInfo)
 
 	// Health endpoint (public)
-	smux.HandleFunc("GET /api/v1/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Cache-Control", "no-store")
-		fmt.Fprintf(w, `{"status":"ok","version":%q,"time":%q}`+"\n", Version, time.Now().UTC().Format(time.RFC3339))
-	})
+	smux.HandleFunc("GET /api/v1/health", healthHandler)
 
 	// Public key for validating invite-link JWTs (see invite_jwt.go, #769).
 	smux.HandleFunc("GET /.well-known/jwks.json", func(w http.ResponseWriter, r *http.Request) {
@@ -5209,11 +5205,22 @@ func main() {
 		IdleTimeout:       time.Duration(config.Server.IdleTimeoutSecs) * time.Second,
 	}
 
+	ln, err := net.Listen("tcp", listenAddr)
+	if err != nil {
+		log.Fatal(err)
+	}
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 			log.Fatal(err)
 		}
 	}()
+	sdNotify("READY=1")
+
+	watchCtx, stopWatch := context.WithCancel(context.Background())
+	defer stopWatch()
+	if interval := watchdogInterval(); interval > 0 {
+		go runWatchdog(watchCtx, interval/4, dbAlive, sdNotify)
+	}
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
@@ -5225,6 +5232,8 @@ func main() {
 		break
 	}
 	logging.Infof("Shutting down...")
+	sdNotify("STOPPING=1")
+	stopWatch()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

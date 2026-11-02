@@ -191,8 +191,23 @@ type SMTPConfig struct {
 }
 
 type Config struct {
-	Server ServerConfig `yaml:"server"`
-	SMTP   SMTPConfig   `yaml:"smtp,omitempty"`
+	Server   ServerConfig   `yaml:"server"`
+	SMTP     SMTPConfig     `yaml:"smtp,omitempty"`
+	Password PasswordConfig `yaml:"password,omitempty"`
+}
+
+// PasswordConfig holds the password rules (#1739). Defaults are applied before
+// the YAML is read, so a key left out keeps its default and max_length: 0
+// means no limit.
+type PasswordConfig struct {
+	MinLength      int  `yaml:"min_length" json:"min_length"`           // characters (runes)
+	MaxLength      int  `yaml:"max_length" json:"max_length"`           // characters; 0 = no limit
+	RequireClasses int  `yaml:"require_classes" json:"require_classes"` // 0-4 of lower, upper, digit, symbol
+	CheckBreached  bool `yaml:"check_breached" json:"check_breached"`   // HaveIBeenPwned range check
+}
+
+func defaultPasswordConfig() PasswordConfig {
+	return PasswordConfig{MinLength: 8, MaxLength: 128, RequireClasses: 0, CheckBreached: true}
 }
 
 var config *Config
@@ -202,7 +217,7 @@ func loadConfig(filename string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfg := &Config{}
+	cfg := &Config{Password: defaultPasswordConfig()}
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, err
 	}

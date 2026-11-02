@@ -738,12 +738,8 @@ func changeOwnPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.NewPassword) < 8 {
-		writeError(w, "Password must be at least 8 characters", http.StatusBadRequest)
-		return
-	}
-	if isPasswordPwned(r.Context(), req.NewPassword) {
-		writeError(w, "This password has appeared in a data breach. Please choose a different password.", http.StatusBadRequest)
+	if err := validatePassword(r.Context(), req.NewPassword); err != nil {
+		writePasswordError(w, err, http.StatusBadRequest)
 		return
 	}
 

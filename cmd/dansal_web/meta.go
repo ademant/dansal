@@ -24,8 +24,13 @@ func truncate(s string, maxLen int) string {
 		return s
 	}
 	cut := runes[:maxLen]
-	if i := strings.LastIndex(string(cut), " "); i > 0 {
-		cut = cut[:i]
+	// Search the rune slice: a byte offset from strings.LastIndex, used as a
+	// rune index, panics on any multibyte rune before the space (#1740).
+	for i := len(cut) - 1; i > 0; i-- {
+		if cut[i] == ' ' {
+			cut = cut[:i]
+			break
+		}
 	}
 	return string(cut) + "…"
 }

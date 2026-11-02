@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"filippo.io/age"
 	"flag"
 	"fmt"
 	"net"
@@ -11,6 +12,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/ademant/dansal/internal/backuparchive"
 	"github.com/ademant/dansal/internal/backupcrypt"
 	"gopkg.in/yaml.v2"
 )
@@ -38,37 +40,42 @@ func socketFromConfig() string {
 }
 
 type request struct {
-	Cmd                   string `json:"cmd"`
-	Username              string `json:"username,omitempty"`
-	Email                 string `json:"email,omitempty"`
-	NewEmail              string `json:"new_email,omitempty"`
-	Password              string `json:"password,omitempty"`
-	Role                  string `json:"role,omitempty"`
-	OrgID                 int    `json:"org_id,omitempty"`
-	Path                  string `json:"path,omitempty"`
-	Since                 string `json:"since,omitempty"`
-	WipeCredentials       bool   `json:"wipe_credentials,omitempty"`
-	SessionID             int    `json:"session_id,omitempty"`
-	InviteToken           string `json:"invite_token,omitempty"`
-	Telegram              string `json:"telegram,omitempty"`
-	Matrix                string `json:"matrix,omitempty"`
-	SMTPHost              string `json:"smtp_host,omitempty"`
-	SMTPPort              int    `json:"smtp_port,omitempty"`
-	SMTPUsername          string `json:"smtp_username,omitempty"`
-	SMTPFrom              string `json:"smtp_from,omitempty"`
-	SMTPFromName          string `json:"smtp_from_name,omitempty"`
-	SMTPTLS               string `json:"smtp_tls,omitempty"`
-	SMTPTimeoutSecs       int    `json:"smtp_timeout_secs,omitempty"`
-	SMTPTo                string `json:"smtp_to,omitempty"`
-	TelegramBotToken      string `json:"telegram_bot_token,omitempty"`
-	TelegramBotName       string `json:"telegram_bot_name,omitempty"`
-	MatrixHomeserver      string `json:"matrix_homeserver,omitempty"`
-	MatrixAccessToken     string `json:"matrix_access_token,omitempty"`
-	MatrixUsername        string `json:"matrix_username,omitempty"`
-	MatrixPassword        string `json:"matrix_password,omitempty"`
-	HeartbeatIntervalMins int    `json:"heartbeat_interval_mins,omitempty"`
-	EventID               int    `json:"event_id,omitempty"`
-	Timezone              string `json:"timezone,omitempty"`
+	Cmd                   string   `json:"cmd"`
+	Username              string   `json:"username,omitempty"`
+	Email                 string   `json:"email,omitempty"`
+	NewEmail              string   `json:"new_email,omitempty"`
+	Password              string   `json:"password,omitempty"`
+	Role                  string   `json:"role,omitempty"`
+	OrgID                 int      `json:"org_id,omitempty"`
+	Path                  string   `json:"path,omitempty"`
+	Since                 string   `json:"since,omitempty"`
+	Mode                  string   `json:"mode,omitempty"`
+	Passphrase            string   `json:"passphrase,omitempty"`
+	PassphraseFile        bool     `json:"passphrase_file,omitempty"`
+	Paths                 []string `json:"paths,omitempty"`
+	StageDir              string   `json:"stage_dir,omitempty"`
+	WipeCredentials       bool     `json:"wipe_credentials,omitempty"`
+	SessionID             int      `json:"session_id,omitempty"`
+	InviteToken           string   `json:"invite_token,omitempty"`
+	Telegram              string   `json:"telegram,omitempty"`
+	Matrix                string   `json:"matrix,omitempty"`
+	SMTPHost              string   `json:"smtp_host,omitempty"`
+	SMTPPort              int      `json:"smtp_port,omitempty"`
+	SMTPUsername          string   `json:"smtp_username,omitempty"`
+	SMTPFrom              string   `json:"smtp_from,omitempty"`
+	SMTPFromName          string   `json:"smtp_from_name,omitempty"`
+	SMTPTLS               string   `json:"smtp_tls,omitempty"`
+	SMTPTimeoutSecs       int      `json:"smtp_timeout_secs,omitempty"`
+	SMTPTo                string   `json:"smtp_to,omitempty"`
+	TelegramBotToken      string   `json:"telegram_bot_token,omitempty"`
+	TelegramBotName       string   `json:"telegram_bot_name,omitempty"`
+	MatrixHomeserver      string   `json:"matrix_homeserver,omitempty"`
+	MatrixAccessToken     string   `json:"matrix_access_token,omitempty"`
+	MatrixUsername        string   `json:"matrix_username,omitempty"`
+	MatrixPassword        string   `json:"matrix_password,omitempty"`
+	HeartbeatIntervalMins int      `json:"heartbeat_interval_mins,omitempty"`
+	EventID               int      `json:"event_id,omitempty"`
+	Timezone              string   `json:"timezone,omitempty"`
 }
 
 type response struct {
@@ -196,8 +203,6 @@ func main() {
 		cmdVacuum()
 	case "backup":
 		cmdBackup(rest)
-	case "incremental-backup":
-		cmdIncrementalBackup(rest)
 	case "restore":
 		cmdRestore(rest)
 	case "password-backup":
@@ -356,9 +361,8 @@ Timezone:
   timezone-show                                      Show the instance's effective event timezone
   timezone-set --tz IANA_NAME                         Set the instance timezone (applies immediately, no restart)
 
-  backup             [--output PATH]                 Business-data backup (db + images)
-  incremental-backup --since RFC3339 [--output PATH] Backup only files changed since time
-  restore            --input PATH                    Restore from a backup archive
+  backup             [--mode M] [--output DIR]       Backup: full, incremental or cumulative (#1765)
+  restore            --input PATH|DIR [--identity F] Restore an archive or the newest chain
   password-backup    [--output PATH] [--password P]  Encrypted business-data backup (AES-256-GCM)
   password-restore   --input PATH   [--password P]   Decrypt and restore an encrypted backup
   config-backup      [--output PATH] [--password P]  Encrypted config/nginx backup for disaster recovery
@@ -690,59 +694,51 @@ Flags:
 Rebuild the database file to reclaim space freed by deleted rows.
 Equivalent to running VACUUM in SQLite. May take a moment on large databases.`,
 
-	"backup": `Usage: dansal_admin backup [--output PATH]
+	"backup": `Usage: dansal_admin backup [--mode full|incremental|cumulative] [--output DIR]
+                          [--passphrase-file F | --passphrase-prompt]
 
-Create a business-data backup as a .tar.gz archive containing:
-  calendar.db   — consistent SQLite snapshot (via VACUUM INTO)
-  images/       — all uploaded images
+Create a backup archive (#1765). Each archive holds the calendar and web
+databases, the config, nginx and systemd files, and the images.
 
-Does not include config.yaml or any deployment/reproducibility data — see
-config-backup for that. Password hashes and TOTP secrets are stripped
-from the snapshot — use password-backup for a full-recovery backup.
+  full         everything; starts a new chain
+  incremental  images changed since the previous archive of any kind
+  cumulative   images changed since the last full
 
-Flags:
-  --output  Destination file (default: ./dansal-backup-<timestamp>.tar.gz)`,
+Without --mode the mode comes from server.backup_mode (the nightly timer uses
+that). Incremental and cumulative need an earlier full in the same directory.
 
-	"restore": `Usage: dansal_admin restore --input PATH [--wipe-credentials]
-
-Restore from a .tar.gz archive created by backup or incremental-backup.
-
-  calendar.db  — restored via SQLite online backup API (no restart needed)
-  images/      — files extracted into the images directory (overlay, no delete)
-  config.yaml  — restored if present in the archive (older archives only)
-
-By default, any user that already exists live (matched by id, falling back
-to email) keeps their live row exactly as it was — most importantly their
-password hash — even though plain backups have password_hash/totp_secret
-stripped. Only users present in the backup but not live are inserted.
-Pass --wipe-credentials to instead let the backup's data win for existing
-users too (useful when restoring a password-backup archive that has real
-credentials, or for a genuine full rollback).
+Encryption: server.backup_encryption_public_key encrypts every archive to the
+configured recipients. --passphrase-file or --passphrase-prompt encrypts a
+single archive with a passphrase (age passphrase mode). With a public key
+configured, a passphrase needs --passphrase-file.
 
 Flags:
-  --input             Path to the .tar.gz backup archive (required)
-  --wipe-credentials  Overwrite existing users' credentials with the backup's (default: false)`,
+  --mode          full, incremental or cumulative (default: backup_mode)
+  --output        directory for the archive (default: backup_dir)
+  --passphrase-file  passphrase read from this file (first line)
+  --passphrase-prompt  passphrase typed at the prompt`,
+	"restore": `Usage: dansal_admin restore --input PATH|DIR [--identity F] [--passphrase-file F] [--to DIR] [--wipe-credentials]
 
-	"incremental-backup": `Usage: dansal_admin incremental-backup --since RFC3339 [--output PATH]
+Restore a backup (#1765). Given a directory, the newest archive is restored
+with its chain; given a file, that archive and the archives it depends on are
+restored. Chains are applied oldest first: the images end up exactly as they
+were at the last backup.
 
-Create an incremental business-data backup containing:
-  calendar.db   — always included (full snapshot)
-  images/       — only files modified after --since
+  calendar.db     restored via SQLite online backup API (no restart needed)
+  images          extracted; images the final backup no longer has are removed
+  web.db, config, nginx, systemd
+                  written to --to DIR only; without --to they are listed as
+                  not restored, and nothing is written to /etc
 
-Does not include config.yaml — see config-backup for deployment data.
+Encrypted archives (.tar.zst.age) need --identity (age key or SSH private
+key) or --passphrase-file. Legacy archives (.tar.gz) restore as before.
 
 Flags:
-  --since   Include files changed after this time, e.g. 2026-05-01T00:00:00Z (required)
-  --output  Destination file (default: ./dansal-incremental-<timestamp>.tar.gz)`,
-
-	"remove-member": `Usage: dansal_admin remove-member --org-id INT --email STR
-
-Remove a user from an organization.
-
-Flags:
-  --org-id  Organization ID (required)
-  --email   Email address of the user to remove (required)`,
-
+  --input             archive file or directory (required)
+  --identity          age identity file or SSH private key
+  --passphrase-file   passphrase file for passphrase-encrypted archives
+  --to                directory for config, nginx and systemd files
+  --wipe-credentials  overwrite existing users' credentials with the backup's (default: false)`,
 	"password-backup": `Usage: dansal_admin password-backup [--output PATH] [--password STR]
 
 Create a business-data backup (calendar.db + images/, no config.yaml — see
@@ -1104,65 +1100,204 @@ func cmdVacuum() {
 func cmdBackup(args []string) {
 	fs := flag.NewFlagSet("backup", flag.ExitOnError)
 	fs.Usage = func() { fmt.Println(commandHelp["backup"]) }
-	output := fs.String("output", "", "destination file path")
+	mode := fs.String("mode", "", "full, incremental or cumulative (default: backup_mode from config)")
+	output := fs.String("output", "", "directory to write the archive to (default: backup_dir)")
+	passFile := fs.String("passphrase-file", "", "encrypt with this passphrase file (age passphrase mode)")
+	passPrompt := fs.Bool("passphrase-prompt", false, "encrypt with a passphrase typed now (age passphrase mode)")
 	fs.Parse(args)
 
-	resp := send(socketPath, request{Cmd: "backup", Path: *output})
+	req := request{Cmd: "backup", Path: *output, Mode: *mode}
+	if *passFile != "" && *passPrompt {
+		die("--passphrase-file and --passphrase-prompt are exclusive")
+	}
+	if *passFile != "" {
+		pw, err := readPassphraseFile(*passFile)
+		if err != nil {
+			die("%v", err)
+		}
+		req.Passphrase, req.PassphraseFile = pw, true
+	} else if *passPrompt {
+		pw, err := promptPassword("Backup passphrase: ")
+		if err != nil {
+			die("passphrase prompt: %v", err)
+		}
+		if len(pw) == 0 {
+			die("empty passphrase")
+		}
+		req.Passphrase = string(pw)
+	}
+
+	resp := send(socketPath, req)
 	if !resp.OK {
 		die("%s", resp.Error)
 	}
 	var result struct {
 		Path string `json:"path"`
 		Size int64  `json:"size"`
+		Kind string `json:"kind"`
 	}
 	json.Unmarshal(resp.Data, &result)
-	fmt.Printf("backup written to %s (%s)\n", result.Path, formatSize(result.Size))
+	fmt.Printf("%s backup written to %s (%s)\n", result.Kind, result.Path, formatSize(result.Size))
 }
 
-func cmdIncrementalBackup(args []string) {
-	fs := flag.NewFlagSet("incremental-backup", flag.ExitOnError)
-	fs.Usage = func() { fmt.Println(commandHelp["incremental-backup"]) }
-	output := fs.String("output", "", "destination file path")
-	since := fs.String("since", "", "include files changed after this time (RFC3339)")
-	fs.Parse(args)
-
-	if *since == "" {
-		die("--since is required (e.g. --since 2026-05-01T00:00:00Z)")
+// readPassphraseFile returns the first line of a passphrase file, without its
+// trailing newline. The file should be readable only by the operator.
+func readPassphraseFile(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("passphrase file: %w", err)
 	}
-	resp := send(socketPath, request{Cmd: "incremental-backup", Path: *output, Since: *since})
-	if !resp.OK {
-		die("%s", resp.Error)
+	pw := strings.TrimRight(strings.SplitN(string(data), "\n", 2)[0], "\r")
+	if pw == "" {
+		return "", fmt.Errorf("passphrase file %s is empty", path)
 	}
-	var result struct {
-		Path string `json:"path"`
-		Size int64  `json:"size"`
-	}
-	json.Unmarshal(resp.Data, &result)
-	fmt.Printf("incremental backup written to %s (%s)\n", result.Path, formatSize(result.Size))
+	return pw, nil
 }
 
 func cmdRestore(args []string) {
 	fs := flag.NewFlagSet("restore", flag.ExitOnError)
 	fs.Usage = func() { fmt.Println(commandHelp["restore"]) }
-	input := fs.String("input", "", "path to backup archive")
+	input := fs.String("input", "", "backup archive, or a directory: the newest archive and its chain are restored")
+	identity := fs.String("identity", "", "age identity or SSH private key for public-key encrypted archives")
+	passFile := fs.String("passphrase-file", "", "passphrase file for passphrase-encrypted archives")
+	stageDir := fs.String("to", "", "directory for config, nginx and systemd files from a chain (never written to /etc)")
 	wipeCredentials := fs.Bool("wipe-credentials", false, "overwrite existing users' credentials with the backup's (default: preserve live credentials)")
 	fs.Parse(args)
 
 	if *input == "" {
 		die("--input is required")
 	}
-	resp := send(socketPath, request{Cmd: "restore", Path: *input, WipeCredentials: *wipeCredentials})
+	chain, err := resolveRestoreChain(*input)
+	if err != nil {
+		die("%v", err)
+	}
+
+	var ids []age.Identity
+	if *identity != "" {
+		ids, err = backuparchive.LoadIdentities(*identity, func() ([]byte, error) {
+			return promptPassword("SSH key passphrase: ")
+		})
+		if err != nil {
+			die("%v", err)
+		}
+	}
+	if *passFile != "" {
+		pw, err := readPassphraseFile(*passFile)
+		if err != nil {
+			die("%v", err)
+		}
+		pid, err := backuparchive.PassphraseIdentity(pw)
+		if err != nil {
+			die("%v", err)
+		}
+		ids = append(ids, pid)
+	}
+
+	// Encrypted members are decrypted into the socket directory, which the
+	// server can read (the same constraint as password-restore); plain archives
+	// are passed by their own path.
+	var paths []string
+	var temps []string
+	defer func() {
+		for _, t := range temps {
+			os.Remove(t)
+		}
+	}()
+	for _, path := range chain {
+		switch {
+		case strings.HasSuffix(path, ".tar.zst.age"):
+			if len(ids) == 0 {
+				die("%s is encrypted: pass --identity or --passphrase-file", filepath.Base(path))
+			}
+			tmp, err := os.CreateTemp(filepath.Dir(socketPath), "dansal-restore-*.tar.zst")
+			if err != nil {
+				die("temp file: %v", err)
+			}
+			tmp.Close()
+			temps = append(temps, tmp.Name())
+			if err := backuparchive.DecryptFile(path, tmp.Name(), ids...); err != nil {
+				die("decrypt %s: %v", filepath.Base(path), err)
+			}
+			paths = append(paths, tmp.Name())
+		case strings.HasSuffix(path, ".tar.zst.enc"):
+			die("%s uses the symmetric backup key; restore it on the server with password-restore's key file", filepath.Base(path))
+		default:
+			abs, err := filepath.Abs(path)
+			if err != nil {
+				die("%v", err)
+			}
+			paths = append(paths, abs)
+		}
+	}
+
+	req := request{Cmd: "restore", WipeCredentials: *wipeCredentials, StageDir: *stageDir}
+	if len(paths) == 1 {
+		req.Path = paths[0]
+	} else {
+		req.Paths = paths
+	}
+	resp := send(socketPath, req)
 	if !resp.OK {
 		die("%s", resp.Error)
 	}
 	var result struct {
-		Config         bool `json:"config"`
-		DB             bool `json:"db"`
-		Images         int  `json:"images"`
-		PreservedUsers int  `json:"preserved_users"`
+		Config         bool     `json:"config"`
+		DB             bool     `json:"db"`
+		Images         int      `json:"images"`
+		PreservedUsers int      `json:"preserved_users"`
+		Archives       int      `json:"archives"`
+		Deleted        int      `json:"deleted"`
+		Staged         []string `json:"staged"`
+		Skipped        []string `json:"skipped"`
 	}
 	json.Unmarshal(resp.Data, &result)
-	fmt.Printf("restored: config=%v db=%v images=%d preserved_users=%d\n", result.Config, result.DB, result.Images, result.PreservedUsers)
+	fmt.Printf("restored: archives=%d db=%v images=%d removed=%d preserved_users=%d\n", max(result.Archives, 1), result.DB, result.Images, result.Deleted, result.PreservedUsers)
+	if len(result.Staged) > 0 {
+		fmt.Printf("staged in %s: %s\n", *stageDir, strings.Join(result.Staged, ", "))
+	}
+	if len(result.Skipped) > 0 {
+		fmt.Printf("not restored (config, nginx and systemd files need --to DIR): %s\n", strings.Join(result.Skipped, ", "))
+	}
+}
+
+// resolveRestoreChain returns the archives to restore, oldest first. A
+// directory selects its newest archive; a file selects itself. Either is
+// expanded to its chain through the manifest copies next to the archives.
+func resolveRestoreChain(input string) ([]string, error) {
+	info, err := os.Stat(input)
+	if err != nil {
+		return nil, err
+	}
+	dir := filepath.Dir(input)
+	var target string
+	if info.IsDir() {
+		dir = input
+		newest, err := backuparchive.Latest(dir, "")
+		if err != nil {
+			return nil, err
+		}
+		if newest == nil {
+			return nil, fmt.Errorf("no archives with manifest copies in %s", dir)
+		}
+		target = newest.Path
+	} else {
+		target = input
+	}
+	if !strings.HasSuffix(target, ".tar.zst") && !strings.HasSuffix(target, ".tar.zst.age") && !strings.HasSuffix(target, ".tar.zst.enc") {
+		return []string{target}, nil // legacy archive: restored as one file
+	}
+	if _, err := os.Stat(backuparchive.SidecarPath(target)); err != nil {
+		return []string{target}, nil // no manifest copy: a chain cannot be resolved
+	}
+	chain, err := backuparchive.ResolveChain(dir, target)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, a := range chain {
+		out = append(out, a.Path)
+	}
+	return out, nil
 }
 
 func cmdPasswordBackup(args []string) {

@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v2"
+
+	"github.com/ademant/dansal/internal/backuparchive"
 )
 
 // RequestSigningConfig configures opt-in HMAC request signing for
@@ -112,6 +114,24 @@ type ServerConfig struct {
 	// also automatically have the key next to it. Empty (default): backups
 	// are written unencrypted, as before.
 	BackupEncryptionKeyFile string `yaml:"backup_encryption_key_file"`
+
+	// BackupMode (#1765) is the mode the scheduled backup (dansal-backup@.timer
+	// runs `dansal_admin backup` with no mode) and a manual `backup` without
+	// --mode use: full, incremental (since the previous archive of any kind)
+	// or cumulative (since the last full). Empty means full.
+	BackupMode string `yaml:"backup_mode"`
+	// BackupEncryptionPublicKey (#1765) holds age-compatible public keys
+	// (age1…, ssh-ed25519, ssh-rsa >= 2048 bits). When set, every archive is
+	// encrypted to these recipients on the server, which keeps no secret that
+	// could decrypt it. Either a single string or a list.
+	BackupEncryptionPublicKey StringList `yaml:"backup_encryption_public_key"`
+	// BackupEncryptionPublicKeyFile names a recipients file in `age -R` format
+	// (one key per line, # comments). Its keys are added to the inline ones.
+	BackupEncryptionPublicKeyFile string `yaml:"backup_encryption_public_key_file"`
+	// BackupIncludeCredentials (#1765) keeps password hashes and TOTP secrets
+	// in calendar.db snapshots, but only for public-key encrypted archives.
+	// Default false: credentials are stripped as before.
+	BackupIncludeCredentials bool `yaml:"backup_include_credentials"`
 
 	// DataRetentionDays (#1440, compliance gap G3) bounds how long personal
 	// data sits in stores the hourly sweep didn't previously touch: confirmed/
@@ -222,7 +242,61 @@ func loadConfig(filename string) (*Config, error) {
 		return nil, err
 	}
 	applyEnvOverrides(cfg)
+	if err := validateBackupConfig(cfg); err != nil {
+		return nil, err
+	}
 	return cfg, nil
+}
+
+// StringList accepts a single YAML string or a list of strings.
+type StringList []string
+
+// UnmarshalYAML implements yaml.Unmarshaler for StringList.
+func (l *StringList) UnmarshalYAML(unmarshal func(any) error) error {
+	var one string
+	if err := unmarshal(&one); err == nil {
+		*l = StringList{one}
+		return nil
+	}
+	var many []string
+	if err := unmarshal(&many); err != nil {
+		return err
+	}
+	*l = many
+	return nil
+}
+
+// validateBackupConfig checks the #1765 backup keys at load time so a bad
+// recipient or mode stops the service before a backup silently fails or,
+// worse, writes an archive nobody can decrypt.
+func validateBackupConfig(cfg *Config) error {
+	if cfg.Server.BackupMode == "" {
+		cfg.Server.BackupMode = "full"
+	}
+	if _, err := backuparchive.ParseKind(cfg.Server.BackupMode); err != nil {
+		return fmt.Errorf("server.backup_mode: %w", err)
+	}
+	if _, err := publicRecipientLines(cfg); err != nil {
+		return fmt.Errorf("server.backup_encryption_public_key: %w", err)
+	}
+	return nil
+}
+
+// publicRecipientLines returns the configured public keys: the inline list
+// followed by the recipients file, in config order.
+func publicRecipientLines(cfg *Config) ([]string, error) {
+	lines := append([]string(nil), cfg.Server.BackupEncryptionPublicKey...)
+	if cfg.Server.BackupEncryptionPublicKeyFile != "" {
+		fileLines, err := backuparchive.ReadRecipientsFile(cfg.Server.BackupEncryptionPublicKeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("recipients file: %w", err)
+		}
+		lines = append(lines, fileLines...)
+	}
+	if _, _, err := backuparchive.ParseRecipients(lines); err != nil {
+		return nil, err
+	}
+	return lines, nil
 }
 
 // applyEnvOverrides lets Docker / container deployments inject secrets and

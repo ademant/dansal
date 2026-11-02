@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ademant/dansal/internal/backuparchive"
 	"github.com/ademant/dansal/internal/backupcrypt"
 	sqlite3 "github.com/mattn/go-sqlite3"
 )
@@ -21,46 +22,26 @@ import (
 type backupResult struct {
 	Path        string `json:"path"`
 	Size        int64  `json:"size"`
+	Kind        string `json:"kind"`
 	Incremental bool   `json:"incremental"`
 }
 
-// adminBackup and adminIncrementalBackup always strip credentials — they
-// never honor a caller-supplied flag. Only adminBackupWithCredentials
-// (reachable exclusively via the dedicated "backup-with-credentials" admin
-// command) passes keepCredentials=true, so a plaintext credentials-included
-// backup can never be produced by requesting "backup" with some field set.
-func adminBackup(req adminRequest) adminResponse {
-	return createBackup(req.Path, time.Time{}, false)
-}
-
-func adminIncrementalBackup(req adminRequest) adminResponse {
-	if req.Since == "" {
-		return adminResponse{OK: false, Error: "--since is required"}
-	}
-	since, err := time.Parse(time.RFC3339, req.Since)
-	if err != nil {
-		return adminResponse{OK: false, Error: "invalid since time: " + err.Error()}
-	}
-	return createBackup(req.Path, since, false)
-}
-
+// Plain backups (adminModeBackup) always strip credentials. Only
+// adminBackupWithCredentials, reachable through the dedicated
+// "backup-with-credentials" admin command, keeps them.
 // adminBackupWithCredentials is used only by cmdPasswordBackup, which
 // immediately encrypts the resulting plaintext archive client-side and
 // deletes the unencrypted temp file — see cmdPasswordBackup for the full
 // handoff. This is the only path allowed to include password_hash/totp_secret.
 func adminBackupWithCredentials(req adminRequest) adminResponse {
-	return createBackup(req.Path, time.Time{}, true)
+	return createBackup(req.Path, true)
 }
 
 // resolveBackupPath returns a full file path for the backup archive.
 // If outputPath is empty or a directory, a timestamped filename is generated
 // inside the configured backup_dir (empty) or the given directory.
-func resolveBackupPath(outputPath string, incremental bool) string {
-	kind := "backup"
-	if incremental {
-		kind = "incremental"
-	}
-	filename := fmt.Sprintf("dansal-%s-%s.tar.gz", kind, time.Now().Format("20060102-150405"))
+func resolveBackupPath(outputPath string) string {
+	filename := fmt.Sprintf("dansal-backup-%s.tar.gz", time.Now().Format("20060102-150405"))
 
 	if outputPath == "" {
 		dir := "/var/lib/dansal/backups"
@@ -80,9 +61,11 @@ func resolveBackupPath(outputPath string, incremental bool) string {
 	return outputPath
 }
 
-func createBackup(outputPath string, since time.Time, keepCredentials bool) adminResponse {
-	incremental := !since.IsZero()
-	outputPath = resolveBackupPath(outputPath, incremental)
+// createBackup writes the legacy single-file archive (calendar.db and images
+// as tar.gz). Only the password-backup path uses it now (keepCredentials);
+// plain and mode-based backups go through createModeBackup (#1765).
+func createBackup(outputPath string, keepCredentials bool) adminResponse {
+	outputPath = resolveBackupPath(outputPath)
 
 	// Consistent DB snapshot via VACUUM INTO a temp file.
 	tmpDB, err := os.CreateTemp("", "dansal-db-*.db")
@@ -129,7 +112,7 @@ func createBackup(outputPath string, since time.Time, keepCredentials bool) admi
 
 	// Images — all for full backup, only changed files for incremental.
 	if archiveErr == nil {
-		archiveErr = addDirToTar(tw, config.Server.ImagesDir, "images", since)
+		archiveErr = addDirToTar(tw, config.Server.ImagesDir, "images", time.Time{})
 	}
 
 	tw.Close()
@@ -166,9 +149,9 @@ func createBackup(outputPath string, since time.Time, keepCredentials bool) admi
 	pruneBackupsIfConfigured(outputPath)
 
 	return adminResponse{OK: true, Data: backupResult{
-		Path:        outputPath,
-		Size:        size,
-		Incremental: incremental,
+		Path: outputPath,
+		Size: size,
+		Kind: "full",
 	}}
 }
 
@@ -299,16 +282,45 @@ func adminRestore(req adminRequest) adminResponse {
 	if req.Path == "" {
 		return adminResponse{OK: false, Error: "path is required"}
 	}
-	path := req.Path
-	// If only a filename was given (no directory component), resolve it against backup_dir.
-	if !strings.ContainsAny(path, "/\\") {
-		dir := "/var/lib/dansal/backups"
-		if config != nil && config.Server.BackupDir != "" {
-			dir = config.Server.BackupDir
-		}
-		path = filepath.Join(dir, path)
+	paths := req.Paths
+	if len(paths) == 0 {
+		paths = []string{req.Path}
 	}
-	restored, err := restoreFromTar(path, req.WipeCredentials)
+	for i, p := range paths {
+		// If only a filename was given (no directory component), resolve it against backup_dir.
+		if !strings.ContainsAny(p, "/\\") {
+			paths[i] = filepath.Join(backupDirPath(), p)
+		}
+	}
+	for _, p := range paths {
+		if strings.HasSuffix(p, ".age") || strings.HasSuffix(p, ".enc") {
+			return adminResponse{OK: false, Error: filepath.Base(p) + " is encrypted: restore it with dansal_admin restore"}
+		}
+	}
+	// A single incremental or cumulative archive is never restored alone: its
+	// bases are applied first, or images that are not in it would be removed.
+	if len(paths) == 1 && isChainArchive(paths[0]) {
+		if _, err := os.Stat(backuparchive.SidecarPath(paths[0])); err == nil {
+			chain, err := backuparchive.ResolveChain(filepath.Dir(paths[0]), paths[0])
+			if err != nil {
+				return adminResponse{OK: false, Error: "backup chain: " + err.Error()}
+			}
+			paths = paths[:0]
+			for _, a := range chain {
+				paths = append(paths, a.Path)
+			}
+		}
+	}
+	var restored restoreResult
+	var err error
+	if isChainArchive(paths[0]) || isZstdFile(paths[0]) {
+		restored, err = restoreChain(paths, req.WipeCredentials, req.StageDir)
+	} else {
+		if len(paths) != 1 {
+			return adminResponse{OK: false, Error: "a chain restore needs .tar.zst archives"}
+		}
+		restored, err = restoreFromTar(paths[0], req.WipeCredentials)
+	}
 	if err != nil {
 		return adminResponse{OK: false, Error: err.Error()}
 	}
@@ -319,10 +331,14 @@ func adminRestore(req adminRequest) adminResponse {
 }
 
 type restoreResult struct {
-	Config         bool `json:"config"`
-	DB             bool `json:"db"`
-	Images         int  `json:"images"`
-	PreservedUsers int  `json:"preserved_users"`
+	Config         bool     `json:"config"`
+	DB             bool     `json:"db"`
+	Images         int      `json:"images"`
+	PreservedUsers int      `json:"preserved_users"`
+	Archives       int      `json:"archives,omitempty"`
+	Deleted        int      `json:"deleted,omitempty"`
+	Staged         []string `json:"staged,omitempty"`
+	Skipped        []string `json:"skipped,omitempty"`
 }
 
 // userSnapshotRow holds one pre-restore live users row, generically — every
@@ -644,7 +660,8 @@ var backupPrefixes = []string{"dansal-backup-", "dansal-incremental-", "dansal-c
 // (.tar.gz.enc). Shared by listBackups and pruneBackups so both recognize
 // an encrypted nightly backup identically.
 func isBackupArchiveName(name string) bool {
-	return strings.HasSuffix(name, ".tar.gz") || strings.HasSuffix(name, ".tar.gz.enc")
+	return strings.HasSuffix(name, ".tar.gz") || strings.HasSuffix(name, ".tar.gz.enc") ||
+		strings.HasSuffix(name, ".tar.zst") || strings.HasSuffix(name, ".tar.zst.age") || strings.HasSuffix(name, ".tar.zst.enc")
 }
 
 // encryptBackupInPlace (#1492, compliance G13) encrypts the plaintext
@@ -742,7 +759,7 @@ func startScheduledBackup() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for range ticker.C {
-			resp := createBackup("", time.Time{}, false)
+			resp := createModeBackup(modeBackupOpts{})
 			if resp.OK {
 				if r, ok := resp.Data.(backupResult); ok {
 					logging.Infof("scheduled backup: %s (%s)", r.Path, fmtSize(r.Size))

@@ -18,37 +18,45 @@ import (
 )
 
 type adminRequest struct {
-	Cmd                   string `json:"cmd"`
-	Email                 string `json:"email,omitempty"`
-	NewEmail              string `json:"new_email,omitempty"`
-	Password              string `json:"password,omitempty"`
-	Role                  string `json:"role,omitempty"`
-	OrgID                 int    `json:"org_id,omitempty"`
-	Path                  string `json:"path,omitempty"`
-	Since                 string `json:"since,omitempty"`
-	WipeCredentials       bool   `json:"wipe_credentials,omitempty"`
-	SessionID             int    `json:"session_id,omitempty"`
-	InviteToken           string `json:"invite_token,omitempty"`
-	Telegram              string `json:"telegram,omitempty"`
-	Matrix                string `json:"matrix,omitempty"`
-	SMTPHost              string `json:"smtp_host,omitempty"`
-	SMTPPort              int    `json:"smtp_port,omitempty"`
-	SMTPUsername          string `json:"smtp_username,omitempty"`
-	SMTPFrom              string `json:"smtp_from,omitempty"`
-	SMTPFromName          string `json:"smtp_from_name,omitempty"`
-	SMTPTLS               string `json:"smtp_tls,omitempty"`
-	SMTPTimeoutSecs       int    `json:"smtp_timeout_secs,omitempty"`
-	SMTPTo                string `json:"smtp_to,omitempty"`
-	SMTPSendmail          string `json:"smtp_sendmail,omitempty"`
-	TelegramBotToken      string `json:"telegram_bot_token,omitempty"`
-	TelegramBotName       string `json:"telegram_bot_name,omitempty"`
-	MatrixHomeserver      string `json:"matrix_homeserver,omitempty"`
-	MatrixAccessToken     string `json:"matrix_access_token,omitempty"`
-	MatrixUsername        string `json:"matrix_username,omitempty"`
-	MatrixPassword        string `json:"matrix_password,omitempty"`
-	HeartbeatIntervalMins int    `json:"heartbeat_interval_mins,omitempty"`
-	EventID               int    `json:"event_id,omitempty"`
-	Timezone              string `json:"timezone,omitempty"`
+	Cmd      string `json:"cmd"`
+	Email    string `json:"email,omitempty"`
+	NewEmail string `json:"new_email,omitempty"`
+	Password string `json:"password,omitempty"`
+	Role     string `json:"role,omitempty"`
+	OrgID    int    `json:"org_id,omitempty"`
+	Path     string `json:"path,omitempty"`
+	Since    string `json:"since,omitempty"`
+	// Mode is full, incremental or cumulative for "backup" (#1765); empty = config.
+	Mode           string `json:"mode,omitempty"`
+	Passphrase     string `json:"passphrase,omitempty"`
+	PassphraseFile bool   `json:"passphrase_file,omitempty"`
+	// Paths is the archive chain for "restore", oldest first; StageDir receives
+	// config, nginx and systemd files from a chain restore instead of /etc.
+	Paths                 []string `json:"paths,omitempty"`
+	StageDir              string   `json:"stage_dir,omitempty"`
+	WipeCredentials       bool     `json:"wipe_credentials,omitempty"`
+	SessionID             int      `json:"session_id,omitempty"`
+	InviteToken           string   `json:"invite_token,omitempty"`
+	Telegram              string   `json:"telegram,omitempty"`
+	Matrix                string   `json:"matrix,omitempty"`
+	SMTPHost              string   `json:"smtp_host,omitempty"`
+	SMTPPort              int      `json:"smtp_port,omitempty"`
+	SMTPUsername          string   `json:"smtp_username,omitempty"`
+	SMTPFrom              string   `json:"smtp_from,omitempty"`
+	SMTPFromName          string   `json:"smtp_from_name,omitempty"`
+	SMTPTLS               string   `json:"smtp_tls,omitempty"`
+	SMTPTimeoutSecs       int      `json:"smtp_timeout_secs,omitempty"`
+	SMTPTo                string   `json:"smtp_to,omitempty"`
+	SMTPSendmail          string   `json:"smtp_sendmail,omitempty"`
+	TelegramBotToken      string   `json:"telegram_bot_token,omitempty"`
+	TelegramBotName       string   `json:"telegram_bot_name,omitempty"`
+	MatrixHomeserver      string   `json:"matrix_homeserver,omitempty"`
+	MatrixAccessToken     string   `json:"matrix_access_token,omitempty"`
+	MatrixUsername        string   `json:"matrix_username,omitempty"`
+	MatrixPassword        string   `json:"matrix_password,omitempty"`
+	HeartbeatIntervalMins int      `json:"heartbeat_interval_mins,omitempty"`
+	EventID               int      `json:"event_id,omitempty"`
+	Timezone              string   `json:"timezone,omitempty"`
 }
 
 type adminResponse struct {
@@ -108,7 +116,6 @@ var mutatingAdminCmds = map[string]bool{
 	"remove-member":            true,
 	"vacuum":                   true,
 	"backup":                   true,
-	"incremental-backup":       true,
 	"restore":                  true,
 	"config-backup":            true,
 	"backup-with-credentials":  true,
@@ -143,8 +150,8 @@ func adminAuditTarget(req adminRequest) string {
 		return "email=" + req.Email + " new_email=" + req.NewEmail
 	case "add-member", "remove-member":
 		return fmt.Sprintf("org_id=%d email=%s", req.OrgID, req.Email)
-	case "backup", "incremental-backup", "config-backup", "backup-with-credentials":
-		return "path=" + req.Path
+	case "backup", "config-backup", "backup-with-credentials":
+		return "path=" + req.Path + " mode=" + req.Mode
 	case "restore":
 		return fmt.Sprintf("path=%s wipe_credentials=%v", req.Path, req.WipeCredentials)
 	case "revoke-invite":
@@ -205,9 +212,7 @@ func dispatchAdminCmdInner(req adminRequest) adminResponse {
 	case "vacuum":
 		return adminVacuum()
 	case "backup":
-		return adminBackup(req)
-	case "incremental-backup":
-		return adminIncrementalBackup(req)
+		return adminModeBackup(req)
 	case "restore":
 		return adminRestore(req)
 	case "config-backup":

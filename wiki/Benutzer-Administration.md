@@ -221,7 +221,7 @@ dansal_admin --config /etc/dansal/prod/config.yaml password-backup
 
 # Inkrementelles Backup seit einem bestimmten Zeitpunkt
 dansal_admin --config /etc/dansal/prod/config.yaml \
-  incremental-backup --since 2025-01-01T00:00:00Z
+  backup --mode incremental
 ```
 
 ### Wiederherstellung

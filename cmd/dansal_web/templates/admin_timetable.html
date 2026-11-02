@@ -1736,12 +1736,24 @@ function saveTimetable(){
   var payload = _entries.map(function(e){
     return {start_time:e.start_time,end_time:e.end_time,title:e.title,description:e.description||'',room:e.room||'',entry_type:e.entry_type||'bal',entry_date:e.entry_date||'',location_id:e.location_id||null,musician_id:e.musician_id||null,instructor_id:e.instructor_id||null,difficulty:e.difficulty||''};
   });
-  fetch('/admin/events/'+EVT_ID+'/timetable',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+  // #1759: a save that queues on the server must not sit at "Saving…" forever.
+  // After 15 s the request is aborted and the admin is told to try again; the
+  // button is re-enabled. The server may still have applied the save, so the
+  // admin can reload to check.
+  var ctrl = new AbortController();
+  var timer = setTimeout(function(){ ctrl.abort(); }, 15000);
+  fetch('/admin/events/'+EVT_ID+'/timetable',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:ctrl.signal})
     .then(function(r){return r.ok?r.json():Promise.reject(r.statusText);})
     .then(function(){
+      clearTimeout(timer);
       _formDirty=false; btn.disabled=false; status.textContent='Saved'; setTimeout(function(){ status.hidden=true; },2000);
     })
-    .catch(function(err){ btn.disabled=false; status.textContent='Error: '+err; });
+    .catch(function(err){
+      clearTimeout(timer);
+      btn.disabled=false;
+      if (err && err.name === 'AbortError') { status.textContent = {{$.Strings.T "timetable_save_timeout" | jsStr}}; return; }
+      status.textContent='Error: '+err;
+    });
 }
 
 function syncEventTimes(){

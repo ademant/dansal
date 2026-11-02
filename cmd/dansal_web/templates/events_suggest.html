@@ -553,6 +553,7 @@
 .musician-chip.is-known{background:#e3f4e6}
 .musician-chip.is-similar{background:#fff3cd}
 .musician-chip.is-new{background:#eef0f3}
+.musician-chip.is-unchecked{background:#fbe9e7;border-style:dashed}
 .people-dialog{margin:auto;max-width:32rem;width:calc(100% - 2rem);border:1px solid var(--border-mid,#ccc);border-radius:8px;padding:1rem 1.2rem;background:var(--bg,#fff);color:var(--fg,#222)}
 .people-dialog::backdrop{background:rgba(0,0,0,.4)}
 .people-dialog h2{font-size:1.1rem;margin:0 0 .5rem}
@@ -687,7 +688,7 @@ document.addEventListener('click', function(e){
 // closing it without "apply" keeps everything as typed.
 (function(){
   var KIND_LABEL = {musician: {{$.Strings.T "tt_musician" | jsStr}}, instructor: {{$.Strings.T "tt_instructor" | jsStr}}};
-  var STATUS_LABEL = {known: {{$.Strings.T "people_status_known" | jsStr}}, similar: {{$.Strings.T "people_status_similar" | jsStr}}, 'new': {{$.Strings.T "people_status_new" | jsStr}}};
+  var STATUS_LABEL = {known: {{$.Strings.T "people_status_known" | jsStr}}, similar: {{$.Strings.T "people_status_similar" | jsStr}}, 'new': {{$.Strings.T "people_status_new" | jsStr}}, unchecked: {{$.Strings.T "people_status_unchecked" | jsStr}}};
   var KEEP_LABEL = {{$.Strings.T "people_keep_typed" | jsStr}};
   var MAX_NAMES = 20;
   var fields = {
@@ -731,7 +732,7 @@ document.addEventListener('click', function(e){
       if (r.status) {
         var st = document.createElement('small');
         st.className = 'chip-status';
-        st.textContent = (r.status === 'known' ? '✓ ' : r.status === 'similar' ? '? ' : '+ ') + STATUS_LABEL[r.status];
+        st.textContent = (r.status === 'known' ? '✓ ' : r.status === 'similar' ? '? ' : r.status === 'unchecked' ? '! ' : '+ ') + STATUS_LABEL[r.status];
         chip.appendChild(st);
       }
       var btn = document.createElement('button');
@@ -781,7 +782,14 @@ document.addEventListener('click', function(e){
         renderChips(kind);
         if (similar.length) { dialogQueue.push({kind: kind, seq: seq, items: similar}); nextDialog(); }
       })
-      .catch(function(){ /* lookup failed: chips stay without status, text is still submitted */ });
+      .catch(function(){
+        // #1758: a failed lookup is not the same as a pending one. Mark the
+        // chips so the visitor sees the check did not happen; the text is
+        // still submitted as typed.
+        if (seq !== f.seq) return;
+        f.results.forEach(function(r){ if (!r.status) r.status = 'unchecked'; });
+        renderChips(kind);
+      });
   }
 
   function nextDialog() {

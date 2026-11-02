@@ -388,6 +388,11 @@
     // still false here) while a radius filter is active offers "Search this
     // area" — the page's own setView/fitBounds calls set programmaticMove
     // first specifically so they don't trigger it.
+    // #1760: a visitor's drag always counts as theirs, even when it lands
+    // during one of the page's own animated fitBounds. Otherwise the first
+    // moveend (the page's animation ending, or the drag stopping it) clears
+    // the flag and the drag is taken for a programmatic move.
+    map.on('dragstart', function(){ programmaticMove = false; });
     map.on('moveend', function(){
       mapBoundsActive = true;
       if(geoFilter && !programmaticMove) searchAreaBtn.hidden = false;

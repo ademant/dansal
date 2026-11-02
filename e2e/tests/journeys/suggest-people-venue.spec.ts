@@ -38,6 +38,21 @@ test("help buttons and the musician list with status chips", async ({ browser })
     .find((n: string) => n && n.length >= 8 && !/[,;]/.test(n));
   test.skip(!known, "target has no suitable musician to match against");
 
+  // #1753: the API list is fresh, but the web's musician lookup is cached for
+  // 30 s (musiciansTTL). A musician seeded just before this test is "new" to
+  // the web until that cache refreshes. Wait for the web to report it known,
+  // so the chip checks below test the form, not the cache age.
+  await expect
+    .poll(
+      async () => {
+        const r = await page.request.get(`/search/people?kind=musician&name=${encodeURIComponent(known!)}`);
+        const body = await r.json();
+        return body?.[0]?.status ?? "";
+      },
+      { timeout: 45_000, intervals: [2_000] }
+    )
+    .toBe("known");
+
   await page.goto("/events/suggest");
 
   // #1418: the ⓘ next to "Musicians" opens its help text.

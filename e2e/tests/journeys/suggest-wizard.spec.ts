@@ -82,10 +82,25 @@ async function submitWizardOnCurrentPage(
     (document.getElementById("sg-date-to") as HTMLInputElement).value = d;
   }, dateStr);
 
-  // Advance through steps 1 → 2 → 3 → 4 → 5 → 6 by clicking Next 5 times.
-  // Only step 1 has a Next-click guard (title must be non-empty); later steps
-  // advance freely.
-  for (let i = 0; i < 5; i++) {
+  // Advance 1 → 2 → 3. Only step 1 has a Next-click guard (title must be
+  // non-empty); later steps advance freely.
+  for (let i = 0; i < 2; i++) {
+    await wizNext(page);
+  }
+
+  // Step 3: the send button stays disabled until a venue is chosen (sgVenueReady,
+  // #1666). Use a new venue unless the page already has one (?next=1 prefill).
+  const venueReady = await page.evaluate(
+    () => !!(window as any).sgVenueReady?.()
+  );
+  if (!venueReady) {
+    await page.locator("#sg-venue-new-btn").click();
+    await page.locator("#sg-location").fill(`E2E venue ${Date.now()}`);
+    await page.locator("#sg-town").fill("Karlsruhe");
+  }
+
+  // Advance 3 → 4 → 5 → 6.
+  for (let i = 0; i < 3; i++) {
     await wizNext(page);
   }
 
@@ -297,6 +312,8 @@ test("suggest-wizard: full lifecycle (A→C→B→D→approve)", async ({
   browser,
 }) => {
   skipWithoutMailbox(); // #1423
+  // Four scenarios (A, C, B, D) with email round trips; longer than the 90 s default.
+  test.setTimeout(180_000);
   // ── Skip guard ──────────────────────────────────────────────────────────
   // The suggest page returns 404 when SMTP / sendmail / Telegram is not
   // configured in web.yaml — skip gracefully in that case.

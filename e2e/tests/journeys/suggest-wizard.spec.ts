@@ -528,9 +528,11 @@ test("suggest-wizard: full lifecycle (A→C→B→D→approve)", async ({
  * same loopback bucket. This test spends 2 and suggest-wizard's lifecycle
  * spends 1: the whole 10-minute budget for one project. Running both projects
  * back-to-back, or re-running with a recent earlier run still inside the
- * window, will start getting HTTP 429 (surfaced by the web tier as the
- * generic suggest_error_submit message). Space runs out, restart the API
- * (clears the in-memory limiter), or run a single project while iterating.
+ * window, will start getting HTTP 429. The web tier now shows that as the
+ * rate-limit message (#1780), so the failure says why. The budget is
+ * server.suggest_rate_limit (default 3): a dev/test instance that runs this
+ * suite often should raise it there rather than wait out the window. Restart
+ * the API clears the in-memory limiter too; or run one project while iterating.
  */
 test("suggest-wizard: several events in a row with one email address (#1468)", async ({
   page,

@@ -19,7 +19,7 @@ func TestSuggestPreviewParsesHTMLEventPage(t *testing.T) {
 		instanceTimezone, _ = time.LoadLocation("Europe/Berlin")
 	}
 	config = &Config{}
-	initSuggestRateLimiters()
+	initSuggestRateLimiters(3)
 
 	// A date relative to now: the preview skips past events, so a fixed
 	// date turned this test red once it had passed.

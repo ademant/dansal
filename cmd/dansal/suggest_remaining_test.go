@@ -38,7 +38,7 @@ func TestSuggestHandlerReportsRemaining(t *testing.T) {
 	if instanceTimezone == nil {
 		instanceTimezone, _ = time.LoadLocation("Europe/Berlin")
 	}
-	initSuggestRateLimiters()
+	initSuggestRateLimiters(3)
 
 	// suggestRateLimiter (3 requests/10min per IP, initSuggestRateLimiters
 	// above) is unrelated to the per-address cap this test exercises -- each

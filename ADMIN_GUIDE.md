@@ -114,6 +114,7 @@ Key settings (all others have sensible defaults):
 | `server.invite_expiry_hours` | Invite link lifetime (default 48) |
 | `server.rate_limit` | Requests per minute per IP (default 100) |
 | `server.login_rate_limit` | Login attempts per minute per IP (default 5) |
+| `server.suggest_rate_limit` | Anonymous event suggestions per client IP per 10 minutes (default 3). Raise it on a dev/test instance whose e2e suite submits many suggestions |
 | `server.login_max_failures` | Failed logins before account lock (default 10) |
 | `server.login_failure_window_secs` | Rolling window for failure counting (default 600) |
 | `server.admin_allowed_ips` | IPs allowed to reach `/api/v1/admin/*` (default loopback) |

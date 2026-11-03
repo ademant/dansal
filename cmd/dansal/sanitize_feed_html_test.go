@@ -94,7 +94,7 @@ func TestSuggestHandlerSanitizesDescription(t *testing.T) {
 		instanceTimezone, _ = time.LoadLocation("Europe/Berlin")
 	}
 	config = &Config{}
-	initSuggestRateLimiters()
+	initSuggestRateLimiters(3)
 
 	future := time.Now().In(instanceTimezone).Add(2 * time.Hour).Format(time.RFC3339)
 	body, _ := json.Marshal(SuggestRequest{

@@ -150,14 +150,13 @@ if [[ "${1:-}" == "--worker" ]]; then
   shift
   cd "$root/e2e"
 
-  # The local web frontend. dev.balfolk.jetzt is a different server (its DNS
-  # does not point at this machine), so a suite aimed at it cannot log in with
-  # a magic link minted here. Set BASE_URL to override.
-  # Use localhost, not 127.0.0.1: the web's admin CSRF check compares the
-  # browser's Origin host with the configured domain (dev: "localhost"). From
-  # 127.0.0.1 every admin save is rejected with 403 "Forbidden" (#1754), which
-  # the timetable page shows as "Error: Forbidden".
-  export BASE_URL="${BASE_URL:-http://localhost:8080}"
+  # The public dev URL. dev.balfolk.jetzt resolves to this machine and nginx
+  # proxies it to the local web frontend. The web's admin CSRF check compares
+  # the browser's Origin host with the configured domain (dev: dev.balfolk.jetzt),
+  # so the suite must browse the same host. Any other origin (localhost,
+  # 127.0.0.1) gets every admin save rejected with 403 (CSRF_BLOCK in the web
+  # log), and the save never redirects. Set BASE_URL to override.
+  export BASE_URL="${BASE_URL:-https://dev.balfolk.jetzt}"
   export API_URL=http://127.0.0.1:8000
   export ADMIN_CLI=/usr/lib/dansal/dev/dansal_admin
   export ADMIN_SOCKET=/var/lib/dansal/dev/dansal.sock

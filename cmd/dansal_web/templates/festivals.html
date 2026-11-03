@@ -127,7 +127,7 @@ table.fest-folded .col-time,table.fest-folded .col-venue{color:var(--fg-muted)}
       // Leaflet throws "Set map center and zoom first" on the first
       // addTo(map) otherwise, aborting the rest of this block (including the
       // fitBounds below, which refines this default once bounds are known).
-      var map = L.map('map-container').setView([50,10], 5);
+      var map = L.map('map-container',{maxZoom:18}).setView([50,10], 5);
       attachTileLayer(map);
       window.festMap = map;
       // Nearby festivals merge into a numbered cluster that expands as you

@@ -1271,7 +1271,7 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
     // either option above covers.
     // #1435: start where the visitor left the map, if we remember it.
     var savedView=readMapView();
-    map = L.map('map-container',{zoomControl:false,keyboard:false})
+    map = L.map('map-container',{zoomControl:false,keyboard:false,maxZoom:18})
       .setView(savedView?[savedView.lat,savedView.lng]:[50,10], savedView?savedView.z:5);
     if(savedView) mapFitted=true;
     map.on('moveend',function(){ writeMapView(map.getCenter(), map.getZoom()); });

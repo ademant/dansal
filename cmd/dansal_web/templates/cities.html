@@ -94,7 +94,7 @@ document.addEventListener('DOMContentLoaded', function(){
   if(!pins || !pins.length) return;
 
   dansalLeafletCss(true);
-  var map = L.map('cities-map');
+  var map = L.map('cities-map',{maxZoom:18});
   attachTileLayer(map);
   var cluster = L.markerClusterGroup({maxClusterRadius:40});
   map.addLayer(cluster);

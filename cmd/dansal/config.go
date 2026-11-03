@@ -38,6 +38,7 @@ type ServerConfig struct {
 	TokenExpirationHours          int    `yaml:"token_expiration_hours"`
 	PublisherTokenExpirationHours int    `yaml:"publisher_token_expiration_hours"`
 	RateLimit                     int    `yaml:"rate_limit"`
+	SuggestRateLimit              int    `yaml:"suggest_rate_limit"`          // anonymous suggestions per client IP per 10 min; 0 = default 3
 	AccountMutationRateLimit      int    `yaml:"account_mutation_rate_limit"` // per-account create/update cap, requests/min; 0 = default 30 (see createUpdateLimiter)
 	MaxBodyBytes                  int64  `yaml:"max_body_bytes"`
 	ReadHeaderTimeoutSecs         int    `yaml:"read_header_timeout_secs"`
@@ -426,6 +427,9 @@ func applyDefaults(cfg *Config) {
 		// nginx already enforces 10r/s per IP in front; this is
 		// defense-in-depth, so 30/min is a safe, generous default.
 		cfg.Server.RateLimit = 30
+	}
+	if cfg.Server.SuggestRateLimit == 0 {
+		cfg.Server.SuggestRateLimit = 3
 	}
 	if cfg.Server.LoginRateLimit == 0 {
 		cfg.Server.LoginRateLimit = 5

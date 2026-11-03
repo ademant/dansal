@@ -401,7 +401,14 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 		if err != nil {
 			clearPendingSubmission(ip, r.UserAgent(), pendingScope)
 			logging.Errorf("dansal-web: suggest submit failed ip_hash=%s err=%v", hashIP(ip), err)
-			suggestError(w, r, cfg, tmpls, client, i18n, i18n.T(r, "suggest_error_submit"), ip)
+			// #1780: say why when the API rate-limited the submission, instead of
+			// the generic failure message (the tests and visitors both need it).
+			msgKey := "suggest_error_submit"
+			var ae *apiHTTPError
+			if errors.As(err, &ae) && ae.StatusCode == http.StatusTooManyRequests {
+				msgKey = "suggest_error_rate_limit"
+			}
+			suggestError(w, r, cfg, tmpls, client, i18n, i18n.T(r, msgKey), ip)
 			return
 		}
 		token := result.Token

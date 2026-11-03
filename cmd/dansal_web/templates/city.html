@@ -114,7 +114,7 @@
       // addTo(map) otherwise, aborting the rest of this block (including the
       // real setView/fitBounds below, which refines this default once the
       // marker bounds are known).
-      var map = L.map('city-map').setView([50,10], 5);
+      var map = L.map('city-map',{maxZoom:18}).setView([50,10], 5);
       attachTileLayer(map);
       window.cityMap = map;
       var bounds = [];

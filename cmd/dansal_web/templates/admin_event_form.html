@@ -2256,7 +2256,7 @@ function showGeoMap(lat,lon){
   var el=document.getElementById('geo-map');
   el.style.display='block';
   if(_geoMap){_geoMap.setView([lat,lon],14);_geoMap.eachLayer(function(l){if(l instanceof L.Marker)_geoMap.removeLayer(l);});L.marker([lat,lon]).addTo(_geoMap);return;}
-  function initGeoMap(){_geoMap=L.map('geo-map').setView([lat,lon],14);attachTileLayer(_geoMap);L.marker([lat,lon]).addTo(_geoMap);}
+  function initGeoMap(){_geoMap=L.map('geo-map',{maxZoom:18}).setView([lat,lon],14);attachTileLayer(_geoMap);L.marker([lat,lon]).addTo(_geoMap);}
   if(typeof L!=='undefined'){initGeoMap();return;}
   var css=document.createElement('link');css.rel='stylesheet';css.href='/static/leaflet/leaflet.css';document.head.appendChild(css);
   var js=document.createElement('script');js.src='/static/leaflet/leaflet.js';js.onload=initGeoMap;document.head.appendChild(js);

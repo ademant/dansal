@@ -197,7 +197,7 @@ document.addEventListener('DOMContentLoaded', function(){
   // throws "Set map center and zoom first" on the first addTo(map) otherwise,
   // aborting the rest of this function (including the real setView/fitBounds
   // below, which refines this default once the marker bounds are known).
-  var map=L.map(el,{scrollWheelZoom:false}).setView([50,10],5);
+  var map=L.map(el,{scrollWheelZoom:false,maxZoom:18}).setView([50,10],5);
   attachTileLayer(map);
   var bounds=[];
   function esc(s){

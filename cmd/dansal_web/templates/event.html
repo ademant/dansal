@@ -1043,7 +1043,10 @@
 .btn-pub-event:hover{background:#155727}
 .evt-assign-form{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
 .evt-assign-select{padding:.25rem .5rem;border:1px solid #ffc107;border-radius:4px;font-size:.85rem;background:#fff;color:#333}
-.series-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;font-size:.88rem}
+/* #1776: the global nav{} rule gives every <nav> its own stacking level
+   (z-index:1100). Un-stacked here so the header's user menu, which sits
+   in the header's stacking context, stays above this bar on phones. */
+.series-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;font-size:.88rem;position:static;z-index:auto}
 .series-nav a{color:var(--link);text-decoration:none;padding:.2rem .4rem;border-radius:3px}
 .series-nav a:hover{background:var(--bg-alt,#f4f6fb)}
 .series-cadence{font-size:.85rem;color:var(--fg-muted,#666);margin:0 0 .5rem}
@@ -1708,7 +1711,7 @@ document.addEventListener('DOMContentLoaded', function(){
   var lat=parseFloat(el.dataset.lat), lng=parseFloat(el.dataset.lng);
   if(isNaN(lat)||isNaN(lng)) return;
   dansalLeafletCss();
-  var map=L.map(el,{zoomControl:false,dragging:false,scrollWheelZoom:false,doubleClickZoom:false,boxZoom:false,keyboard:false,touchZoom:false}).setView([lat,lng],15);
+  var map=L.map(el,{maxZoom:18,zoomControl:false,dragging:false,scrollWheelZoom:false,doubleClickZoom:false,boxZoom:false,keyboard:false,touchZoom:false}).setView([lat,lng],15);
   attachTileLayer(map);
   window.dansalEvtMap=map; // #1617: the location tab resizes it when it is shown
   L.marker([lat,lng]).addTo(map);
@@ -1743,7 +1746,7 @@ document.addEventListener('DOMContentLoaded', function(){
   // throws "Set map center and zoom first" on the first addTo(map) otherwise,
   // aborting the rest of this block (including the real setView/fitBounds
   // below, which refines this default once the marker bounds are known).
-  var map=L.map(el,{scrollWheelZoom:false}).setView([50,10],5);
+  var map=L.map(el,{scrollWheelZoom:false,maxZoom:18}).setView([50,10],5);
   attachTileLayer(map);
   var bounds=[];
   function esc(s){

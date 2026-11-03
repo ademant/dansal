@@ -183,7 +183,7 @@ body{font-family:system-ui,sans-serif;font-size:.9rem;color:#222;background:#fff
   }
   function initMap(){
     dansalLeafletCss();
-    map = L.map('cal-map',{scrollWheelZoom:false}).setView([50,10],5);
+    map = L.map('cal-map',{scrollWheelZoom:false,maxZoom:18}).setView([50,10],5);
     // #1269: routed through dansal's own tile proxy (never a direct OSM
     // URL — OSM's tile usage policy forbids that kind of unmetered
     // third-party use), carrying the instance's public tile token. Relative

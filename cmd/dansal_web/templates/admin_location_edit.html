@@ -720,7 +720,7 @@ document.addEventListener('DOMContentLoaded', function(){
     if (map) return;
     dansalLeafletCss();
     mapDiv.classList.add('visible');
-    map = L.map('map').setView([lat, lon], zoom);
+    map = L.map('map',{maxZoom:18}).setView([lat, lon], zoom);
     attachTileLayer(map);
     map.on('click', function(e) {
       placeSelected(e.latlng.lat, e.latlng.lng);

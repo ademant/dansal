@@ -67,7 +67,26 @@ test.describe("Index page: discovery mechanics", () => {
   test("clicking the far marker opens its popup and links to the right event", async ({ page }) => {
     await page.goto("/");
     await openHomeTab(page, "map");
+    // The initial fit-to-bounds view (z3 on a full instance) groups the far
+    // event into a cluster with everything else, so its own marker only
+    // appears after zooming in — zoom by clicking the largest cluster.
     const marker = page.locator(`.leaflet-marker-icon[title="${fixture.farEventTitle}"]`);
+    for (let i = 0; i < 10 && !(await marker.isVisible().catch(() => false)); i++) {
+      const clusters = page.locator(".marker-cluster");
+      const n = await clusters.count();
+      let best = -1;
+      let bestCount = -1;
+      for (let j = 0; j < n; j++) {
+        const count = parseInt((await clusters.nth(j).innerText()).trim(), 10);
+        if (count > bestCount) {
+          bestCount = count;
+          best = j;
+        }
+      }
+      if (best < 0) break;
+      await clusters.nth(best).click();
+      await page.waitForTimeout(600);
+    }
     await expect(marker).toBeVisible();
     await marker.click();
     const popupLink = page.locator(".leaflet-popup a", { hasText: fixture.farEventTitle });

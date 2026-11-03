@@ -61,7 +61,7 @@ document.addEventListener('DOMContentLoaded', function(){
   if(!pins || !pins.length) return;
 
   dansalLeafletCss(true);
-  var map = L.map('omap');
+  var map = L.map('omap',{maxZoom:18});
   attachTileLayer(map);
   // Nearby orgs merge into a numbered cluster that expands as you zoom in,
   // same plugin/radius as /cities and the homepage map, for consistency.

@@ -331,7 +331,7 @@
     // on #map-container above. detabifyHiddenMap (base.js) mops up the
     // rest — attribution links and marker-cluster icons, neither of which
     // either option above covers.
-    map = L.map('map-container',{zoomControl:false,keyboard:false}).setView([50,10],5);
+    map = L.map('map-container',{zoomControl:false,keyboard:false,maxZoom:18}).setView([50,10],5);
     attachTileLayer(map);
     detabifyHiddenMap(map);
     clusterGroup = L.markerClusterGroup({maxClusterRadius:40});

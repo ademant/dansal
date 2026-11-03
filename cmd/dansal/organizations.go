@@ -3,12 +3,14 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 
 	ics "github.com/arran4/golang-ical"
+	"github.com/mattn/go-sqlite3"
 
 	"github.com/ademant/dansal/internal/logging"
 )
@@ -434,6 +436,11 @@ func createOrganization(w http.ResponseWriter, r *http.Request) {
 		req.Name, req.Description, req.ActorName, req.Website, req.Instagram, req.Mastodon, req.Facebook, req.ContactEmail, req.ContactName, req.WikidataID, req.NotesMd, string(chatLinksJSON),
 	))
 	if err != nil {
+		var sqliteErr sqlite3.Error
+		if errors.As(err, &sqliteErr) && sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique {
+			writeError(w, "name already in use", http.StatusConflict)
+			return
+		}
 		writeError(w, "Failed to create organization", http.StatusInternalServerError)
 		return
 	}

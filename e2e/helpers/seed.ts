@@ -280,14 +280,28 @@ async function jsonOrThrow(resp: APIResponse, method: string, path: string): Pro
 // against a pre-filled/persistent database (e.g. the shared dev instance)
 // repeated runs would otherwise pile up same-named orgs and make
 // create-event.spec.ts's label-based <select> pick ambiguous.
+//
+// Parallel workers can race: both see an empty list and both POST simultaneously.
+// The second POST gets a UNIQUE constraint violation (409 after #1777, 500
+// before). Either way, retry the GET to find the now-existing org.
 export async function seedOrg(page: Page, token: string): Promise<number> {
   const existing = await apiGet(page, "/api/v1/organizations");
   const found = Array.isArray(existing)
     ? existing.find((o: any) => o.name === ORG.name)
     : undefined;
   if (found) return found.id;
-  const data = await apiPost(page, "/api/v1/organizations", token, ORG);
-  return data.id;
+  try {
+    const data = await apiPost(page, "/api/v1/organizations", token, ORG);
+    return data.id;
+  } catch {
+    // Race: another worker created the org between our GET and POST.
+    const retry = await apiGet(page, "/api/v1/organizations");
+    const found2 = Array.isArray(retry)
+      ? retry.find((o: any) => o.name === ORG.name)
+      : undefined;
+    if (found2) return found2.id;
+    throw new Error(`seedOrg: POST failed and '${ORG.name}' not found on retry`);
+  }
 }
 
 // seedLocation creates a fresh location every run, with the fixture's

@@ -35,24 +35,6 @@ function inTable(page: Page, title: string) {
   return page.locator(".event-tile, tr.event-row").filter({ hasText: title });
 }
 
-// Both the desktop table row and the mobile tile for a given title can be
-// present in the DOM at once (only one is CSS-hidden depending on
-// viewport — see helpers/nav.ts's clickEventInTable), so a combined
-// selector's toBeVisible() hits a strict-mode violation once the event
-// actually exists. Check whichever variant is actually on screen instead;
-// inTable()'s toHaveCount(0) above is fine as-is since an absent event
-// matches neither selector regardless of viewport.
-async function expectVisibleInTable(page: Page, title: string) {
-  const tile = page.locator(".event-tile").filter({ hasText: title }).first();
-  if (await tile.isVisible().catch(() => false)) {
-    await expect(tile).toBeVisible();
-  } else {
-    await expect(
-      page.locator("tr.event-row").filter({ hasText: title }).first()
-    ).toBeVisible();
-  }
-}
-
 test.describe("Admin: event lifecycle", () => {
   test.beforeAll(async ({ browser }) => {
     const context = await browser.newContext({ storageState: AUTH_FILE });
@@ -118,10 +100,10 @@ test.describe("Admin: event lifecycle", () => {
         { message: "event should become publicly visible after publishing" }
       )
       .toBe(200);
-    await page.goto("/");
-    await goToAllView(page);
-    await loadAllRows(page);
-    await expectVisibleInTable(page, titleA);
+    // Checked on the event's own page, by id. The index lists only the
+    // soonest ~100 events, so a fresh test event may not be on it (#1807).
+    await page.goto(`/events/${idA}`);
+    await expect(page.locator("h1")).toContainText(titleA);
 
     // -- B: a second event at the same date/hour as A, deliberately with no
     //    org and no location — a plausible accidental duplicate an admin

@@ -219,6 +219,10 @@
   // handler, so those don't get mistaken for a visitor dragging/zooming the
   // map themselves, which is the only thing that should surface the button.
   var programmaticMove = false;
+  // #1806: set by a visitor's drag, cleared by the next moveend. Unlike
+  // programmaticMove it cannot be overwritten by a page move that starts
+  // during the drag, so a drag always offers the button.
+  var visitorMoved = false;
 
   // ── Country → Region cascading filter ────────────────────────────────────
   // Built client-side from the already-fetched locs array (same as allTowns).
@@ -392,11 +396,12 @@
     // during one of the page's own animated fitBounds. Otherwise the first
     // moveend (the page's animation ending, or the drag stopping it) clears
     // the flag and the drag is taken for a programmatic move.
-    map.on('dragstart', function(){ programmaticMove = false; });
+    map.on('dragstart', function(){ programmaticMove = false; visitorMoved = true; });
     map.on('moveend', function(){
       mapBoundsActive = true;
-      if(geoFilter && !programmaticMove) searchAreaBtn.hidden = false;
+      if(geoFilter && (visitorMoved || !programmaticMove)) searchAreaBtn.hidden = false;
       programmaticMove = false;
+      visitorMoved = false;
       render();
     });
     searchAreaBtn.addEventListener('click', function(){
@@ -800,6 +805,9 @@
         mapBoundsActive = false;
         resultsReady = true;
         rebuildMarkers();
+        // #1806: the fit below is the page's own move, like the deep-link
+        // setView, so flag it: its moveend must not be taken for a visitor's.
+        programmaticMove = true;
         render(true);
       });
   }

@@ -144,7 +144,10 @@ test.describe("Watchlist (#1554)", () => {
     await page.goto(`/events/${id}`);
     const star = eventStar(page, id);
     await star.click();
-    await expect(star).toHaveText("★");
+    // On phones the star's label is "★ Watchlist" (#1749); the glyph is what
+    // matters here. toBeVisible keeps a hidden link from passing (#1805).
+    await expect(star).toBeVisible();
+    await expect(star).toContainText("★");
     expect(errors).toEqual([]);
   });
 });

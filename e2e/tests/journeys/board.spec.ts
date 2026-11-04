@@ -25,11 +25,20 @@ import { skipWithoutMailbox } from "../../helpers/mailguard";
 import { fullSeed, SeedResult } from "../../helpers/seed";
 import { AUTH_FILE } from "../../helpers/auth";
 import { makeImage } from "../../helpers/images";
+import { isPhone } from "../../helpers/nav";
 
 const WEB_BASE = process.env.BASE_URL ?? "http://localhost:8080";
 const API_BASE = process.env.API_URL ?? "http://localhost:8000";
 
 let seed: SeedResult;
+
+// On phones the event page opens on its general tab every time it loads, and
+// the board panel (and its post-submit flash) sits in the 📌 tab (#1790).
+async function openBoardTabOnPhone(page: import("@playwright/test").Page): Promise<void> {
+  if (isPhone(page)) {
+    await page.locator('.mtab[data-tab="board"]').click();
+  }
+}
 
 async function boardPosts(page: import("@playwright/test").Page, eventId: number): Promise<any[]> {
   const resp = await page.request.fetch(`${API_BASE}/api/v1/events/${eventId}/contact-posts`);
@@ -74,6 +83,10 @@ test.describe("Bulletin board", () => {
     try {
       await anonPage.goto(`${WEB_BASE}/events/${eventId}`);
 
+      // On phones the board lives in the event page's 📌 tab: its panel stays
+      // hidden until that tab is opened, and a click on the summary would wait
+      // for visibility until the whole test timed out (#1790).
+      await openBoardTabOnPhone(anonPage);
       // Opening the panel refreshes _form_token in the background and
       // disables the submit button until that fetch resolves (#979).
       await anonPage.locator(".board-post-details summary").click();
@@ -108,6 +121,7 @@ test.describe("Bulletin board", () => {
       // on pathname alone, not a regex anchored with $ (which never matches
       // once a query string is appended).
       await anonPage.waitForURL((url) => url.pathname === `/events/${eventId}`);
+      await openBoardTabOnPhone(anonPage);
       await expect(anonPage.locator(".msg-ok")).toBeVisible();
 
       // Board posts always get a manage-link email regardless of
@@ -138,6 +152,7 @@ test.describe("Bulletin board", () => {
       }
 
       await anonPage.goto(`${WEB_BASE}/events/${eventId}`);
+      await openBoardTabOnPhone(anonPage);
       const boardItem = anonPage.locator(".board-item").filter({ hasText: message });
       await expect(boardItem).toBeVisible();
 
@@ -156,6 +171,7 @@ test.describe("Bulletin board", () => {
       expect(uploadResp.status()).toBe(200); // follows the 303 back to the manage page
 
       await anonPage.goto(`${WEB_BASE}/events/${eventId}`);
+      await openBoardTabOnPhone(anonPage);
       const boardItemWithImage = anonPage.locator(".board-item").filter({ hasText: message });
       await expect(boardItemWithImage.locator(".board-item-imgs img")).toBeVisible();
     } finally {

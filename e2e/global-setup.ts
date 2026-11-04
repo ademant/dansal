@@ -4,6 +4,7 @@ import * as path from "path";
 import { createUsers, adminMagicLinkToken } from "./helpers/seed";
 import { ADMIN } from "./fixtures/data";
 import { AUTH_FILE } from "./helpers/auth";
+import { cleanupStaleLedgers, tokenFromAuthFile } from "./helpers/cleanup";
 
 // Runs once for the whole suite, before any test file or worker starts —
 // regardless of how many spec files call fullSeed() or how many workers run
@@ -44,4 +45,12 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
   await page.context().storageState({ path: AUTH_FILE });
 
   await browser.close();
+
+  // Entities left behind by a crashed earlier run (#1793). Runs after the
+  // fresh admin session was saved, so the token is current.
+  await cleanupStaleLedgers({
+    apiBase: process.env.API_URL ?? "http://localhost:8000",
+    token: tokenFromAuthFile(AUTH_FILE),
+    urls: [baseURL],
+  });
 }

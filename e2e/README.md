@@ -76,6 +76,20 @@ Retries come from `playwright.config.ts` (`retries: 1`): a test that fails once
 and passes on the second attempt is reported as flaky, not failed. Do not pass
 `--retries=0` for a normal run, or flaky tests look like real failures.
 
+## Cleanup of test data (#1793)
+
+After each run, `global-teardown.ts` deletes the events, locations, musicians
+and instructors the run created (bookings included: they are test data). Seed
+data shared between runs (the seed org, users) is not deleted. Each created id
+is written to `e2e/.run/cleanup/run-<id>.jsonl` as it is created. Ids that fail
+to delete stay there. `global-setup.ts` retries ledgers older than an hour
+from crashed runs.
+
+Cleanup only runs on hosts in `CLEANUP_ALLOWED_HOSTS` (`helpers/cleanup.ts`).
+Anything else is refused and left in the ledger. Locations, musicians and
+instructors are removed with `dansal_admin delete`, which needs
+`server.allow_admin_delete: true` on the target instance.
+
 ## Smoke and full suites
 
 Journeys tagged `@smoke` form the smoke suite: desktop only, run on every PR

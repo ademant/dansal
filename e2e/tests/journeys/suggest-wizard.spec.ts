@@ -133,9 +133,16 @@ async function submitWizardOnCurrentPage(
   } catch {
     const err = page.locator(".form-error").first();
     if (await err.count()) {
-      throw new Error(
-        `suggest submit was rejected: ${(await err.innerText()).trim()}`
-      );
+      const text = (await err.innerText()).trim();
+      // The API's per-IP suggest limit (server.suggest_rate_limit, 3 per 10
+      // min by default). Name it, so a run that hits it is not read as a
+      // form bug (#1804). The fix is the limit on the e2e instance.
+      if (/too many requests|zu viele anfragen/i.test(text)) {
+        throw new Error(
+          `suggest submit rate-limited (server.suggest_rate_limit reached for this IP): ${text}`
+        );
+      }
+      throw new Error(`suggest submit was rejected: ${text}`);
     }
     throw new Error("suggest submit did not reach the done page");
   }

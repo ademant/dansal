@@ -2,6 +2,8 @@ import { defineConfig, devices } from "@playwright/test";
 import * as fs from "fs";
 import * as path from "path";
 import { AUTH_FILE } from "./helpers/auth";
+// Sets E2E_RUN_ID in this process before workers start, so all workers share one cleanup ledger (#1793).
+import "./helpers/cleanup";
 
 const BASE_URL = process.env.BASE_URL ?? "http://localhost:8080";
 const RESULTS_DIR = path.resolve(__dirname, "test-results");
@@ -27,6 +29,8 @@ export default defineConfig({
   // AUTH_FILE below — see global-setup.ts and #1252 for why this replaced
   // 13 real per-run logins with 1.
   globalSetup: require.resolve("./global-setup"),
+  // Deletes what this run created, after all tests, pass or fail (#1793).
+  globalTeardown: require.resolve("./global-teardown"),
   reporter: [
     ["list"],
     ["json", { outputFile: "test-results/results.json" }],

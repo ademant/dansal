@@ -1,5 +1,6 @@
 import { execSync } from "child_process";
 import { APIResponse, Browser, BrowserContext, Page } from "@playwright/test";
+import { recordCreated } from "./cleanup";
 import {
   ADMIN,
   EDITOR,
@@ -342,7 +343,9 @@ export async function seedLocation(
   // bodies too) — never a flat object with .id at the top level, even for
   // a single-location request.
   const data = await apiPost(page, "/api/v1/locations", token, jitteredLocation());
-  return data[0].location.id;
+  const id: number = data[0].location.id;
+  recordCreated("location", id);
+  return id;
 }
 
 // safeMaxDaysOut looks at the database's actual published-future-event
@@ -385,6 +388,7 @@ export async function seedEventsAndTimetable(
     const data = await apiPost(page, "/api/v1/events", token, payload);
     const created = Array.isArray(data) ? data[0] : data;
     events.push({ id: created?.id, title: created?.title ?? payload.title });
+    recordCreated("event", created?.id);
   }
   if (events.length > 0) {
     const tt = seedTimetable(events[0].id);
@@ -417,6 +421,7 @@ export async function seedMusician(
   // /musicians/undefined (#1195 item 4): not a broken template, a broken
   // seed helper.
   const data = await apiPost(page, "/api/v1/musicians", token, MUSICIAN);
+  recordCreated("musician", data[0].id);
   return data[0].id;
 }
 
@@ -425,6 +430,7 @@ export async function seedInstructor(
   token: string
 ): Promise<number> {
   const data = await apiPost(page, "/api/v1/instructors", token, INSTRUCTOR);
+  recordCreated("instructor", data.id);
   return data.id;
 }
 

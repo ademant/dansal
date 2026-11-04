@@ -154,6 +154,9 @@ tr.mc-week.mc-sel td{border-top:2px solid var(--link);border-bottom:2px solid va
 .heat-past-2{background:color-mix(in srgb, var(--heat-2) 35%, white)}
 .heat-past-3{background:color-mix(in srgb, var(--heat-3) 35%, white)}
 .heat-past-4{background:color-mix(in srgb, var(--heat-4) 35%, white)}
+/* #1799: the tint is light in both themes, so past cells need dark text.
+   The td. prefix beats .mc-other's !important on other-month cells. */
+td.heat-past-1,td.heat-past-2,td.heat-past-3,td.heat-past-4{color:#333!important}
 .week-mobile{display:none}
 .week-mobile-nav{display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem}
 .wm-arrow{padding:.25rem .65rem;border:1px solid var(--border-mid);border-radius:4px;background:var(--btn-bg);cursor:pointer;font-size:1.05rem;line-height:1;color:var(--fg)}

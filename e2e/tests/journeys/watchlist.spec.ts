@@ -87,13 +87,31 @@ test.describe("Watchlist (#1554)", () => {
       .poll(() => page.evaluate(() => localStorage.getItem("dansal_watchlist")))
       .toBe(JSON.stringify({ v: 1, ids: [id] }));
   });
-  test("save the list on the server, then load it with the key in another browser", async ({ page, browser }) => {
+  test("save the list on the server, then load it with the key in another browser", async ({ page, browser }, testInfo) => {
+    // #1798: one save per run. watchlistCreateThrottle allows 5 new keys per
+    // hour per IP, and the suite shares one IP, so the phone project would
+    // spend the desktop run's budget. The server logic is the same at both
+    // viewports, so save only on desktop.
+    test.skip(testInfo.project.name !== "desktop", "one key per run: desktop only (#1798)");
     const id = seed.eventIds[0];
     await page.goto(`${EVENT_HREF_PREFIX}${id}`);
     await eventStar(page, id).click();
 
     await page.goto("/watchlist");
+    // Wait for the save response itself, so a 429 fails here with its real
+    // cause instead of a 30 s timeout on the load step below (#1798).
+    const saved = page.waitForResponse(
+      (r) => r.request().method() === "POST" && new URL(r.url()).pathname === "/watchlist/save",
+      { timeout: 30_000 }
+    );
     await page.locator(".wl-server button").nth(0).click();
+    const saveResp = await saved;
+    expect(
+      saveResp.status(),
+      saveResp.status() === 429
+        ? "save rate-limited: watchlistCreateThrottle allows 5 new keys per hour per IP (#1798)"
+        : "/watchlist/save response"
+    ).toBe(200);
     // The save waits briefly for the form token to age (formguard.go), so
     // poll for the key rather than reading it at once.
     await expect(page.locator("#wl-key-out")).toHaveText(/^[0-9a-f]{32}$/);

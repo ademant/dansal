@@ -162,6 +162,7 @@ func main() {
 		InternalSecret:  cfg.InternalSharedSecret,
 		FetchRunTimeout: time.Duration(cfg.FetchRunTimeoutSecs) * time.Second,
 	}
+	startTemplatePruning(db, client) // #1792: drop templates whose org/location was deleted
 
 	tmpls := loadTemplates()
 

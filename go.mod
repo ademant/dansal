@@ -3,7 +3,7 @@ module github.com/ademant/dansal
 go 1.27.3
 
 require (
-	filippo.io/age v1.2.1
+	filippo.io/age v1.3.2
 	github.com/andybalholm/brotli v1.2.7
 	github.com/arran4/golang-ical v0.3.8
 	github.com/coreos/go-oidc/v3 v3.21.0
@@ -32,6 +32,7 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
+	filippo.io/hpke v0.4.0 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect

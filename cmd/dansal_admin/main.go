@@ -75,6 +75,9 @@ type request struct {
 	MatrixPassword        string   `json:"matrix_password,omitempty"`
 	HeartbeatIntervalMins int      `json:"heartbeat_interval_mins,omitempty"`
 	EventID               int      `json:"event_id,omitempty"`
+	Kind                  string   `json:"kind,omitempty"`
+	EntityID              int      `json:"entity_id,omitempty"`
+	Confirm               bool     `json:"confirm,omitempty"`
 	Timezone              string   `json:"timezone,omitempty"`
 }
 
@@ -255,6 +258,8 @@ func main() {
 		cmdMailBounces()
 	case "delete-event":
 		cmdDeleteEvent(rest)
+	case "delete":
+		cmdDeleteEntity(rest)
 	case "delete-all-events":
 		cmdDeleteAllEvents(rest)
 	case "export-locations-geojson":
@@ -318,6 +323,7 @@ Maintenance:
 
 Event management:
   delete-event      --id INT                         Delete an event by ID
+  delete            --type KIND --id INT [--confirm] Delete an organisation, location, series, musician or instructor
   delete-all-events [--confirm]                     Delete ALL events in database
 
 Location GeoJSON:
@@ -830,6 +836,27 @@ List all issued certificates with their status (valid / REVOKED / expired).`,
 	"mtls-ca-cert": `Usage: dansal_admin mtls-ca-cert
 
 Print the CA certificate in PEM format (for piping into nginx config or distribution).`,
+
+	"delete": `Usage: dansal_admin delete --type KIND --id INT [--confirm]
+
+Delete one organisation, location, series, musician or instructor (#1792).
+Without --confirm nothing is changed: the command prints what would change.
+
+KIND and what happens to the rest:
+  organisation  its fetch URLs are deleted; its events and series stay, org-free;
+                event templates for it are removed by dansal_web
+  location      its events and timetable entries stay, location-free; rooms go with it;
+                event templates for it are removed by dansal_web
+  series        its events stay and leave the series
+  musician      events stay; only the links are removed
+  instructor    events stay; only the links are removed
+
+Requires server.allow_admin_delete: true in config.yaml (off by default).
+
+Flags:
+  --type     organisation, location, series, musician or instructor (required)
+  --id       ID of the entity (required)
+  --confirm  apply the change`,
 
 	"delete-event": `Usage: dansal_admin delete-event --id INT
 
@@ -1705,6 +1732,40 @@ func cmdMailBounces() {
 		}
 	}
 	fmt.Printf("bounces checked: %d total, %d newly marked\n", len(results), marked)
+}
+
+func cmdDeleteEntity(args []string) {
+	fs := flag.NewFlagSet("delete", flag.ExitOnError)
+	fs.Usage = func() { fmt.Println(commandHelp["delete"]) }
+	kind := fs.String("type", "", "organisation, location, series, musician or instructor")
+	id := fs.Int("id", 0, "ID of the entity")
+	confirm := fs.Bool("confirm", false, "apply the change (without it, only the preview is shown)")
+	fs.Parse(args)
+	if *kind == "" || *id == 0 {
+		die("--type and --id are required")
+	}
+	resp := send(socketPath, request{Cmd: "delete-entity", Kind: *kind, EntityID: *id, Confirm: *confirm})
+	if !resp.OK {
+		die("%s", resp.Error)
+	}
+	var rep struct {
+		Changes []struct {
+			What  string `json:"what"`
+			Count int64  `json:"count"`
+		} `json:"changes"`
+		Note string `json:"note"`
+	}
+	if err := json.Unmarshal(resp.Data, &rep); err != nil {
+		die("unexpected response: %v", err)
+	}
+	for _, c := range rep.Changes {
+		fmt.Printf("  %-34s %d\n", c.What, c.Count)
+	}
+	if rep.Note != "" {
+		fmt.Println(rep.Note)
+	} else {
+		fmt.Printf("deleted %s %d\n", *kind, *id)
+	}
 }
 
 func cmdDeleteEvent(args []string) {

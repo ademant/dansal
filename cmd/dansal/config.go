@@ -38,29 +38,32 @@ type ServerConfig struct {
 	TokenExpirationHours          int    `yaml:"token_expiration_hours"`
 	PublisherTokenExpirationHours int    `yaml:"publisher_token_expiration_hours"`
 	RateLimit                     int    `yaml:"rate_limit"`
-	SuggestRateLimit              int    `yaml:"suggest_rate_limit"`          // anonymous suggestions per client IP per 10 min; 0 = default 3
-	AccountMutationRateLimit      int    `yaml:"account_mutation_rate_limit"` // per-account create/update cap, requests/min; 0 = default 30 (see createUpdateLimiter)
-	MaxBodyBytes                  int64  `yaml:"max_body_bytes"`
-	ReadHeaderTimeoutSecs         int    `yaml:"read_header_timeout_secs"`
-	ReadTimeoutSecs               int    `yaml:"read_timeout_secs"`
-	WriteTimeoutSecs              int    `yaml:"write_timeout_secs"`
-	IdleTimeoutSecs               int    `yaml:"idle_timeout_secs"`
-	MaxConnsPerIP                 int    `yaml:"max_conns_per_ip"`
-	LogLevel                      string `yaml:"log_level"` // debug | info (default) | warning | error (#1645)
-	ImagesDir                     string `yaml:"images_dir"`
-	ImageXMax                     int    `yaml:"image_x_max"`
-	ImageYMax                     int    `yaml:"image_y_max"`
-	GalleryMaxImages              int    `yaml:"gallery_max_images"` // uploaded gallery pictures per musician (#1362); 0 = default 8
-	AdminSocket                   string `yaml:"admin_socket"`
-	DBPath                        string `yaml:"db_path"`
-	DBMaxConns                    int    `yaml:"db_max_conns"`
-	LoginRateLimit                int    `yaml:"login_rate_limit"`
-	LoginMaxFailures              int    `yaml:"login_max_failures"`
-	LoginFailureWindowSecs        int    `yaml:"login_failure_window_secs"`
-	InviteExpiryHours             int    `yaml:"invite_expiry_hours"`
-	InviteQRExpiryMinutes         int    `yaml:"invite_qr_expiry_minutes"`
-	InvitePublisherExpiryMinutes  int    `yaml:"invite_publisher_expiry_minutes"`
-	VerificationExpiryHours       int    `yaml:"verification_expiry_hours"`
+	// AllowAdminDelete enables `dansal_admin delete` (#1792). Off by default:
+	// it is the prod guard, so set it only on dev and test instances.
+	AllowAdminDelete             bool   `yaml:"allow_admin_delete"`
+	SuggestRateLimit             int    `yaml:"suggest_rate_limit"`          // anonymous suggestions per client IP per 10 min; 0 = default 3
+	AccountMutationRateLimit     int    `yaml:"account_mutation_rate_limit"` // per-account create/update cap, requests/min; 0 = default 30 (see createUpdateLimiter)
+	MaxBodyBytes                 int64  `yaml:"max_body_bytes"`
+	ReadHeaderTimeoutSecs        int    `yaml:"read_header_timeout_secs"`
+	ReadTimeoutSecs              int    `yaml:"read_timeout_secs"`
+	WriteTimeoutSecs             int    `yaml:"write_timeout_secs"`
+	IdleTimeoutSecs              int    `yaml:"idle_timeout_secs"`
+	MaxConnsPerIP                int    `yaml:"max_conns_per_ip"`
+	LogLevel                     string `yaml:"log_level"` // debug | info (default) | warning | error (#1645)
+	ImagesDir                    string `yaml:"images_dir"`
+	ImageXMax                    int    `yaml:"image_x_max"`
+	ImageYMax                    int    `yaml:"image_y_max"`
+	GalleryMaxImages             int    `yaml:"gallery_max_images"` // uploaded gallery pictures per musician (#1362); 0 = default 8
+	AdminSocket                  string `yaml:"admin_socket"`
+	DBPath                       string `yaml:"db_path"`
+	DBMaxConns                   int    `yaml:"db_max_conns"`
+	LoginRateLimit               int    `yaml:"login_rate_limit"`
+	LoginMaxFailures             int    `yaml:"login_max_failures"`
+	LoginFailureWindowSecs       int    `yaml:"login_failure_window_secs"`
+	InviteExpiryHours            int    `yaml:"invite_expiry_hours"`
+	InviteQRExpiryMinutes        int    `yaml:"invite_qr_expiry_minutes"`
+	InvitePublisherExpiryMinutes int    `yaml:"invite_publisher_expiry_minutes"`
+	VerificationExpiryHours      int    `yaml:"verification_expiry_hours"`
 	// CheckinOpensBeforeMinutes / CheckinClosesAfterMinutes bound how long a
 	// booking's QR code may be scanned at the door, relative to the event's own
 	// start and end times (#1382). The QR is a physical-world credential printed

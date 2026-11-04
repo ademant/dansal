@@ -24,6 +24,10 @@ type adminRequest struct {
 	Password string `json:"password,omitempty"`
 	Role     string `json:"role,omitempty"`
 	OrgID    int    `json:"org_id,omitempty"`
+	// Kind, EntityID and Confirm drive "delete-entity" (#1792).
+	Kind     string `json:"kind,omitempty"`
+	EntityID int    `json:"entity_id,omitempty"`
+	Confirm  bool   `json:"confirm,omitempty"`
 	Path     string `json:"path,omitempty"`
 	Since    string `json:"since,omitempty"`
 	// Mode is full, incremental or cumulative for "backup" (#1765); empty = config.
@@ -136,6 +140,7 @@ var mutatingAdminCmds = map[string]bool{
 	"prune-images":             true,
 	"mail-bounces":             true,
 	"delete-event":             true,
+	"delete-entity":            true,
 	"delete-all-events":        true,
 	"import-locations-geojson": true,
 }
@@ -170,6 +175,8 @@ func adminAuditTarget(req adminRequest) string {
 		return "timezone=" + req.Timezone
 	case "delete-event":
 		return fmt.Sprintf("event_id=%d", req.EventID)
+	case "delete-entity":
+		return fmt.Sprintf("kind=%s id=%d confirm=%t", req.Kind, req.EntityID, req.Confirm)
 	default:
 		return "-"
 	}
@@ -195,6 +202,8 @@ func dispatchAdminCmdInner(req adminRequest) adminResponse {
 		return adminCreateUser(req)
 	case "delete-user":
 		return adminDeleteUser(req)
+	case "delete-entity":
+		return adminDeleteEntity(req)
 	case "set-password":
 		return adminSetPassword(req)
 	case "set-role":

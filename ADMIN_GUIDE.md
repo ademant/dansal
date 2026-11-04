@@ -115,6 +115,7 @@ Key settings (all others have sensible defaults):
 | `server.rate_limit` | Requests per minute per IP (default 100) |
 | `server.login_rate_limit` | Login attempts per minute per IP (default 5) |
 | `server.suggest_rate_limit` | Anonymous event suggestions per client IP per 10 minutes (default 3). Raise it on a dev/test instance whose e2e suite submits many suggestions |
+| `server.allow_admin_delete` | Enables `dansal_admin delete` (#1792). Off by default; the prod guard. Set it only on dev and test instances |
 | `server.login_max_failures` | Failed logins before account lock (default 10) |
 | `server.login_failure_window_secs` | Rolling window for failure counting (default 600) |
 | `server.admin_allowed_ips` | IPs allowed to reach `/api/v1/admin/*` (default loopback) |
@@ -398,6 +399,17 @@ dansal_admin --config /etc/dansal/prod/config.yaml fetch-all
 # Check the fetch timer
 sudo systemctl status dansal-fetch@prod.timer
 ```
+
+### Deleting an organisation, location, series, musician or instructor (#1792)
+
+`dansal_admin delete --type KIND --id N` removes one entity. Without `--confirm` it only prints what would change; with `--confirm` it applies the change. Requires `server.allow_admin_delete: true`.
+
+- **organisation:** its feed URLs are deleted. Its events and series stay, without the organisation.
+- **location:** its events and timetable entries stay, without the location. Its rooms are deleted with it.
+- **series:** its events stay and leave the series.
+- **musician, instructor:** events stay; only the links are removed.
+
+Event templates that belong to a deleted organisation or location are removed by the web server, at startup and then hourly, because the templates live in its database.
 
 ### Pruning Orphaned Images
 

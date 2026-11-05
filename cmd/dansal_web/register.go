@@ -594,11 +594,48 @@ func registerCancelHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		parts := strings.SplitN(c.Value, ":", 2)
 		if len(parts) == 2 {
 			tok := parts[1]
+			// #1823: an approved registration is not withdrawn (its account is
+			// live). Send the applicant to login and keep the cookie.
+			if id, err := strconv.Atoi(parts[0]); err == nil {
+				if st, err := client.GetRegistrationStatus(r.Context(), id, tok); err == nil && st != nil && st.Approved {
+					http.Redirect(w, r, "/login", http.StatusSeeOther)
+					return
+				}
+			}
 			if err := client.CancelRegistration(r.Context(), tok); err != nil {
 				logging.Errorf("register cancel: %v", err)
 			}
 		}
 		http.SetCookie(w, &http.Cookie{Name: pendingRegCookie, MaxAge: -1, Path: "/", Secure: true})
 		http.Redirect(w, r, "/register", http.StatusSeeOther)
+	}
+}
+
+// registerStatusHandler (#1823) answers the waiting page's poll: GET /register/status
+// with the pending_reg cookie. state is "waiting" while the registration is
+// awaiting review, "approved" once it is approved, and "gone" when it is
+// expired, withdrawn or unknown. The page reloads when the state changes.
+func registerStatusHandler(client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		state := "gone"
+		if c, err := r.Cookie(pendingRegCookie); err == nil {
+			parts := strings.SplitN(c.Value, ":", 2)
+			if len(parts) == 2 {
+				if id, err := strconv.Atoi(parts[0]); err == nil {
+					if st, err := client.GetRegistrationStatus(r.Context(), id, parts[1]); err == nil && st != nil && !st.Expired {
+						switch {
+						case st.Approved:
+							state = "approved"
+						case st.Verified:
+							state = "waiting"
+						}
+					}
+				}
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		// state is one of three fixed words, so no escaping is needed.
+		w.Write([]byte(`{"state":"` + state + `"}`))
 	}
 }

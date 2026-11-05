@@ -19,10 +19,14 @@
     {{end}}
     {{else if .PendingVerified}}
     {{if .PendingHasAuthMethod}}
+    {{/* #1823: the page polls /register/status while waiting and reloads on
+         a change; aria-live announces the change to screen readers. */}}
+    <div data-pending-poll aria-live="polite">
     <p>{{$.Strings.T "pending_reg_awaiting_review"}}</p>
     {{if .PendingHasPasskey}}
     <p style="margin:.5rem 0 0;font-size:.88rem;color:var(--fg-muted)">✓ {{$.Strings.T "pending_reg_passkey_bound"}}</p>
     {{end}}
+    </div>
     {{else}}
     {{/* Mandatory onboarding (#1223): the account is created here, disabled,
          right after email verification -- admin approval later only enables
@@ -200,6 +204,21 @@
 .bind-err{background:#fee2e2;color:#991b1b}
 .hint{font-size:.82rem;color:var(--fg-muted);font-weight:normal}
 </style>
+<script nonce="{{$.Nonce}}">
+// #1823: while awaiting review, check the registration state every 60 s
+// (paused while the tab is hidden) and reload once it changes, so an open
+// tab shows the approved view without a manual refresh.
+(function(){
+  if(!document.querySelector('[data-pending-poll]')) return;
+  setInterval(function(){
+    if(document.hidden) return;
+    fetch('/register/status',{credentials:'same-origin',cache:'no-store'})
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){ if(d && d.state !== 'waiting') location.reload(); })
+      .catch(function(){});
+  }, 60000);
+})();
+</script>
 <script nonce="{{$.Nonce}}">
 function switchTab(tab) {
   document.getElementById('join-fields').hidden = tab !== 'join';

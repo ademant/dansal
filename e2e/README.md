@@ -21,8 +21,11 @@ provide.
   suggest specs submit more than that in one run (#1804):
   ```yaml
   suggest_rate_limit: 100
+  suggest_preview_rate_limit: 100
   ```
-  A submit rejected by it fails with `suggest submit rate-limited`.
+  A submit rejected by it fails with `suggest submit rate-limited`. The
+  preview limit (default 5 per 10 minutes) is separate: the suggest specs
+  preview several times per run too (#1819).
 - **Mail capture** for the mail-dependent specs (auth-invite,
   auth-magic-link, board, checkin, suggest-wizard). The instance's outgoing
   mail goes to a fake sendmail that appends each message to the mbox named by

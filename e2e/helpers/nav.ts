@@ -95,9 +95,7 @@ export async function searchFilter(
 }
 
 export async function goToAllView(page: Page): Promise<void> {
-  // Below 640px the desktop #tmt-week/#tmt-all toggle (inside .tmt) is
-  // CSS-hidden. There the list tab (#mtab-list, the default, #1613) shows
-  // every future event, so no click is needed.
+  // Desktop: switch the week/all toggle (#tmt-all) to "all".
   const btn = page.locator("#tmt-all");
   if (await btn.isVisible().catch(() => false)) {
     const isActive = await btn.evaluate((el) =>
@@ -108,6 +106,9 @@ export async function goToAllView(page: Page): Promise<void> {
       await page.waitForTimeout(300);
     }
   }
+  // Phones: the index opens on the map tab (data-mtab="map"); the event tiles
+  // sit in the list panel, so select it (#1820). No-op on desktop.
+  await openHomeTab(page, "list");
 }
 
 // openHomeTab switches the phone bottom tab bar (#1613) to list, week or map.

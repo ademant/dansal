@@ -188,7 +188,7 @@ test.describe("Role-based access boundaries", () => {
       });
       expect(categoryResp.status()).toBe(403);
 
-      const fetchSourceResp = await editorPage.request.fetch(`${API_BASE}/api/v1/feeds`, {
+      const fetchSourceResp = await editorPage.request.fetch(`${API_BASE}/api/v1/feeds?limit=1000`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

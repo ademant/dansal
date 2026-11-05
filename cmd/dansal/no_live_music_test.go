@@ -58,7 +58,7 @@ func TestNoLiveMusicFlagIsStoredAndListed(t *testing.T) {
 // touches the database, so a stale form or an API client cannot store the
 // contradiction.
 func TestSuggestRefusesNoLiveMusicWithMusicians(t *testing.T) {
-	initSuggestRateLimiters(3)
+	initSuggestRateLimiters(3, 5)
 	body := `{"title":"Session","no_live_music":true,"musicians":["Some Band"]}`
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/suggestions", strings.NewReader(body))
 	r.Header.Set("Content-Type", "application/json")

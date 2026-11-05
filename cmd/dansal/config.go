@@ -42,6 +42,7 @@ type ServerConfig struct {
 	// it is the prod guard, so set it only on dev and test instances.
 	AllowAdminDelete             bool   `yaml:"allow_admin_delete"`
 	SuggestRateLimit             int    `yaml:"suggest_rate_limit"`          // anonymous suggestions per client IP per 10 min; 0 = default 3
+	SuggestPreviewRateLimit      int    `yaml:"suggest_preview_rate_limit"`  // anonymous previews per client IP per 10 min (event and feed suggest); 0 = default 5
 	AccountMutationRateLimit     int    `yaml:"account_mutation_rate_limit"` // per-account create/update cap, requests/min; 0 = default 30 (see createUpdateLimiter)
 	MaxBodyBytes                 int64  `yaml:"max_body_bytes"`
 	ReadHeaderTimeoutSecs        int    `yaml:"read_header_timeout_secs"`
@@ -433,6 +434,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.SuggestRateLimit == 0 {
 		cfg.Server.SuggestRateLimit = 3
+	}
+	if cfg.Server.SuggestPreviewRateLimit == 0 {
+		cfg.Server.SuggestPreviewRateLimit = 5
 	}
 	if cfg.Server.LoginRateLimit == 0 {
 		cfg.Server.LoginRateLimit = 5

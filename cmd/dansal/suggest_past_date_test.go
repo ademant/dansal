@@ -39,7 +39,7 @@ func TestSuggestHandlerRejectsPastStartTime(t *testing.T) {
 		instanceTimezone, _ = time.LoadLocation("Europe/Berlin")
 	}
 	config = &Config{}
-	initSuggestRateLimiters(3)
+	initSuggestRateLimiters(3, 5)
 
 	post := func(startTime, endTime string) *httptest.ResponseRecorder {
 		body, _ := json.Marshal(SuggestRequest{

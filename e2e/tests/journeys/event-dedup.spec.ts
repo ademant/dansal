@@ -186,7 +186,7 @@ test.describe("Event dedup tiers (API)", () => {
   test("Tier 3: the same feed re-sending its event with a new title merges", async ({
     page,
   }) => {
-    const sources = await authedJSON(page, "GET", "/api/v1/feeds");
+    const sources = await authedJSON(page, "GET", "/api/v1/feeds?limit=1000");
     test.skip(!Array.isArray(sources) || sources.length === 0, "needs a fetch source on the target");
     const fetch_source_id = sources[0].id;
     const firstId = await postEvent(

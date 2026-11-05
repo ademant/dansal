@@ -121,6 +121,14 @@ export async function openHomeTab(page: Page, tab: "list" | "week" | "map"): Pro
   }
 }
 
+// openMobileTab selects a page's bottom tab (.mtab[data-tab]) on phones, where
+// only the active tab panel is shown. Desktop shows every panel, so it does
+// nothing there. Used by org/location pages (#1816, #1807).
+export async function openMobileTab(page: Page, tab: string): Promise<void> {
+  const btn = page.locator(`.mtab[data-tab="${tab}"]`);
+  if (await btn.isVisible().catch(() => false)) await btn.click();
+}
+
 export async function expectVisible(
   page: Page,
   selector: string,

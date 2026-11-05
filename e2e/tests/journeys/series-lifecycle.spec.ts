@@ -2,6 +2,7 @@ import { test, expect } from "../../helpers/fixtures";
 import { Page } from "@playwright/test";
 import { fullSeed, SeedResult, getTokenFromCookie, gotoAdminEventsFor } from "../../helpers/seed";
 import { AUTH_FILE } from "../../helpers/auth";
+import { openMobileTab } from "../../helpers/nav";
 import {
   randomFutureDate,
   isoDate,
@@ -194,6 +195,7 @@ test.describe("Admin: recurring event series lifecycle", () => {
     // -- Cadence renders on the org page and on each event page. --
     const orgURL = await orgPageURLFor(page, ev1.id);
     await page.goto(orgURL);
+    await openMobileTab(page, "series");
     const recurringItem = page.locator(".recurring-item").filter({ hasText: seriesTitle });
     await expect(recurringItem).toBeVisible();
     await expect(recurringItem.locator(".recurring-cadence")).toContainText(cadenceText);
@@ -221,6 +223,7 @@ test.describe("Admin: recurring event series lifecycle", () => {
     // Org page's recurring entry survives (other instances are still
     // upcoming and published).
     await page.goto(orgURL);
+    await openMobileTab(page, "series");
     await expect(page.locator(".recurring-item").filter({ hasText: seriesTitle })).toBeVisible();
 
     // -- Assign a standalone event to the series via its own edit page. --

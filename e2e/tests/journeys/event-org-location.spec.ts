@@ -11,6 +11,7 @@ import {
   gotoAdminEventsFor,
 } from "../../helpers/seed";
 import { AUTH_FILE } from "../../helpers/auth";
+import { openMobileTab } from "../../helpers/nav";
 import { VIEWER, randomFutureDate, isoDate, hhmm, EVENT_DATE_MIN_DAYS, EVENT_DATE_MAX_DAYS } from "../../fixtures/data";
 
 const API_BASE = process.env.API_URL ?? "http://localhost:8000";
@@ -124,14 +125,6 @@ async function orgPageURLFor(page: Page, eventId: number): Promise<string> {
   return href;
 }
 
-// On mobile the org and location pages open on the Info tab and the event list
-// sits in the events tab panel (hidden until selected, #1816). Select that tab
-// when the tab bar is shown; desktop shows every panel, so there is nothing to do.
-async function openEventsTab(page: Page): Promise<void> {
-  const tab = page.locator('.mtab[data-tab="events"]');
-  if (await tab.isVisible()) await tab.click();
-}
-
 test.describe("Admin: event org/location assignment", () => {
   test.beforeAll(async ({ browser }) => {
     const context = await browser.newContext({ storageState: AUTH_FILE });
@@ -175,7 +168,7 @@ test.describe("Admin: event org/location assignment", () => {
 
     const org1URL = await orgPageURLFor(page, eventId);
     await page.goto(org1URL);
-    await openEventsTab(page);
+    await openMobileTab(page, "events");
     await expect(page.locator(".event-list").filter({ hasText: title })).toBeVisible();
 
     // -- Assign to loc1 via the same tool (org left untouched). --
@@ -197,7 +190,7 @@ test.describe("Admin: event org/location assignment", () => {
     expect(ev.organization_id).toBe(org1Id); // untouched by the location-only call
 
     await page.goto(`/location/${loc1Id}`);
-    await openEventsTab(page);
+    await openMobileTab(page, "events");
     await expect(page.locator(".event-list").filter({ hasText: title })).toBeVisible();
 
     // -- Change both org and location via the regular edit form. Both are
@@ -234,10 +227,10 @@ test.describe("Admin: event org/location assignment", () => {
 
     const org2URL = await orgPageURLFor(page, eventId);
     await page.goto(org2URL);
-    await openEventsTab(page);
+    await openMobileTab(page, "events");
     await expect(page.locator(".event-list").filter({ hasText: title })).toBeVisible();
     await page.goto(`/location/${loc2Id}`);
-    await openEventsTab(page);
+    await openMobileTab(page, "events");
     await expect(page.locator(".event-list").filter({ hasText: title })).toBeVisible();
   });
 });
@@ -344,7 +337,7 @@ test.describe("Org membership rules on create/assign (#1273, #1275)", () => {
 
     const orgURL = await orgPageURLFor(page, orglessId);
     await page.goto(orgURL);
-    await openEventsTab(page);
+    await openMobileTab(page, "events");
     await expect(page.locator(".event-list").filter({ hasText: orglessTitle })).toBeVisible();
 
     await viewerContext.close();

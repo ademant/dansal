@@ -4650,7 +4650,7 @@ func reloadConfig(path string) {
 	createUpdateLimiter = newAccountLimiter(config.Server.AccountMutationRateLimit, time.Minute)
 	connLimiter = NewConnLimiter(config.Server.MaxConnsPerIP)
 	initSuggestRateLimiters(config.Server.SuggestRateLimit)
-	initFetchSuggestRateLimiters()
+	initFetchSuggestRateLimiters(config.Server.SuggestRateLimit)
 	initRegisterRateLimiter()
 	logging.Infof("Config reloaded from %s", path)
 }
@@ -4759,7 +4759,7 @@ func main() {
 	createUpdateLimiter = newAccountLimiter(config.Server.AccountMutationRateLimit, time.Minute)
 	connLimiter = NewConnLimiter(config.Server.MaxConnsPerIP)
 	initSuggestRateLimiters(config.Server.SuggestRateLimit)
-	initFetchSuggestRateLimiters()
+	initFetchSuggestRateLimiters(config.Server.SuggestRateLimit)
 	initRegisterRateLimiter()
 	initResendRateLimiter()
 	startAutoDeclineJob()

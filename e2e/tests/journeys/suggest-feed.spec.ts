@@ -96,6 +96,19 @@ async function fetchSuggestionRowByEmail(page: Page, email: string) {
   return page.locator("tr").filter({ hasText: email });
 }
 
+// After a submit: wait for the preview, or fail at once if the form shows the
+// rate-limit alert (the feed-suggest limit is server.suggest_rate_limit, #1814).
+async function waitForPreviewOrRateLimit(page: Page) {
+  const preview = page.locator(".fetch-preview-box");
+  const limited = page.getByRole("alert").filter({ hasText: "rate limit exceeded" });
+  await expect(preview.or(limited).first()).toBeVisible();
+  if (await limited.isVisible()) {
+    throw new Error(
+      "feed suggest was rate limited (server.suggest_rate_limit on this instance); the test cannot run until the limit is raised"
+    );
+  }
+}
+
 test.describe("Suggest a feed (#1333)", () => {
   test.beforeAll(async ({ browser }) => {
     const checkCtx = await browser.newContext();
@@ -156,7 +169,7 @@ test.describe("Suggest a feed (#1333)", () => {
       // needed before this click.
       await anonPage.locator('button[type="submit"]').click();
 
-      await expect(anonPage.locator(".fetch-preview-box")).toBeVisible();
+      await waitForPreviewOrRateLimit(anonPage);
       const locRows = anonPage.locator(".fetch-loc-row");
       await expect(locRows.first()).toBeVisible();
 
@@ -274,7 +287,7 @@ test.describe("Suggest a feed (#1333)", () => {
       await anonPage.fill("#field-feed-url", feedURL);
       await anonPage.locator('button[type="submit"]').click();
 
-      await expect(anonPage.locator(".fetch-preview-box")).toBeVisible();
+      await waitForPreviewOrRateLimit(anonPage);
 
       await anonPage.waitForTimeout(1100);
       await anonPage.locator('button[type="submit"]').click();

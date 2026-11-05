@@ -18,10 +18,10 @@ var (
 )
 
 // initSuggestRateLimiters sets up the anonymous suggestion limiters. limit is
-// server.suggest_rate_limit (per client IP per 10 minutes); the preview
-// limiter keeps its own fixed budget.
-func initSuggestRateLimiters(limit int) {
-	suggestPreviewRateLimiter = NewRateLimiter(5, 10*time.Minute)
+// server.suggest_rate_limit and previewLimit is server.suggest_preview_rate_limit
+// (both per client IP per 10 minutes).
+func initSuggestRateLimiters(limit, previewLimit int) {
+	suggestPreviewRateLimiter = NewRateLimiter(previewLimit, 10*time.Minute)
 	suggestRateLimiter = NewRateLimiter(limit, 10*time.Minute)
 }
 

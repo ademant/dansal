@@ -31,11 +31,11 @@ var (
 )
 
 // initFetchSuggestRateLimiters sets up the anonymous feed-suggestion limiters.
-// limit is server.suggest_rate_limit, shared with the event-suggest submit
-// limiter (per client IP per 10 minutes); the preview limiter keeps its own
-// fixed budget.
-func initFetchSuggestRateLimiters(limit int) {
-	fetchSuggestPreviewRateLimiter = NewRateLimiter(5, 10*time.Minute)
+// limit is server.suggest_rate_limit and previewLimit is
+// server.suggest_preview_rate_limit, both shared with the event-suggest
+// limiters (per client IP per 10 minutes).
+func initFetchSuggestRateLimiters(limit, previewLimit int) {
+	fetchSuggestPreviewRateLimiter = NewRateLimiter(previewLimit, 10*time.Minute)
 	fetchSuggestRateLimiter = NewRateLimiter(limit, 10*time.Minute)
 }
 

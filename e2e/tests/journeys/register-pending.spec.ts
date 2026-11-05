@@ -24,16 +24,18 @@ test.beforeEach(({}, testInfo) => {
 async function createRegistration(
   browser: Browser,
   label: string
-): Promise<{ email: string; pendingId: number; token: string }> {
+): Promise<{ email: string; pendingId: number; token: string; name: string }> {
   const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
   try {
     const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const email = `e2e-register-${stamp}@dansal.test`;
+    // Display names are unique (case-insensitive), so each run needs its own.
+    const name = `E2E Register ${label} ${stamp}`;
     const resp = await ctx.request.post(`${API_BASE}/api/v1/register`, {
       data: {
         email,
         reg_type: "new_org",
-        org_name: `E2E Register ${label} ${stamp}`,
+        org_name: name,
         org_contact_email: email,
         channel: "email",
         description: "e2e test #1823",
@@ -41,16 +43,16 @@ async function createRegistration(
     });
     expect(resp.status(), "registration request accepted").toBe(202);
     const body = await resp.json();
-    return { email, pendingId: Number(body.pending_id), token: body.verification_token };
+    return { email, pendingId: Number(body.pending_id), token: body.verification_token, name };
   } finally {
     await ctx.close();
   }
 }
 
 // Verifies the email and sets a password, leaving the page on the waiting view.
-async function completeToWaiting(page: Page, token: string, label: string): Promise<void> {
+async function completeToWaiting(page: Page, token: string, name: string): Promise<void> {
   await page.goto(`/register/verify/email/${token}`, { waitUntil: "domcontentloaded" });
-  await page.fill("#field-auth-display-name", `E2E Register ${label}`);
+  await page.fill("#field-auth-display-name", name);
   await page.fill("#field-auth-password", PASSWORD);
   await page.fill("#field-auth-password-confirm", PASSWORD);
   await page.locator("#btn-set-password").click();
@@ -87,7 +89,7 @@ test("withdraw asks first, then deletes a registration awaiting review", async (
   page,
 }) => {
   const reg = await createRegistration(browser, "withdraw");
-  await completeToWaiting(page, reg.token, "withdraw");
+  await completeToWaiting(page, reg.token, reg.name);
 
   // The waiting view is announced to screen readers.
   await expect(page.locator('[data-pending-poll][aria-live="polite"]')).toHaveCount(1);
@@ -114,7 +116,7 @@ test("approved registration: waiting -> approved, withdraw leaves it alone", asy
   page,
 }) => {
   const reg = await createRegistration(browser, "approved");
-  await completeToWaiting(page, reg.token, "approved");
+  await completeToWaiting(page, reg.token, reg.name);
   expect(await statusState(page)).toBe("waiting");
 
   await approveAsAdmin(browser, reg.email);
@@ -124,7 +126,7 @@ test("approved registration: waiting -> approved, withdraw leaves it alone", asy
   expect(await statusState(page)).toBe("approved");
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.locator("[data-pending-poll]")).toHaveCount(0);
-  await expect(page.locator('a[href="/login"]').first()).toBeVisible();
+  await expect(page.locator('.pending-reg-notice a[href="/login"]')).toBeVisible();
 
   // Withdrawing an approved registration sends the applicant to login and
   // keeps the approval.

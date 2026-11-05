@@ -241,6 +241,7 @@ func main() {
 		r.HandleFunc("POST /register/password", registerPasswordSubmitHandler(cfg, client))
 		r.HandleFunc("POST /register/resend", registerResendHandler(cfg, client))
 		r.HandleFunc("POST /register/cancel", registerCancelHandler(cfg, client))
+		r.HandleFunc("GET /register/status", registerStatusHandler(client))
 		r.HandleFunc("GET /admin/registrations", adminRegistrationsHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("POST /admin/registrations/{id}/approve", adminRateLimit(adminRegistrationApproveHandler(cfg, client)))
 		r.HandleFunc("POST /admin/registrations/{id}/reject", adminRateLimit(adminRegistrationRejectHandler(cfg, client)))

@@ -412,14 +412,19 @@ func registerResendHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// DELETE /api/v1/register/{token} — self-service cancellation of a pending registration.
+// DELETE /api/v1/register/{token} — withdraw a pending registration (#1823).
+// An approved registration is left alone: its account is live, so this is a
+// no-op. Any other registration, verified or not, is deleted together with
+// the provisional user it created at the password step, as the expiry sweep
+// does. Before #1823 a verified registration was silently kept, so the
+// applicant's withdraw button did nothing.
 func registerCancelHandler(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
-	var id int
-	var verified int
+	var id, approved int
+	var userID sql.NullInt64
 	err := db.QueryRow(
-		"SELECT id, verified FROM pending_registrations WHERE verification_token=?", sha256Hex(token),
-	).Scan(&id, &verified)
+		"SELECT id, approved, user_id FROM pending_registrations WHERE verification_token=?", sha256Hex(token),
+	).Scan(&id, &approved, &userID)
 	if err == sql.ErrNoRows {
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -428,12 +433,14 @@ func registerCancelHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "db error", http.StatusInternalServerError)
 		return
 	}
-	// Once verified or approved the record stays for admin visibility; just acknowledge.
-	if verified == 1 {
+	if approved == 1 {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	deletePendingRegistration(db, id)
+	if userID.Valid {
+		deleteUserByID(db, userID.Int64)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

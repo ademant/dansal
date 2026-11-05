@@ -3744,6 +3744,9 @@ type RegisterReq struct {
 	Channel         string `json:"channel"`
 	Telegram        string `json:"telegram,omitempty"`
 	Phone2          string `json:"phone2,omitempty"`
+	// Lang is the language the form was shown in; the API sends the
+	// registration emails in it (#1809).
+	Lang string `json:"lang,omitempty"`
 }
 
 func (c *DansalClient) GetDansalInfo(ctx context.Context) (DansalInfo, error) {

@@ -410,6 +410,32 @@ function nominatimRefine(lat, lon, countryCode, cb){
     cb((item && item.address) || null);
   });
 }
+// geocodeVenue (#1811): finds a venue from its own parts, most precise
+// first. v = {name, address, zip, town, country}. Candidates, in order:
+// address + zip/town + country; name + town + country; town + country. The
+// first one that matches without nominatimSearch's prefix-dropping retry is
+// used. A retry means the query did not match as written, and its result is
+// a broader place (the town, or the country), so it is not accepted. cb(hit,
+// level) gets the Nominatim item and the level it matched at: 'address',
+// 'venue' or 'town'; cb(null, null) when nothing matched.
+function geocodeVenue(v, cb){
+  var zipTown = [v.zip, v.town].filter(Boolean).join(' ');
+  var cands = [];
+  if (v.address) cands.push({level:'address', parts:[v.address, zipTown, v.country]});
+  if (v.name) cands.push({level:'venue', parts:[v.name, v.town, v.country]});
+  if (v.town) cands.push({level:'town', parts:[v.town, v.country]});
+  var i = 0;
+  (function next(){
+    if (i >= cands.length) { cb(null, null); return; }
+    var c = cands[i++];
+    var q = c.parts.filter(Boolean).join(', ');
+    if (!q) { next(); return; }
+    nominatimSearch(q, null, 1, function(data, meta){
+      if (data && data.length && !(meta && meta.strippedPrefix)) { cb(data[0], c.level); return; }
+      next();
+    });
+  })();
+}
 // renderMiniCalendar draws a small multi-month event calendar into
 // #containerId: one grid per month in `months` (array of Date, each the
 // 1st of a month to render), days with an event highlighted and linking

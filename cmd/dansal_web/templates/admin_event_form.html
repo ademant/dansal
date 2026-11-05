@@ -341,7 +341,7 @@
         </div>
       </div>
       <button type="button" class="btn-secondary btn-sm-secondary" data-fn="geocodeLocation" data-args="[]" id="geo-btn">{{$.Strings.T "loc_geocode_btn"}}</button>
-      <span id="geo-status" style="font-size:.82rem;color:#888;margin-left:.5rem"></span>
+      <span id="geo-status" data-town-only="{{$.Strings.T "loc_geo_town_only"}}" style="font-size:.82rem;color:#888;margin-left:.5rem"></span>
       <div id="geo-map" style="display:none;height:200px;margin-top:.75rem;border-radius:4px;border:1px solid #ddd"></div>
     </div>
 
@@ -1627,45 +1627,54 @@ function togglePricing(){
 }
 
 // Nominatim geocoding
+// Nominatim types that mean a town-level match, not the venue (#1811).
+var GEO_TOWN_TYPES=['city','town','village','hamlet','municipality','county','state','country','administrative'];
 function geocodeLocation(){
-  var name=document.getElementById('new_loc_name').value.trim();
-  var town=document.getElementById('new_loc_town').value.trim();
-  var country=document.getElementById('new_loc_country').value.trim();
-  var q=[name,town,country].filter(Boolean).join(', ');
-  if(!q){document.getElementById('geo-status').textContent='Please enter a location name first';return;}
+  var v={
+    name:document.getElementById('new_loc_name').value.trim(),
+    address:document.getElementById('new_loc_address').value.trim(),
+    zip:document.getElementById('new_loc_zip').value.trim(),
+    town:document.getElementById('new_loc_town').value.trim(),
+    country:document.getElementById('new_loc_country').value.trim()
+  };
   var btn=document.getElementById('geo-btn');
   var status=document.getElementById('geo-status');
+  if(!v.name&&!v.address&&!v.town){status.textContent='Please enter a location name first';return;}
   btn.disabled=true;
   status.textContent='Searching…';
-  nominatimSearch(q, null, 1, function(data){
+  geocodeVenue(v,function(r,level){
       btn.disabled=false;
-      if(data&&data.length>0){
-        var r=data[0];
-        var a=r.address||{};
-        var lat=parseFloat(r.lat),lon=parseFloat(r.lon);
-        document.getElementById('new_loc_lat').value=lat.toFixed(6);
-        document.getElementById('new_loc_lng').value=lon.toFixed(6);
-        var road=[a.house_number,a.road].filter(Boolean).join(' ');
-        if(road) document.getElementById('new_loc_address').value=road;
-        if(a.postcode) document.getElementById('new_loc_zip').value=a.postcode;
-        document.getElementById('new_loc_country_code').value=(a.country_code||'').toUpperCase();
-        var snInp=document.getElementById('new_loc_short_name');
-        if(!snInp.value){var sn=r.name||a.amenity||'';if(sn)snInp.value=sn;}
-        status.textContent='✓ '+r.display_name;
-        showGeoMap(lat,lon);
-        // town/country/region are language-dependent — the search above had
-        // no explicit language (Nominatim's own default), not the venue's
-        // country, so re-fetch once in the venue's own language (#1126).
-        nominatimRefine(lat, lon, a.country_code, function(a2){
-          a2 = a2 || a;
-          var city=a2.city||a2.town||a2.village||a2.hamlet||a2.municipality||'';
-          if(city) document.getElementById('new_loc_town').value=city;
-          if(a2.country) document.getElementById('new_loc_country').value=a2.country;
-          document.getElementById('new_loc_region').value=a2.state||a2.county||'';
-        });
+      if(!r){status.textContent='Not found';return;}
+      var a=r.address||{};
+      var lat=parseFloat(r.lat),lon=parseFloat(r.lon);
+      var townOnly=level==='town'||GEO_TOWN_TYPES.indexOf(r.addresstype||r.type||'')>=0;
+      document.getElementById('new_loc_lat').value=lat.toFixed(6);
+      document.getElementById('new_loc_lng').value=lon.toFixed(6);
+      // A town-level hit has no street: keep the address and postcode the visitor typed.
+      var road=[a.house_number,a.road].filter(Boolean).join(' ');
+      if(road&&!townOnly) document.getElementById('new_loc_address').value=road;
+      if(a.postcode&&!(townOnly&&v.zip)) document.getElementById('new_loc_zip').value=a.postcode;
+      document.getElementById('new_loc_country_code').value=(a.country_code||'').toUpperCase();
+      var snInp=document.getElementById('new_loc_short_name');
+      if(!snInp.value){var sn=r.name||a.amenity||'';if(sn)snInp.value=sn;}
+      if(townOnly){
+        status.textContent='⚠ '+status.getAttribute('data-town-only');
+        status.style.color='#b26a00';
       } else {
-        status.textContent='Not found';
+        status.textContent='✓ '+r.display_name;
+        status.style.color='#888';
       }
+      showGeoMap(lat,lon);
+      // town/country/region are language-dependent — the search above had
+      // no explicit language (Nominatim's own default), not the venue's
+      // country, so re-fetch once in the venue's own language (#1126).
+      nominatimRefine(lat, lon, a.country_code, function(a2){
+        a2 = a2 || a;
+        var city=a2.city||a2.town||a2.village||a2.hamlet||a2.municipality||'';
+        if(city) document.getElementById('new_loc_town').value=city;
+        if(a2.country) document.getElementById('new_loc_country').value=a2.country;
+        document.getElementById('new_loc_region').value=a2.state||a2.county||'';
+      });
     });
 }
 
@@ -2252,11 +2261,23 @@ function growPricingTable(el){
 }
 
 var _geoMap=null;
+// #1811: the marker can be dragged to the exact spot; the drop writes the
+// coordinates back to the form.
+var _geoMarker=null;
+function placeGeoMarker(lat,lon){
+  if(_geoMarker){_geoMarker.setLatLng([lat,lon]);return;}
+  _geoMarker=L.marker([lat,lon],{draggable:true}).addTo(_geoMap);
+  _geoMarker.on('dragend',function(){
+    var p=_geoMarker.getLatLng();
+    document.getElementById('new_loc_lat').value=p.lat.toFixed(6);
+    document.getElementById('new_loc_lng').value=p.lng.toFixed(6);
+  });
+}
 function showGeoMap(lat,lon){
   var el=document.getElementById('geo-map');
   el.style.display='block';
-  if(_geoMap){_geoMap.setView([lat,lon],14);_geoMap.eachLayer(function(l){if(l instanceof L.Marker)_geoMap.removeLayer(l);});L.marker([lat,lon]).addTo(_geoMap);return;}
-  function initGeoMap(){_geoMap=L.map('geo-map',{maxZoom:18}).setView([lat,lon],14);attachTileLayer(_geoMap);L.marker([lat,lon]).addTo(_geoMap);}
+  if(_geoMap){_geoMap.setView([lat,lon],14);placeGeoMarker(lat,lon);return;}
+  function initGeoMap(){_geoMap=L.map('geo-map',{maxZoom:18}).setView([lat,lon],14);attachTileLayer(_geoMap);placeGeoMarker(lat,lon);}
   if(typeof L!=='undefined'){initGeoMap();return;}
   var css=document.createElement('link');css.rel='stylesheet';css.href='/static/leaflet/leaflet.css';document.head.appendChild(css);
   var js=document.createElement('script');js.src='/static/leaflet/leaflet.js';js.onload=initGeoMap;document.head.appendChild(js);

@@ -39,6 +39,9 @@ type RegisterRequest struct {
 	Channel         string `json:"channel"` // "email" | "telegram"
 	Telegram        string `json:"telegram,omitempty"`
 	Phone2          string `json:"phone2"` // honeypot
+	// Lang is the language of the registration form (#1809). The emails for
+	// this registration use it. Empty means the site default.
+	Lang string `json:"lang,omitempty"`
 }
 
 type PendingRegistration struct {
@@ -250,11 +253,11 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		`INSERT INTO pending_registrations
 		 (verification_token, approval_token, email, description,
 		  reg_type, org_id, org_name, org_actor_name, org_description, org_website, org_contact_email,
-		  verification_channel, telegram, verified, expires_at)
-		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`,
+		  verification_channel, telegram, verified, expires_at, lang)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`,
 		sha256Hex(verificationToken), sha256Hex(approvalToken), req.Email, req.Description,
 		req.RegType, orgIDArg, req.OrgName, req.OrgActorName, req.OrgDescription, req.OrgWebsite, req.OrgContactEmail,
-		channel, req.Telegram, verifiedInitial, expiresAt,
+		channel, req.Telegram, verifiedInitial, expiresAt, registerLang(req.Lang),
 	).Scan(&pendingID)
 	if dbErr != nil {
 		logging.Errorf("register: db error: %v", dbErr)
@@ -279,11 +282,8 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		base := buildBaseURL(r)
 		verifyURL := base + "/register/verify/email/" + verificationToken
 		go func() {
-			msg := fmt.Sprintf(
-				"You requested an account on this event calendar. Please confirm your email address:\n\n%s\n\nThis link expires in 72 hours. If you did not request this, you can ignore this email.",
-				verifyURL,
-			)
-			if msgID, err := SendEmail(req.Email, "Confirm your registration", msg, false); err != nil {
+			subject, msg := emailMessage(registerLang(req.Lang), "subject_verify", "verify", verifyURL)
+			if msgID, err := SendEmail(req.Email, subject, msg, false); err != nil {
 				logging.Errorf("register: send verify email: %v", err)
 			} else {
 				db.Exec("UPDATE pending_registrations SET message_id=? WHERE verification_token=?", msgID, sha256Hex(verificationToken))
@@ -379,12 +379,12 @@ func registerResendHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var id int
-	var email, telegram, channel, expiresAt string
+	var email, telegram, channel, expiresAt, lang string
 	var verified int
 	err := db.QueryRow(
-		"SELECT id, COALESCE(email,''), COALESCE(telegram,''), verification_channel, expires_at, verified FROM pending_registrations WHERE verification_token=?",
+		"SELECT id, COALESCE(email,''), COALESCE(telegram,''), verification_channel, expires_at, verified, COALESCE(lang,'') FROM pending_registrations WHERE verification_token=?",
 		sha256Hex(token),
-	).Scan(&id, &email, &telegram, &channel, &expiresAt, &verified)
+	).Scan(&id, &email, &telegram, &channel, &expiresAt, &verified, &lang)
 	if !rowOr404(w, err, "registration not found") {
 		return
 	}
@@ -403,11 +403,8 @@ func registerResendHandler(w http.ResponseWriter, r *http.Request) {
 		base := buildBaseURL(r)
 		verifyURL := base + "/register/verify/email/" + token
 		go func() {
-			msg := fmt.Sprintf(
-				"You requested an account on this event calendar. Please confirm your email address:\n\n%s\n\nThis link expires in 72 hours. If you did not request this, you can ignore this email.",
-				verifyURL,
-			)
-			if _, err := SendEmail(email, "Confirm your registration", msg, false); err != nil {
+			subject, msg := emailMessage(lang, "subject_verify", "verify", verifyURL)
+			if _, err := SendEmail(email, subject, msg, false); err != nil {
 				logging.Errorf("register resend: send verify email: %v", err)
 			}
 		}()
@@ -439,6 +436,10 @@ func registerCancelHandler(w http.ResponseWriter, r *http.Request) {
 	deletePendingRegistration(db, id)
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// approvedTombstoneTTL is how long an approved registration stays visible on
+// /register for its applicant (#1812).
+const approvedTombstoneTTL = 7 * 24 * time.Hour
 
 // GET /api/v1/register/verify/email/{token}
 func verifyEmailRegHandler(w http.ResponseWriter, r *http.Request) {
@@ -636,18 +637,24 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 		OrgName, OrgActorName, OrgDescription, OrgWebsite, OrgContactEmail string
 		VerificationChannel, Telegram, TelegramChatID                      string
 		Verified                                                           int
+		Lang                                                               string
+		Approved                                                           int
 	}
 	err := db.QueryRow(
 		`SELECT id, COALESCE(email,''), reg_type, org_id, org_name, COALESCE(org_actor_name,''), org_description,
-		 org_website, org_contact_email, verification_channel, COALESCE(telegram,''), COALESCE(telegram_chat_id,''), verified, user_id
+		 org_website, org_contact_email, verification_channel, COALESCE(telegram,''), COALESCE(telegram_chat_id,''), verified, user_id, COALESCE(lang,''), approved
 		 FROM pending_registrations WHERE id=?`, id,
 	).Scan(
 		&pr.ID, &pr.Email, &pr.RegType,
 		&pr.OrgID, &pr.OrgName, &pr.OrgActorName, &pr.OrgDescription, &pr.OrgWebsite, &pr.OrgContactEmail,
-		&pr.VerificationChannel, &pr.Telegram, &pr.TelegramChatID, &pr.Verified, &pr.UserID,
+		&pr.VerificationChannel, &pr.Telegram, &pr.TelegramChatID, &pr.Verified, &pr.UserID, &pr.Lang, &pr.Approved,
 	)
 	if err != nil {
 		writeError(w, "pending registration not found", http.StatusNotFound)
+		return
+	}
+	if pr.Approved == 1 {
+		writeError(w, "registration already approved", http.StatusConflict)
 		return
 	}
 
@@ -703,7 +710,19 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		tx.Exec("UPDATE users SET disabled=0 WHERE id=?", userID)
-		deletePendingRegistration(tx, id)
+		// #1810: the applicant confirmed this exact address during
+		// registration (verify step), so the account is verified now. Only
+		// the email channel verifies an address; the stored email must still
+		// match, so a changed address is not marked.
+		if pr.Verified == 1 && pr.VerificationChannel == "email" && pr.Email != "" {
+			tx.Exec("UPDATE users SET email_verified=1 WHERE id=? AND LOWER(email)=LOWER(?)", userID, pr.Email)
+		}
+		// #1812: keep the row as an approved tombstone for a week, so a
+		// returning applicant sees "approved" and a sign-in link on /register,
+		// not an empty form. It is excluded from every pending view and from
+		// expiry, and the expiry job removes it once the week is over.
+		tx.Exec("UPDATE pending_registrations SET approved=1, expires_at=? WHERE id=?",
+			time.Now().Add(approvedTombstoneTTL).Unix(), id)
 
 		if err := tx.Commit(); err != nil {
 			writeError(w, "db error", http.StatusInternalServerError)
@@ -712,12 +731,13 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 
 		logging.Infof("register: approved pending registration %d — enabled user %d (role=%s, passkey=%v)", id, userID, role, hasPasskey)
 
-		signInHint := "You can now sign in with the password you set."
+		// #1809: sign-in link and the applicant's language.
+		bodyKey := "approved_password"
 		if hasPasskey {
-			signInHint = "You can now sign in with the passkey you registered."
+			bodyKey = "approved_passkey"
 		}
-		go notifyUser(pr.TelegramChatID, "", false, pr.Email, "Your registration was approved",
-			"Your registration has been approved. "+signInHint)
+		subject, body := emailMessage(pr.Lang, "subject_approved", bodyKey, emailLoginURL(emailBaseURL(r), pr.Email))
+		go notifyUser(pr.TelegramChatID, "", false, pr.Email, subject, body)
 
 		writeJSONStatus(w, http.StatusCreated, map[string]any{
 			"status":  "user_enabled",
@@ -788,8 +808,8 @@ func approveRegHandler(w http.ResponseWriter, r *http.Request) {
 
 	logging.Infof("register: approved pending registration %d — invite sent to %q (role=%s)", id, pr.Email, role)
 
-	go notifyUser(pr.TelegramChatID, "", false, pr.Email, "Your registration was approved",
-		fmt.Sprintf("Your registration has been approved.\n\nUse the link below to complete your account setup. The setup page will guide you through choosing how you want to sign in.\n\n%s\n\nThe link is valid for %d hours.", setupURL, config.Server.InviteExpiryHours))
+	subject, body := emailMessage(pr.Lang, "subject_approved", "approved_invite", setupURL, config.Server.InviteExpiryHours)
+	go notifyUser(pr.TelegramChatID, "", false, pr.Email, subject, body)
 
 	writeJSONStatus(w, http.StatusCreated, map[string]any{
 		"status":     "invite_sent",
@@ -812,12 +832,18 @@ func rejectRegHandler(w http.ResponseWriter, r *http.Request) {
 		Verified                       int
 		OrgID                          sql.NullInt64
 		UserID                         sql.NullInt64
+		Lang                           string
+		Approved                       int
 	}
 	err := db.QueryRow(
-		"SELECT reg_type, COALESCE(email,''), COALESCE(telegram_chat_id,''), verified, org_id, user_id FROM pending_registrations WHERE id=?", id,
-	).Scan(&pr.RegType, &pr.Email, &pr.TelegramChatID, &pr.Verified, &pr.OrgID, &pr.UserID)
+		"SELECT reg_type, COALESCE(email,''), COALESCE(telegram_chat_id,''), verified, org_id, user_id, COALESCE(lang,''), approved FROM pending_registrations WHERE id=?", id,
+	).Scan(&pr.RegType, &pr.Email, &pr.TelegramChatID, &pr.Verified, &pr.OrgID, &pr.UserID, &pr.Lang, &pr.Approved)
 	if err != nil {
 		writeError(w, "pending registration not found", http.StatusNotFound)
+		return
+	}
+	if pr.Approved == 1 {
+		writeError(w, "registration already approved", http.StatusConflict)
 		return
 	}
 
@@ -847,12 +873,15 @@ func rejectRegHandler(w http.ResponseWriter, r *http.Request) {
 	logging.Infof("register: rejected pending registration %d — reason=%q", id, strings.TrimSpace(body.Reason))
 
 	if pr.Verified == 1 {
-		rejectMsg := "Your registration request was not approved."
+		// #1809: the reason line is only there when a reason was given.
+		bodyKey := "rejected"
+		var args []any
 		if body.Reason != "" {
-			rejectMsg += "\n\nReason: " + body.Reason
+			bodyKey = "rejected_reason"
+			args = append(args, body.Reason)
 		}
-		rejectMsg += "\n\nAll submitted data has been deleted. You are welcome to register again at any time using the same email address."
-		go notifyUser(pr.TelegramChatID, "", false, pr.Email, "Registration not approved", rejectMsg)
+		subject, rejectMsg := emailMessage(pr.Lang, "subject_rejected", bodyKey, args...)
+		go notifyUser(pr.TelegramChatID, "", false, pr.Email, subject, rejectMsg)
 	}
 
 	w.WriteHeader(http.StatusNoContent)
@@ -923,13 +952,13 @@ func pendingRegCountHandler(w http.ResponseWriter, r *http.Request) {
 	var count int
 	if callerRole == RoleAdmin {
 		db.QueryRow(
-			"SELECT COUNT(*) FROM pending_registrations pr WHERE pr.verified=1 AND pr.expires_at > strftime('%s','now') AND " + hasAuthMethodClause,
+			"SELECT COUNT(*) FROM pending_registrations pr WHERE pr.verified=1 AND pr.approved=0 AND pr.expires_at > strftime('%s','now') AND " + hasAuthMethodClause,
 		).Scan(&count)
 	} else {
 		db.QueryRow(`
 			SELECT COUNT(*) FROM pending_registrations pr
 			JOIN organization_members om ON om.organization_id = pr.org_id AND om.user_id = ?
-			WHERE pr.reg_type='join_org' AND pr.verified=1 AND pr.expires_at > strftime('%s','now') AND `+hasAuthMethodClause,
+			WHERE pr.reg_type='join_org' AND pr.verified=1 AND pr.approved=0 AND pr.expires_at > strftime('%s','now') AND `+hasAuthMethodClause,
 			callerID,
 		).Scan(&count)
 	}
@@ -946,7 +975,7 @@ func dashboardAttentionHandler(w http.ResponseWriter, r *http.Request) {
 	var regCount, suggestionCount, duplicateCount, pendingEditCount, notVerifiedCount int
 	if callerRole == RoleAdmin {
 		db.QueryRow(
-			"SELECT COUNT(*) FROM pending_registrations pr WHERE pr.verified=1 AND pr.expires_at > strftime('%s','now') AND " + hasAuthMethodClause,
+			"SELECT COUNT(*) FROM pending_registrations pr WHERE pr.verified=1 AND pr.approved=0 AND pr.expires_at > strftime('%s','now') AND " + hasAuthMethodClause,
 		).Scan(&regCount)
 		db.QueryRow(
 			"SELECT COUNT(*) FROM events WHERE is_published=0",
@@ -964,7 +993,7 @@ func dashboardAttentionHandler(w http.ResponseWriter, r *http.Request) {
 		db.QueryRow(`
 			SELECT COUNT(*) FROM pending_registrations pr
 			JOIN organization_members om ON om.organization_id = pr.org_id AND om.user_id = ?
-			WHERE pr.reg_type='join_org' AND pr.verified=1 AND pr.expires_at > strftime('%s','now') AND `+hasAuthMethodClause,
+			WHERE pr.reg_type='join_org' AND pr.verified=1 AND pr.approved=0 AND pr.expires_at > strftime('%s','now') AND `+hasAuthMethodClause,
 			callerID,
 		).Scan(&regCount)
 
@@ -1024,7 +1053,9 @@ func processExpiredInviteLinks() {
 
 func processExpiredRegistrations() {
 	rows, err := db.Query(
-		"SELECT id, COALESCE(email,''), COALESCE(telegram_chat_id,''), verified, user_id FROM pending_registrations WHERE expires_at < strftime('%s','now')",
+		// approved=0 only: an approved row (#1812) points at a user that is
+		// now active, and must never be deleted with its user here.
+		"SELECT id, COALESCE(email,''), COALESCE(telegram_chat_id,''), verified, user_id FROM pending_registrations WHERE approved=0 AND expires_at < strftime('%s','now')",
 	)
 	if err != nil {
 		return
@@ -1041,6 +1072,9 @@ func processExpiredRegistrations() {
 		expired = append(expired, e)
 	}
 	rows.Close()
+
+	// Approved tombstones (#1812) are only rows: their user stays.
+	db.Exec("DELETE FROM pending_registrations WHERE approved=1 AND expires_at < strftime('%s','now')")
 
 	for _, e := range expired {
 		if e.verified == 1 {
@@ -1088,4 +1122,13 @@ func isInviteUsable(token string) bool {
 	}
 	exp, err := parseTokenExpiration(expiresAt)
 	return err == nil && !time.Now().After(exp)
+}
+
+// emailBaseURL is the site's address for links in registration emails:
+// base_url from the config, or the request's own host when none is set.
+func emailBaseURL(r *http.Request) string {
+	if config.Server.BaseURL != "" {
+		return strings.TrimSuffix(config.Server.BaseURL, "/")
+	}
+	return buildBaseURL(r)
 }

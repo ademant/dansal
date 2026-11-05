@@ -14,7 +14,8 @@
     <p style="margin:.75rem 0 .5rem;font-weight:600">{{$.Strings.T "pending_reg_invite_link"}}:</p>
     <a href="{{.InviteURL}}" class="btn-primary" style="display:inline-block;margin-bottom:.75rem">{{$.Strings.T "pending_reg_complete_setup"}}</a>
     {{else}}
-    <p style="font-size:.88rem;color:var(--fg-muted);margin:.5rem 0 0">{{$.Strings.T "pending_reg_invite_expired"}}</p>
+    {{/* #1812: approved without an invite link = the account is already active. */}}
+    <a href="/login" class="btn-primary" style="display:inline-block;margin-bottom:.75rem">{{$.Strings.T "login_submit"}}</a>
     {{end}}
     {{else if .PendingVerified}}
     {{if .PendingHasAuthMethod}}
@@ -68,8 +69,9 @@
       <button type="submit" class="btn-primary" style="font-size:.9rem;padding:.4rem .9rem">{{$.Strings.T "pending_reg_resend_btn"}}</button>
     </form>
     {{end}}
-    <form method="post" action="/register/cancel" style="display:inline;margin-left:.5rem">
-      <button type="submit" class="btn-link">{{$.Strings.T "pending_reg_start_over_btn"}}</button>
+    {{/* #1812: withdrawing deletes the application, so ask first. */}}
+    <form method="post" action="/register/cancel" style="display:inline;margin-left:.5rem" data-on="submit" data-confirm="{{$.Strings.T "pending_reg_withdraw_confirm"}}">
+      <button type="submit" class="btn-link">{{$.Strings.T "pending_reg_withdraw_btn"}}</button>
     </form>
   </div>
   {{else}}

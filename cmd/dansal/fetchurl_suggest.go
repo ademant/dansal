@@ -30,9 +30,13 @@ var (
 	fetchSuggestRateLimiter        *RateLimiter
 )
 
-func initFetchSuggestRateLimiters() {
+// initFetchSuggestRateLimiters sets up the anonymous feed-suggestion limiters.
+// limit is server.suggest_rate_limit, shared with the event-suggest submit
+// limiter (per client IP per 10 minutes); the preview limiter keeps its own
+// fixed budget.
+func initFetchSuggestRateLimiters(limit int) {
 	fetchSuggestPreviewRateLimiter = NewRateLimiter(5, 10*time.Minute)
-	fetchSuggestRateLimiter = NewRateLimiter(3, 10*time.Minute)
+	fetchSuggestRateLimiter = NewRateLimiter(limit, 10*time.Minute)
 }
 
 // FetchSuggestLocationMapping is one entry of the submitter's own mapping of a

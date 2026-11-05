@@ -3004,6 +3004,20 @@ func migrateDB() {
 			db.Exec("ALTER TABLE events ADD COLUMN no_live_music INTEGER NOT NULL DEFAULT 0")
 		}
 	}
+	// #1809: the applicant's language, so the registration emails are sent
+	// in it. Empty for rows from before this column (sent in the site default).
+	if !applied(53) {
+		db.Exec("ALTER TABLE pending_registrations ADD COLUMN lang TEXT NOT NULL DEFAULT ''")
+		mark(53)
+	}
+	// Safety net: ensure the lang column exists even if migration 53 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('pending_registrations') WHERE name='lang'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE pending_registrations ADD COLUMN lang TEXT NOT NULL DEFAULT ''")
+		}
+	}
 	// Safety net: ensure the window columns exist even if migration 50 was pre-marked.
 	for col, def := range map[string]string{"max_past_days": "1", "max_future_days": "365"} {
 		var n int
@@ -4379,6 +4393,7 @@ func createTables() error {
 		telegram_chat_id   TEXT DEFAULT '',
 		verified           INTEGER DEFAULT 0,
 		approved           INTEGER DEFAULT 0,
+		lang               TEXT NOT NULL DEFAULT '',
 		approved_invite_url TEXT DEFAULT '',
 		message_id         TEXT NOT NULL DEFAULT '',
 		user_id             INTEGER REFERENCES users(id),

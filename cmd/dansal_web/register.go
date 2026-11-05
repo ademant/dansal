@@ -339,6 +339,7 @@ func registerSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			Channel:         channel,
 			Telegram:        telegram,
 			Phone2:          phone2,
+			Lang:            i18n.detectLang(r),
 		}
 
 		authThrottle.record(ip)

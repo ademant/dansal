@@ -90,7 +90,8 @@ test.describe("Admin: event lifecycle", () => {
     );
     await page.locator('input[name="is_published"]').check();
     await page.locator("#save-btn").click();
-    await page.waitForURL(`**/admin/events/${idA}/edit`);
+    // Regex, not a glob: the URL may carry a query string after save (#1830).
+    await page.waitForURL(new RegExp(`/admin/events/${idA}/edit(\\?.*)?$`));
 
     // Now published: visible both via a bare fetch and on the public index.
     await expect
@@ -161,16 +162,18 @@ test.describe("Admin: event lifecycle", () => {
     await expect(mergeBtn).toBeEnabled();
     page.once("dialog", (d) => d.accept());
     await mergeBtn.click();
-    await page.waitForTimeout(1500);
-
-    const [respA, respB] = await Promise.all([
-      authedGet(page, token, `/api/v1/events/${idA}`),
-      authedGet(page, token, `/api/v1/events/${idB}`),
-    ]);
-    expect(
-      [respA.status(), respB.status()].sort(),
-      "merge must leave exactly one of A/B alive (200) and drop the other (410: tombstoned, #1455)"
-    ).toEqual([200, 410]);
+    // Poll the state the merge should reach, instead of a fixed wait (#1830).
+    const statuses = async () =>
+      [
+        (await authedGet(page, token, `/api/v1/events/${idA}`)).status(),
+        (await authedGet(page, token, `/api/v1/events/${idB}`)).status(),
+      ].sort();
+    await expect
+      .poll(statuses, {
+        message: "merge must leave exactly one of A/B alive (200) and drop the other (410: tombstoned, #1455)",
+      })
+      .toEqual([200, 410]);
+    const respA = await authedGet(page, token, `/api/v1/events/${idA}`);
     const survivorId = respA.status() === 200 ? idA : idB;
 
     // -- Cancel the survivor from the events list; the public event page
@@ -183,7 +186,11 @@ test.describe("Admin: event lifecycle", () => {
     );
     page.once("dialog", (d) => d.accept());
     await cancelForm.locator("button").click();
-    await page.waitForTimeout(1500);
+    await expect
+      .poll(async () => (await (await authedGet(page, token, `/api/v1/events/${survivorId}`)).json()).is_cancelled, {
+        message: "cancel must set is_cancelled on the survivor",
+      })
+      .toBe(true);
 
     await page.goto(`/events/${survivorId}`);
     await expect(page.locator(".badge.cancelled")).toBeVisible();

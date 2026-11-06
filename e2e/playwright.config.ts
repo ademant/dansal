@@ -39,7 +39,9 @@ export default defineConfig({
   ],
   use: {
     baseURL: BASE_URL,
-    trace: "on-first-retry",
+    // Keep the trace of every failing attempt, not only a retry (#1830):
+    // the first attempt is the one whose failure needs explaining.
+    trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
     // Every test's `page` fixture loads pre-authenticated as admin from

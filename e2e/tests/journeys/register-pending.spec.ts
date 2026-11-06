@@ -59,7 +59,12 @@ async function completeToWaiting(page: Page, token: string, name: string): Promi
   await page.fill("#field-auth-password", PASSWORD);
   await page.fill("#field-auth-password-confirm", PASSWORD);
   await page.locator("#btn-set-password").click();
-  await expect(page.locator("[data-pending-poll]")).toBeVisible();
+  // The waiting view replaces the password form only once the set-password
+  // request is done. Name that state in the failure, not just a missing element (#1830).
+  await expect(
+    page.locator("[data-pending-poll]"),
+    `waiting view after setting the password (url ${page.url()})`
+  ).toBeVisible({ timeout: 20_000 });
   // The password step creates the applicant's user account.
   recordCreated("user", 0, email);
 }

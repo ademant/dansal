@@ -1194,23 +1194,9 @@ func (c *DansalClient) BulkEventConflicts(ctx context.Context, payload map[strin
 // limit=1000 chunks until a short page, preventing the default 100-row API
 // cap from silently truncating large result sets (#1719).
 func (c *DansalClient) getAllEventsPaged(ctx context.Context, baseURL string) ([]Event, error) {
-	sep := "&"
-	if !strings.Contains(baseURL, "?") {
-		sep = "?"
-	}
-	var all []Event
-	for offset := 0; ; offset += apiListLimit {
-		var page []Event
-		u := fmt.Sprintf("%s%slimit=%d&offset=%d", baseURL, sep, apiListLimit, offset)
-		if err := c.get(ctx, u, &page); err != nil {
-			return nil, err
-		}
-		all = append(all, page...)
-		if len(page) < apiListLimit {
-			break
-		}
-	}
-	return all, nil
+	return pageAll(baseURL, func(u string, out *[]Event) error {
+		return c.get(ctx, u, out)
+	})
 }
 
 // GetAllEvents fetches all published events including past ones; used by the
@@ -1496,10 +1482,34 @@ func (c *DansalClient) AssignEventOrg(ctx context.Context, id, orgID int, token 
 	return c.do(ctx, http.MethodPut, fmt.Sprintf("/api/v1/events/%d/organization", id), token, body, nil, http.StatusNoContent)
 }
 
+// pageAll reads every row of a list endpoint, one apiListLimit page at a
+// time. The API caps each page (1000 rows), so a single request silently
+// drops the rest once an instance has more rows (#1827: 1044 organisations
+// on dev). fetch performs one page request; baseURL may already carry a query.
+func pageAll[T any](baseURL string, fetch func(u string, out *[]T) error) ([]T, error) {
+	sep := "?"
+	if strings.Contains(baseURL, "?") {
+		sep = "&"
+	}
+	var all []T
+	for offset := 0; ; offset += apiListLimit {
+		var page []T
+		if err := fetch(fmt.Sprintf("%s%slimit=%d&offset=%d", baseURL, sep, apiListLimit, offset), &page); err != nil {
+			return nil, err
+		}
+		all = append(all, page...)
+		if len(page) < apiListLimit {
+			break
+		}
+	}
+	return all, nil
+}
+
 func (c *DansalClient) GetOrganizations(ctx context.Context) ([]Organization, error) {
 	return cached(&c.mu, &c.orgsCache, orgsTTL, func() ([]Organization, error) {
-		var orgs []Organization
-		return orgs, c.get(ctx, fmt.Sprintf("/api/v1/organizations?limit=%d", apiListLimit), &orgs)
+		return pageAll("/api/v1/organizations", func(u string, out *[]Organization) error {
+			return c.get(ctx, u, out)
+		})
 	})
 }
 
@@ -1593,8 +1603,9 @@ func (c *DansalClient) GetAllPublicEventsByInstructor(ctx context.Context, instr
 
 func (c *DansalClient) GetMusicians(ctx context.Context) ([]Musician, error) {
 	return cached(&c.mu, &c.musiciansCache, musiciansTTL, func() ([]Musician, error) {
-		var ms []Musician
-		return ms, c.get(ctx, fmt.Sprintf("/api/v1/musicians?limit=%d&with_event_counts=true", apiListLimit), &ms)
+		return pageAll("/api/v1/musicians?with_event_counts=true", func(u string, out *[]Musician) error {
+			return c.get(ctx, u, out)
+		})
 	})
 }
 
@@ -1643,8 +1654,9 @@ func (c *DansalClient) DeleteMusician(ctx context.Context, id int, token string)
 }
 
 func (c *DansalClient) GetInstructors(ctx context.Context) ([]Instructor, error) {
-	var out []Instructor
-	return out, c.get(ctx, fmt.Sprintf("/api/v1/instructors?limit=%d&with_event_counts=true", apiListLimit), &out)
+	return pageAll("/api/v1/instructors?with_event_counts=true", func(u string, out *[]Instructor) error {
+		return c.get(ctx, u, out)
+	})
 }
 
 func (c *DansalClient) GetInstructor(ctx context.Context, id int) (Instructor, error) {
@@ -1812,9 +1824,12 @@ func (c *DansalClient) CreateFetchSource(ctx context.Context, rawURL, typ string
 	return len(events), nil
 }
 
+// GetFetchSources returns every feed source the token may see. The API's
+// default page is 100 rows, which missed newer feeds (#1818, #1827).
 func (c *DansalClient) GetFetchSources(ctx context.Context, token string) ([]FetchSource, error) {
-	var sources []FetchSource
-	return sources, c.do(ctx, http.MethodGet, "/api/v1/feeds", token, nil, &sources)
+	return pageAll("/api/v1/feeds", func(u string, out *[]FetchSource) error {
+		return c.do(ctx, http.MethodGet, u, token, nil, out)
+	})
 }
 
 func (c *DansalClient) GetFetchSource(ctx context.Context, id int, token string) (FetchSource, error) {
@@ -1863,16 +1878,18 @@ func (c *DansalClient) UpdateFetchSource(ctx context.Context, id int, u FetchSou
 
 func (c *DansalClient) GetLocations(ctx context.Context) ([]Location, error) {
 	return cached(&c.mu, &c.locationsCache, locationsTTL, func() ([]Location, error) {
-		var locs []Location
-		return locs, c.get(ctx, fmt.Sprintf("/api/v1/locations?limit=%d", apiListLimit), &locs)
+		return pageAll("/api/v1/locations", func(u string, out *[]Location) error {
+			return c.get(ctx, u, out)
+		})
 	})
 }
 
 // GetLocationsWithEventCounts fetches all locations with future/past event
 // counts; used by the /embed/locations map.
 func (c *DansalClient) GetLocationsWithEventCounts(ctx context.Context) ([]Location, error) {
-	var locs []Location
-	return locs, c.get(ctx, fmt.Sprintf("/api/v1/locations?with_event_counts=true&limit=%d", apiListLimit), &locs)
+	return pageAll("/api/v1/locations?with_event_counts=true", func(u string, out *[]Location) error {
+		return c.get(ctx, u, out)
+	})
 }
 
 func (c *DansalClient) GetLocationEventCounts(ctx context.Context, token string) (map[int]int, error) {

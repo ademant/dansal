@@ -258,3 +258,36 @@ func opensearchHandler(cfg *Config) http.HandlerFunc {
 `, siteName, siteName, base, base)
 	}
 }
+
+// redirectHandler answers with a fixed redirect. Used for /security.txt
+// (legacy root location, RFC 9116 §3 → 301 to /.well-known/security.txt) and
+// /.well-known/change-password (W3C "well-known URL for changing passwords"
+// → 302 to /settings) (#1836).
+func redirectHandler(target string, code int) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target, code)
+	}
+}
+
+// passkeyEndpointsHandler serves /.well-known/passkey-endpoints (W3C passkey
+// endpoints draft): tells password managers where users enroll and manage
+// passkeys. Both live on /settings (#1836).
+func passkeyEndpointsHandler(cfg *Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		settings := cfg.publicBaseURL() + "/settings"
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		fmt.Fprintf(w, `{"enroll":%q,"manage":%q}`+"\n", settings, settings)
+	}
+}
+
+// trafficAdviceHandler serves /.well-known/traffic-advice for Chrome's
+// private prefetch proxy: allows prefetching of all pages linked from
+// Google results (#1836).
+func trafficAdviceHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/trafficadvice+json")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		fmt.Fprint(w, `[{"user_agent":"prefetch-proxy","fraction":1.0}]`+"\n")
+	}
+}

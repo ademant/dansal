@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -88,4 +89,55 @@ func TestSecurityTxtHandler(t *testing.T) {
 			t.Errorf("got %d, want 404 (no contact)", w.Code)
 		}
 	})
+}
+
+// TestWellKnownExtras covers the static well-known endpoints from #1836.
+func TestWellKnownExtras(t *testing.T) {
+	cfg := &Config{Domain: "example.test"}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /security.txt", redirectHandler("/.well-known/security.txt", http.StatusMovedPermanently))
+	mux.HandleFunc("GET /.well-known/change-password", redirectHandler("/settings", http.StatusFound))
+	mux.HandleFunc("GET /.well-known/passkey-endpoints", passkeyEndpointsHandler(cfg))
+	mux.HandleFunc("GET /.well-known/traffic-advice", trafficAdviceHandler())
+	mux.HandleFunc("GET /{name}", func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) })
+
+	get := func(path string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		return w
+	}
+
+	for _, tc := range []struct {
+		path, loc string
+		code      int
+	}{
+		{"/security.txt", "/.well-known/security.txt", http.StatusMovedPermanently},
+		{"/.well-known/change-password", "/settings", http.StatusFound},
+	} {
+		w := get(tc.path)
+		if w.Code != tc.code || w.Header().Get("Location") != tc.loc {
+			t.Errorf("%s: got %d Location=%q, want %d %q", tc.path, w.Code, w.Header().Get("Location"), tc.code, tc.loc)
+		}
+	}
+
+	w := get("/.well-known/passkey-endpoints")
+	if w.Code != http.StatusOK || w.Header().Get("Content-Type") != "application/json" {
+		t.Fatalf("passkey-endpoints: got %d %q", w.Code, w.Header().Get("Content-Type"))
+	}
+	var pk map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &pk); err != nil {
+		t.Fatalf("passkey-endpoints: invalid JSON: %v", err)
+	}
+	if pk["enroll"] != "https://example.test/settings" || pk["manage"] != "https://example.test/settings" {
+		t.Errorf("passkey-endpoints: got %v", pk)
+	}
+
+	w = get("/.well-known/traffic-advice")
+	if w.Code != http.StatusOK || w.Header().Get("Content-Type") != "application/trafficadvice+json" {
+		t.Fatalf("traffic-advice: got %d %q", w.Code, w.Header().Get("Content-Type"))
+	}
+	var ta []map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &ta); err != nil || len(ta) != 1 || ta[0]["user_agent"] != "prefetch-proxy" || ta[0]["fraction"] != 1.0 {
+		t.Errorf("traffic-advice: got %s (err %v)", w.Body.String(), err)
+	}
 }

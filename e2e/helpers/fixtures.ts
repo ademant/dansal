@@ -183,6 +183,32 @@ export const test = base.extend<DansalFixtures>({
       // page may be closed — skip metrics
     }
 
+    // ── On failure: say where the page was (#1830) ──
+    // A timeout alone says nothing about the page. Attach the URL and any
+    // visible alert text, so the report shows what the page was doing.
+    if (testInfo.status !== "passed" && testInfo.status !== "skipped") {
+      try {
+        const state = await page.evaluate(() => {
+          const alerts = Array.from(
+            document.querySelectorAll('[role="alert"], .alert, .flash, .error-msg, .form-error')
+          )
+            .filter((el) => (el as HTMLElement).offsetParent !== null)
+            .map((el) => (el.textContent ?? "").trim())
+            .filter((t) => t !== "");
+          return { url: location.href, alerts };
+        });
+        await testInfo.attach("page-state", {
+          body: `url: ${state.url}\nvisible alerts: ${state.alerts.length ? state.alerts.join(" | ") : "none"}\n`,
+          contentType: "text/plain",
+        });
+      } catch {
+        await testInfo.attach("page-state", {
+          body: "page was closed before its state could be read\n",
+          contentType: "text/plain",
+        });
+      }
+    }
+
     // ── On failure: gather full error context ──
     if (testInfo.status !== "passed" && testInfo.status !== "skipped") {
       try {

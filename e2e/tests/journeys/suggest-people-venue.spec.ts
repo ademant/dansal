@@ -73,7 +73,17 @@ test("help buttons and the musician list with status chips", async ({ browser })
     { timeout: 30_000 }
   );
   await input.press("Tab");
-  expect((await lookup).status(), "/search/people response").toBe(200);
+  // On a timeout, say what the input held when the blur should have fired the
+  // lookup, not just "waiting for response" (#1830).
+  const status = await lookup.then(
+    (r) => r.status(),
+    async (err) => {
+      throw new Error(
+        `no /search/people response within 30 s of blur; input was ${JSON.stringify(await input.inputValue())}: ${err.message}`
+      );
+    }
+  );
+  expect(status, "/search/people response").toBe(200);
   const chips = page.locator("#sg-musician-chips .musician-chip");
   await expect(chips).toHaveCount(2);
   await expect(chips.nth(0)).toHaveClass(/is-known/);

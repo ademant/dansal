@@ -43,6 +43,7 @@ type ServerConfig struct {
 	AllowAdminDelete             bool   `yaml:"allow_admin_delete"`
 	SuggestRateLimit             int    `yaml:"suggest_rate_limit"`          // anonymous suggestions per client IP per 10 min; 0 = default 3
 	SuggestPreviewRateLimit      int    `yaml:"suggest_preview_rate_limit"`  // anonymous previews per client IP per 10 min (event and feed suggest); 0 = default 5
+	RegisterRateLimit            int    `yaml:"register_rate_limit"`         // self-registrations per client IP per 10 min; 0 = default 3
 	AccountMutationRateLimit     int    `yaml:"account_mutation_rate_limit"` // per-account create/update cap, requests/min; 0 = default 30 (see createUpdateLimiter)
 	MaxBodyBytes                 int64  `yaml:"max_body_bytes"`
 	ReadHeaderTimeoutSecs        int    `yaml:"read_header_timeout_secs"`
@@ -437,6 +438,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.SuggestPreviewRateLimit == 0 {
 		cfg.Server.SuggestPreviewRateLimit = 5
+	}
+	if cfg.Server.RegisterRateLimit == 0 {
+		cfg.Server.RegisterRateLimit = 3
 	}
 	if cfg.Server.LoginRateLimit == 0 {
 		cfg.Server.LoginRateLimit = 5

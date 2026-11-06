@@ -5,6 +5,7 @@
  */
 import { test, expect } from "../../helpers/fixtures";
 import { getTokenFromCookie, seedLocation } from "../../helpers/seed";
+import { recordCreated } from "../../helpers/cleanup";
 
 const API_BASE = process.env.API_URL ?? "http://localhost:8000";
 
@@ -49,6 +50,7 @@ async function createOrg(
   );
   const found = (await resp.json()).find((o: any) => o.name === name);
   expect(found).toBeTruthy();
+  recordCreated("organisation", found.id);
   return { id: found.id as number, slug: (found.actor_name as string) || name.toLowerCase().replace(/[^a-z0-9]+/g, "-") };
 }
 

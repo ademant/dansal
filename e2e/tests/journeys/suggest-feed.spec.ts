@@ -38,6 +38,7 @@ import {
   addOrgMember,
   loginViaApi,
 } from "../../helpers/seed";
+import { recordCreated } from "../../helpers/cleanup";
 
 const WEB_BASE = process.env.BASE_URL ?? "http://localhost:8080";
 const API_BASE = process.env.API_URL ?? "http://localhost:8000";
@@ -68,6 +69,7 @@ async function createOrg(page: Page, name: string): Promise<number> {
   const list = await resp.json();
   const match = Array.isArray(list) ? list.find((o: any) => o.name === name) : null;
   if (!match) throw new Error(`org not found: ${name}`);
+  recordCreated("organisation", match.id);
   return match.id;
 }
 
@@ -88,6 +90,7 @@ async function createLocation(page: Page, name: string): Promise<number> {
   const list = await resp.json();
   const match = Array.isArray(list) ? list.find((l: any) => l.location === name) : null;
   if (!match) throw new Error(`location not found: ${name}`);
+  recordCreated("location", match.id);
   return match.id;
 }
 

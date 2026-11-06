@@ -1,6 +1,7 @@
 import { test, expect } from "../../helpers/fixtures";
 import { Browser, BrowserContext, Page } from "@playwright/test";
 import { AUTH_FILE } from "../../helpers/auth";
+import { recordCreated, tokenFromAuthFile } from "../../helpers/cleanup";
 
 // The pending-registration journey (#1823): withdraw, the waiting view, the
 // approved view, and the status endpoint the waiting page polls. Each test
@@ -43,7 +44,9 @@ async function createRegistration(
     });
     expect(resp.status(), "registration request accepted").toBe(202);
     const body = await resp.json();
-    return { email, pendingId: Number(body.pending_id), token: body.verification_token, name };
+    const pendingId = Number(body.pending_id);
+    recordCreated("registration", pendingId);
+    return { email, pendingId, token: body.verification_token, name };
   } finally {
     await ctx.close();
   }
@@ -57,9 +60,13 @@ async function completeToWaiting(page: Page, token: string, name: string): Promi
   await page.fill("#field-auth-password-confirm", PASSWORD);
   await page.locator("#btn-set-password").click();
   await expect(page.locator("[data-pending-poll]")).toBeVisible();
+  // The password step creates the applicant's user account.
+  recordCreated("user", 0, email);
 }
 
-async function approveAsAdmin(browser: Browser, email: string): Promise<void> {
+// Approval creates the org (new_org) and links the applicant to it. Both are
+// recorded so the teardown removes them; the user is removed by its own entry.
+async function approveAsAdmin(browser: Browser, email: string, orgName: string): Promise<void> {
   const ctx: BrowserContext = await browser.newContext({ storageState: AUTH_FILE });
   try {
     const page = await ctx.newPage();
@@ -76,6 +83,15 @@ async function approveAsAdmin(browser: Browser, email: string): Promise<void> {
   } finally {
     await ctx.close();
   }
+  const token = tokenFromAuthFile(AUTH_FILE);
+  const resp = await fetch(
+    `${API_BASE}/api/v1/organizations?name=${encodeURIComponent(orgName)}&limit=100`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  const list = await resp.json();
+  const match = Array.isArray(list) ? list.find((o: any) => o.name === orgName) : null;
+  if (!match) throw new Error(`approved org not found: ${orgName}`);
+  recordCreated("organisation", match.id);
 }
 
 async function statusState(page: Page): Promise<string> {
@@ -119,7 +135,7 @@ test("approved registration: waiting -> approved, withdraw leaves it alone", asy
   await completeToWaiting(page, reg.token, reg.name);
   expect(await statusState(page)).toBe("waiting");
 
-  await approveAsAdmin(browser, reg.email);
+  await approveAsAdmin(browser, reg.email, reg.name);
 
   // The status endpoint reports the approval, and the approved view replaces
   // the waiting view after a reload (the page polls for this every 60 s).

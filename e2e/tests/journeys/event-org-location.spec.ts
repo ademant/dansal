@@ -12,6 +12,7 @@ import {
 } from "../../helpers/seed";
 import { AUTH_FILE } from "../../helpers/auth";
 import { openMobileTab } from "../../helpers/nav";
+import { recordCreated } from "../../helpers/cleanup";
 import { VIEWER, randomFutureDate, isoDate, hhmm, EVENT_DATE_MIN_DAYS, EVENT_DATE_MAX_DAYS } from "../../fixtures/data";
 
 const API_BASE = process.env.API_URL ?? "http://localhost:8000";
@@ -43,7 +44,9 @@ async function createMinimalEvent(page: Page, title: string): Promise<number> {
   await page.fill('input[name="end_time"]', hhmm(22, 0));
   await page.locator("#save-btn").click();
   await page.waitForURL(/\/admin\/events\/\d+\/edit/);
-  return idFromEditURL(page.url());
+  const id = idFromEditURL(page.url());
+  recordCreated("event", id);
+  return id;
 }
 
 // createOrg/createLocation go through the real admin forms rather than a
@@ -61,7 +64,9 @@ async function createOrg(page: Page, name: string): Promise<number> {
   await page.locator("#save-btn").scrollIntoViewIfNeeded();
   await page.locator("#save-btn").click({ force: true });
   await page.waitForURL("**/admin/organizations");
-  return idByName(page, "/api/v1/organizations", name);
+  const id = await idByName(page, "/api/v1/organizations", name);
+  recordCreated("organisation", id);
+  return id;
 }
 
 async function createLocation(page: Page, name: string): Promise<number> {
@@ -71,7 +76,9 @@ async function createLocation(page: Page, name: string): Promise<number> {
   await page.fill("#town", "E2E Ville");
   await page.locator("#save-btn").click();
   await page.waitForURL("**/admin/locations");
-  return idByName(page, "/api/v1/locations", name);
+  const id = await idByName(page, "/api/v1/locations", name);
+  recordCreated("location", id);
+  return id;
 }
 
 // The location edit/create form collapses every section except #sec-base;
@@ -260,6 +267,7 @@ test.describe("Org membership rules on create/assign (#1273, #1275)", () => {
     const otherOrgId = await apiPost(page, "/api/v1/organizations", adminToken, {
       name: otherOrg,
     }).then((o) => o.id);
+    recordCreated("organisation", otherOrgId);
 
     // VIEWER (role "user") is a shared seed account with no fixed org of
     // its own — add it to memberOrg only. INSERT OR IGNORE server-side
@@ -319,6 +327,7 @@ test.describe("Org membership rules on create/assign (#1273, #1275)", () => {
       data: JSON.stringify({ ...basePayload, organization_id: memberOrgId }),
     });
     expect(ownOrgResp.status()).toBe(201);
+    recordCreated("event", (await ownOrgResp.json()).id);
 
     // #1275: claim the org-less event into memberOrg through the real
     // admin UI, as VIEWER (not admin).
@@ -365,11 +374,13 @@ test.describe("New-event org-picker restricted to the caller's own orgs (#1331)"
     const soloEmail = `e2e-role-solo-${Date.now()}@example.com`;
     const soloPassword = "Bq3nWt8kFj5xRv2Y";
     createUser(soloEmail, soloPassword, "user");
+    recordCreated("user", 0, soloEmail);
     addOrgMember(soloOrgId, soloEmail);
 
     const multiEmail = `e2e-role-multi-${Date.now()}@example.com`;
     const multiPassword = "Cw6mYd1sHq4jTz9K";
     createUser(multiEmail, multiPassword, "user");
+    recordCreated("user", 0, multiEmail);
     addOrgMember(multiOrgAId, multiEmail);
     addOrgMember(multiOrgBId, multiEmail);
 

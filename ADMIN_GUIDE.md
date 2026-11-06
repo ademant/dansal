@@ -116,6 +116,7 @@ Key settings (all others have sensible defaults):
 | `server.login_rate_limit` | Login attempts per minute per IP (default 5) |
 | `server.suggest_rate_limit` | Anonymous event suggestions per client IP per 10 minutes (default 3). Raise it on a dev/test instance whose e2e suite submits many suggestions |
 | `server.suggest_preview_rate_limit` | Anonymous suggestion previews (event and feed) per client IP per 10 minutes (default 5). Raise it on a dev/test instance whose e2e suite previews many suggestions |
+| `server.register_rate_limit` | Self-registrations per client IP per 10 minutes (default 3). Raise it on a dev/test instance whose e2e suite registers several accounts per run |
 | `server.allow_admin_delete` | Enables `dansal_admin delete` (#1792). Off by default; the prod guard. Set it only on dev and test instances |
 | `server.login_max_failures` | Failed logins before account lock (default 10) |
 | `server.login_failure_window_secs` | Rolling window for failure counting (default 600) |

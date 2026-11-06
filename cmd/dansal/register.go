@@ -14,8 +14,10 @@ import (
 
 var registerRateLimiter *RateLimiter
 
-func initRegisterRateLimiter() {
-	registerRateLimiter = NewRateLimiter(3, 10*time.Minute)
+// initRegisterRateLimiter sets the registration limiter: limit is
+// server.register_rate_limit (per client IP per 10 minutes).
+func initRegisterRateLimiter(limit int) {
+	registerRateLimiter = NewRateLimiter(limit, 10*time.Minute)
 }
 
 func smtpEnabled() bool {

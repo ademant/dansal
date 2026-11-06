@@ -22,7 +22,10 @@ provide.
   ```yaml
   suggest_rate_limit: 100
   suggest_preview_rate_limit: 100
+  register_rate_limit: 100
   ```
+  `register_rate_limit` (default 3 per 10 minutes) covers self-registration, so
+  the register specs need it too (#1828).
   A submit rejected by it fails with `suggest submit rate-limited`. The
   preview limit (default 5 per 10 minutes) is separate: the suggest specs
   preview several times per run too (#1819).

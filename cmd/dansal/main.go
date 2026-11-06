@@ -3644,10 +3644,18 @@ func migrateLocationAliasesToJunction() {
 
 	// Populate from existing JSON data.
 	db.Exec(`INSERT OR IGNORE INTO location_aliases (location_id, alias)
-		SELECT id, j.value FROM locations, json_each(COALESCE(aliases,'[]')) j
+		SELECT locations.id, j.value FROM locations, json_each(COALESCE(aliases,'[]')) j
 		WHERE j.value != ''`)
 
-	// Rebuild locations table without the aliases column.
+	// Rebuild locations table without the aliases column. A legacy table may
+	// predate organization_id (#1826): copy NULL for it then, instead of
+	// selecting a column that is not there.
+	var hasOrgCol int
+	db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('locations') WHERE name='organization_id'").Scan(&hasOrgCol)
+	orgSel := "organization_id"
+	if hasOrgCol == 0 {
+		orgSel = "NULL"
+	}
 	conn, err := db.Conn(context.Background())
 	if err != nil {
 		logging.Errorf("migrateLocationAliasesToJunction: get conn: %v", err)
@@ -3712,7 +3720,7 @@ func migrateLocationAliasesToJunction() {
 			      THEN floor_condition ELSE '' END,
 			 COALESCE(no_street_shoes, 0),
 			 created_at, updated_at, COALESCE(updated_by, ''),
-			 organization_id, COALESCE(wheelchair_accessible, 0), COALESCE(hearing_loop, 0), COALESCE(visual_support, 0)
+			 ` + orgSel + `, COALESCE(wheelchair_accessible, 0), COALESCE(hearing_loop, 0), COALESCE(visual_support, 0)
 		FROM locations`,
 		`DROP TABLE locations`,
 		`ALTER TABLE locations_new RENAME TO locations`,

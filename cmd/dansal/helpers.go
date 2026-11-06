@@ -180,7 +180,9 @@ func notifyUser(chatID, matrixID string, matrixVerified bool, email, subject, bo
 			logging.Errorf("notify: matrix to %s: %v", matrixID, err)
 		}
 	}
-	if !hasChat && email != "" && (config.SMTP.Host != "" || config.SMTP.Sendmail != "") {
+	// config can be unset in tests and partial startup (#1825); no config
+	// means no SMTP to send through.
+	if !hasChat && email != "" && config != nil && (config.SMTP.Host != "" || config.SMTP.Sendmail != "") {
 		if _, err := SendEmail(email, subject, body, true); err != nil {
 			logging.Errorf("notify: email to %s: %v", email, err)
 		}

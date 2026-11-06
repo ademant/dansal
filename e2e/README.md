@@ -89,19 +89,32 @@ Retries come from `playwright.config.ts` (`retries: 1`): a test that fails once
 and passes on the second attempt is reported as flaky, not failed. Do not pass
 `--retries=0` for a normal run, or flaky tests look like real failures.
 
-## Cleanup of test data (#1793)
+## Cleanup of test data (#1793, #1829)
 
-After each run, `global-teardown.ts` deletes the events, locations, musicians
-and instructors the run created (bookings included: they are test data). Seed
-data shared between runs (the seed org, users) is not deleted. Each created id
-is written to `e2e/.run/cleanup/run-<id>.jsonl` as it is created. Ids that fail
-to delete stay there. `global-setup.ts` retries ledgers older than an hour
-from crashed runs.
+After each run, `global-teardown.ts` deletes what the run created: registrations,
+events (bookings included: they are test data), organisations, locations,
+musicians, instructors and the users that registration made. Seed data shared
+between runs (the seed org, the shared seed accounts) is never deleted. Each
+created entity is written to `e2e/.run/cleanup/run-<id>.jsonl` as it is created.
+
+Each run ends with a summary line per phase: removed, failed, kept and skipped
+ledgers, with the reason for each failure. A registration that was already
+approved cannot be removed through the API (409); it is reported as kept, and it
+expires on its own after a week. Entities that fail stay in the ledger.
+
+`global-setup.ts` clears ledgers from earlier runs at the start of the next run.
+A ledger whose owning process is gone is cleaned at once; one whose owner is
+still running is left alone. A ledger with no readable owner is cleaned once it
+is an hour old.
 
 Cleanup only runs on hosts in `CLEANUP_ALLOWED_HOSTS` (`helpers/cleanup.ts`).
-Anything else is refused and left in the ledger. Locations, musicians and
-instructors are removed with `dansal_admin delete`, which needs
+Anything else is refused and left in the ledger. Organisations, locations,
+users and the rest are removed with `dansal_admin`, which needs
 `server.allow_admin_delete: true` on the target instance.
+
+Not yet recorded: events created by feed imports and suggestion submissions
+(the server creates them, so the test does not see their ids), and organisations
+or users created by specs that do not go through the helpers above.
 
 ## Smoke and full suites
 

@@ -2,6 +2,7 @@ import { test, expect } from "../../helpers/fixtures";
 import { Page } from "@playwright/test";
 import { fullSeed, SeedResult, getTokenFromCookie, gotoAdminEventsFor } from "../../helpers/seed";
 import { AUTH_FILE } from "../../helpers/auth";
+import { recordCreated } from "../../helpers/cleanup";
 import { openMobileTab } from "../../helpers/nav";
 import {
   randomFutureDate,
@@ -48,7 +49,9 @@ async function createMinimalEvent(page: Page, title: string, eventDate: Date): P
   await page.fill('input[name="end_time"]', hhmm(22, 0));
   await page.locator("#save-btn").click();
   await page.waitForURL(/\/admin\/events\/\d+\/edit/);
-  return idFromEditURL(page.url());
+  const id = idFromEditURL(page.url());
+  recordCreated("event", id);
+  return id;
 }
 
 // dansal_web caches GetLocations for admin pickers (#1276) and only its own
@@ -73,6 +76,7 @@ async function createLocation(page: Page, name: string): Promise<number> {
   const list = await resp.json();
   const match = Array.isArray(list) ? list.find((l: any) => l.location === name) : null;
   if (!match) throw new Error(`location not found: ${name}`);
+  recordCreated("location", match.id);
   return match.id;
 }
 
@@ -87,6 +91,7 @@ async function createOrg(page: Page, name: string): Promise<number> {
   const list = await resp.json();
   const match = Array.isArray(list) ? list.find((o: any) => o.name === name) : null;
   if (!match) throw new Error(`org not found: ${name}`);
+  recordCreated("organisation", match.id);
   return match.id;
 }
 

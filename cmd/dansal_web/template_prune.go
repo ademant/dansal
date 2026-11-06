@@ -15,8 +15,8 @@ import (
 // holds the templates, so the web tier does this itself: once at startup and
 // then hourly.
 //
-// Nothing is pruned when a lookup fails or when a list is at the API's page
-// cap: a failed or truncated list must not look like "everything is gone".
+// Nothing is pruned when a lookup fails: the lists are read in full (pageAll),
+// so a failed page must not look like "everything is gone" (#1827).
 func pruneOrphanTemplates(ctx context.Context, db *sql.DB, client *DansalClient) (int, error) {
 	orgs, err := client.GetOrganizations(ctx)
 	if err != nil {
@@ -25,10 +25,6 @@ func pruneOrphanTemplates(ctx context.Context, db *sql.DB, client *DansalClient)
 	locs, err := client.GetLocations(ctx)
 	if err != nil {
 		return 0, err
-	}
-	if len(orgs) >= apiListLimit || len(locs) >= apiListLimit {
-		logging.Warnf("dansal-web: template prune skipped: organisation or location list is at the API page cap (%d)", apiListLimit)
-		return 0, nil
 	}
 	orgIDs := make(map[int]bool, len(orgs))
 	for _, o := range orgs {

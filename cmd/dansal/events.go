@@ -1434,6 +1434,7 @@ func insertEventCore(q querier, in EventInput) (int, string, string, error) {
 			if err != nil {
 				return 0, "", "", err
 			}
+			checkTitleCancellation(fetchSourceID, existingID, existing.Title, title, isCancelled)
 			return existingID, existingShortCode, outcomeUpdated, nil
 		}
 
@@ -1444,19 +1445,20 @@ func insertEventCore(q querier, in EventInput) (int, string, string, error) {
 				fsArg = fetchSourceID
 			}
 			_, err = q.Exec(
-				"UPDATE events SET uid=COALESCE(uid,?), description=?, start_time=?, end_time=?, location_id=COALESCE(?,location_id), has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, workshop_difficulty=?, is_published=?, url=?, source_last_modified=?, pricing=jsonb(?), changed_at=?, changed_by=?, fetch_source_id=COALESCE(?,fetch_source_id), organization_id=COALESCE(organization_id,?), previous_start_time=COALESCE(?,previous_start_time), email_verified=1 WHERE id=?",
-				uidArg, description, startTime, endTime, locIDArg, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, urlVal(url), slmArg, pricingArg,
+				"UPDATE events SET uid=COALESCE(uid,?), title=?, description=?, start_time=?, end_time=?, location_id=COALESCE(?,location_id), has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, workshop_difficulty=?, is_published=?, url=?, source_last_modified=?, pricing=jsonb(?), changed_at=?, changed_by=?, fetch_source_id=COALESCE(?,fetch_source_id), organization_id=COALESCE(organization_id,?), previous_start_time=COALESCE(?,previous_start_time), email_verified=1 WHERE id=?",
+				uidArg, title, description, startTime, endTime, locIDArg, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, urlVal(url), slmArg, pricingArg,
 				time.Now().UTC().Unix(), "fetch", fsArg, orgIDArg, previousStartTimeArg, existingID,
 			)
 		} else {
 			_, err = q.Exec(
-				"UPDATE events SET description=?, start_time=?, end_time=?, location_id=COALESCE(?,location_id), has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, workshop_difficulty=?, is_published=?, url=?, source_last_modified=?, pricing=jsonb(?), organization_id=COALESCE(organization_id,?), previous_start_time=COALESCE(?,previous_start_time), email_verified=1 WHERE id=?",
-				description, startTime, endTime, locIDArg, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, urlVal(url), slmArg, pricingArg, orgIDArg, previousStartTimeArg, existingID,
+				"UPDATE events SET title=?, description=?, start_time=?, end_time=?, location_id=COALESCE(?,location_id), has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, workshop_difficulty=?, is_published=?, url=?, source_last_modified=?, pricing=jsonb(?), organization_id=COALESCE(organization_id,?), previous_start_time=COALESCE(?,previous_start_time), email_verified=1 WHERE id=?",
+				title, description, startTime, endTime, locIDArg, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, isPublished, urlVal(url), slmArg, pricingArg, orgIDArg, previousStartTimeArg, existingID,
 			)
 		}
 		if err != nil {
 			return 0, "", "", err
 		}
+		checkTitleCancellation(fetchSourceID, existingID, existing.Title, title, isCancelled)
 		return existingID, existingShortCode, outcomeUpdated, nil
 	}
 
@@ -1510,6 +1512,7 @@ func insertEventCore(q querier, in EventInput) (int, string, string, error) {
 	if duplicateReviewCandidateID > 0 {
 		flagDuplicateReview(q, int(id), duplicateReviewCandidateID, title)
 	}
+	checkTitleCancellation(fetchSourceID, int(id), "", title, isCancelled)
 	return int(id), shortCode, outcomeNew, nil
 }
 

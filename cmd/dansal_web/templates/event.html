@@ -1613,20 +1613,10 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 </script>
 
-{{with .Data}}
-{{$hasGeoPosts := false}}
-{{range .ContactPosts}}{{if and .Lat .Lon}}{{$hasGeoPosts = true}}{{end}}{{end}}
-{{if or (and .Event.Location .Event.Location.Latitude) $hasGeoPosts}}
-<!-- defer (#1130): deferring the external tag below doesn't change execution
-     order (it's the last element on the page) — it just lets the browser
-     finish parsing the rest of the document instead of blocking on the
-     Leaflet download here. `defer` has NO effect on an inline script without
-     `src` (it always runs synchronously at its parse position regardless of
-     the attribute) — so the map-init script below is wrapped in a
-     DOMContentLoaded listener instead, which is what actually delays it
-     until after the deferred external script has run and L is defined. -->
 <script nonce="{{$.Nonce}}">
-// #1617: phone tab bar for the event page. Hash links open the tab that holds
+// #1617: phone tab bar for the event page. Rendered for every event (#1838):
+// it used to sit inside the map condition below, so events without
+// coordinates had a tab bar without handlers. Hash links open the tab that holds
 // their target (e.g. #board-post-… opens Board, a timetable link opens
 // Timetable). Only the bar and the panels change; nothing is re-rendered.
 (function(){
@@ -1694,6 +1684,19 @@ document.addEventListener('DOMContentLoaded', function(){
   }
 })();
 </script>
+
+{{with .Data}}
+{{$hasGeoPosts := false}}
+{{range .ContactPosts}}{{if and .Lat .Lon}}{{$hasGeoPosts = true}}{{end}}{{end}}
+{{if or (and .Event.Location .Event.Location.Latitude) $hasGeoPosts}}
+<!-- defer (#1130): deferring the external tag below doesn't change execution
+     order (it's the last element on the page) — it just lets the browser
+     finish parsing the rest of the document instead of blocking on the
+     Leaflet download here. `defer` has NO effect on an inline script without
+     `src` (it always runs synchronously at its parse position regardless of
+     the attribute) — so the map-init script below is wrapped in a
+     DOMContentLoaded listener instead, which is what actually delays it
+     until after the deferred external script has run and L is defined. -->
 <script nonce="{{$.Nonce}}" defer src="/static/leaflet/leaflet.js"></script>
 <script nonce="{{$.Nonce}}">
 // #1166: same bfcache staleness as #1162 — an admin editing this event

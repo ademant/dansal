@@ -1,6 +1,6 @@
 ---
 name: event-import
-description: Change the dansal event import pipeline: feed fetch/detection/parsing (fetchurl*.go, preview.go parseBodyToRequests, importFromSource), new feed type, dedup (findExistingEvent tiers, insertEvent, previewDuplicateStatus), location resolution (ensureLocation, location_aliases), suggest-preview/JSON-LD. Use for any import/dedup/location-matching bug or feature.
+description: Change the dansal event import pipeline: feed fetch/detection/parsing (fetchurl*.go, preview.go parseBodyToRequests, importFromSource), new feed type, dedup (findExistingEvent tiers, insertEvent, previewDuplicateStatus), location resolution (ensureLocation, location_aliases), suggest-preview/JSON-LD, update paths (merge vs normal), title-only cancellation notices. Use for any import/dedup/location-matching bug or feature.
 ---
 
 # Import & dedup (cmd/dansal)
@@ -16,6 +16,19 @@ TIERS (first match wins; constant `threeHours`; details also in CLAUDE.md)
 1 UID exact (works with nil startTime). 2 URL exact AND |Δstart|<3h (window is deliberate, #702: feeds reuse one homepage URL — CLAUDE.md omits the window). 3 location_id + 3h: auto-merge only same feed source or fuzzy/identical title from another feed; manual create / unrelated title → `TierLocationReview` (#1424). 4 title + 3h (when locationID==0). 5 same fetch_source_id + 3h + `titlesFuzzyOverlap` → `TierFuzzyReview`.
 - Review tiers (`IsReview()`): insert as new, flag both (`needs_duplicate_review`, `duplicate_of_id`); preview reports "new" + `duplicate_hint_id`.
 - Dedup runs on EVERY create incl. admin form/API — affects tests/fixtures.
+
+UPDATE PATHS (`insertEventCore`, matched row)
+- Skip (unchanged): same `ical_sequence` + no newer LAST-MODIFIED, or `source_last_modified` ≤ stored.
+- Merge path: `source!=""` && `changed_at>0` && slm > changed_at → overwrite only non-empty feed fields; else skip (protects manual edits).
+- Normal path (`source` set / unset): full UPDATE. Every path writes `title` (#1840 — normal path didn't). New written column → add to ALL three UPDATEs + INSERT.
+- Insert sets `changed_at=now` → a test re-import hits the merge path; to test the normal path, `UPDATE events SET changed_at=0` first.
+- `is_cancelled` is overwritten from the feed on update → a manual cancel is lost on the next newer feed revision (known, unfixed).
+- Fixing data after a missed field: stored `source_last_modified` already equals the feed's → re-run skips; clear it on those rows first.
+
+TITLE-ONLY CANCELLATION (#1841, `title_cancel.go`)
+- `titleCancellationSignal(title)` → none/cancelled/postponed; single keyword list `titleCancelKeywords` (12 langs). Whole word at start/end of title or of a part split by `titleSegmentSeparators` / " - " (hyphenated words stay intact).
+- `checkTitleCancellation` after every insert/update return in insertEventCore: fetch sources only, `!isCancelled`, old title lacks the same signal → `go notifyTitleCancellation` (var, stubbed in tests) → admins, link `/admin/events/{id}/edit`. NEVER auto-cancels.
+- Tests: `title_cancel_test.go` (matcher table, title-on-reimport, notify-once).
 
 PREVIEW vs INSERT INVARIANTS
 - Preview never writes: location lookup is plain SELECT; insert path uses `ensureLocation` (may create).

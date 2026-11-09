@@ -94,3 +94,36 @@ func TestEventVenueLinksToLocationTab(t *testing.T) {
 		t.Error("venue name on the Info tab must link to the Location tab")
 	}
 }
+
+// TestEventPagePhoneTabsWithoutMap covers #1838: the tab script used to sit in
+// the map block, so an event without coordinates got a tab bar with no click
+// handlers. It must render whether or not the page has a map.
+func TestEventPagePhoneTabsWithoutMap(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.Exec(`CREATE TABLE site_settings (key TEXT PRIMARY KEY, value TEXT)`)
+	siteCfg = newSiteSettingsCache(db)
+
+	tmpls := loadTemplates()
+	i18n := loadI18n("")
+	cfg := &Config{Domain: "example.test"}
+	req := httptest.NewRequest(http.MethodGet, "/events/1", nil)
+	rec := httptest.NewRecorder()
+	renderTemplate(rec, tmpls.event, tmplData(req, cfg, i18n, "Test", EventData{Event: Event{ID: 1, Title: "Test"}}))
+	html := rec.Body.String()
+	if strings.Contains(html, "/static/leaflet/leaflet.js") {
+		t.Fatal("test premise: an event without coordinates must not load the map")
+	}
+	for _, want := range []string{
+		`var root=document.getElementById('evt-tabs');`,
+		`b.addEventListener('click', function(){ show(this.dataset.tab, true); });`,
+		`show('general', false);`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("event page without a map is missing tab script line %q", want)
+		}
+	}
+}

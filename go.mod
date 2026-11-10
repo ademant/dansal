@@ -4,7 +4,7 @@ go 1.27.3
 
 require (
 	filippo.io/age v1.3.2
-	github.com/andybalholm/brotli v1.2.7
+	github.com/andybalholm/brotli v1.2.8
 	github.com/arran4/golang-ical v0.3.8
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/gen2brain/avif v0.6.0

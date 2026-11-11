@@ -250,15 +250,15 @@ func isInternalCaller(r *http.Request) bool {
 }
 
 // corsOrigin returns the allowed CORS origin for the request.
-// When allowed_origins is unset, falls back to the configured base_url origin
-// so that unconfigured deployments don't silently open CORS to all domains.
-// Falls through to "*" only when base_url is also not set.
+// When allowed_origins is unset, falls back to the configured base_url origin.
+// Returns "" (deny all cross-origin) when base_url is also not set, so an
+// unconfigured deployment is closed rather than open.
 func corsOrigin(r *http.Request) string {
 	if len(config.Server.AllowedOrigins) == 0 {
 		if u, err := url.Parse(config.Server.BaseURL); err == nil && u.Host != "" {
 			return u.Scheme + "://" + u.Host
 		}
-		return "*"
+		return ""
 	}
 	origin := r.Header.Get("Origin")
 	for _, o := range config.Server.AllowedOrigins {
@@ -4716,7 +4716,7 @@ func main() {
 		if u, err := url.Parse(config.Server.BaseURL); err == nil && u.Host != "" {
 			logging.Infof("server.allowed_origins is unset — CORS restricted to base_url origin (%s://%s)", u.Scheme, u.Host)
 		} else {
-			logging.Infof("warning: server.allowed_origins and base_url are both unset — CORS defaults to '*' (all origins); set base_url or allowed_origins in config")
+			logging.Infof("warning: server.allowed_origins and base_url are both unset — CORS blocked for all origins; set base_url or allowed_origins in config")
 		}
 	}
 

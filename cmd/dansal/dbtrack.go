@@ -83,8 +83,8 @@ func callSite() string {
 		f, more := frames.Next()
 		if strings.Contains(f.File, "/cmd/dansal/") && !strings.HasSuffix(f.File, "dbtrack.go") {
 			fn := f.Function
-			if i := strings.LastIndex(fn, "."); i >= 0 {
-				fn = fn[i+1:]
+			if _, after, ok := strings.CutLast(fn, "."); ok {
+				fn = after
 			}
 			return fmt.Sprintf("%s:%d (%s)", filepath.Base(f.File), f.Line, fn)
 		}

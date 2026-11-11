@@ -73,11 +73,11 @@ func validateEmailDomain(ctx context.Context, email string) error {
 // than 2-3 dot-separated segments (e.g. "j.r.tolkien@gmail.com"), so the bar
 // here — 5+ segments, most of them 1-2 chars — is set well above that.
 func looksLikeGmailDotSpam(email string) bool {
-	at := strings.LastIndex(email, "@")
-	if at < 0 {
+	local, domain, ok := strings.CutLast(email, "@")
+	if !ok {
 		return false
 	}
-	local, domain := email[:at], strings.ToLower(email[at+1:])
+	domain = strings.ToLower(domain)
 	if domain != "gmail.com" && domain != "googlemail.com" {
 		return false
 	}

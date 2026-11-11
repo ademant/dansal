@@ -83,8 +83,8 @@ func smtpReveal(encBase64, keyHex string) (string, error) {
 // generateMessageID returns a unique RFC 5322 Message-ID using the From domain.
 func generateMessageID() string {
 	domain := "localhost"
-	if from := config.SMTP.From; strings.Contains(from, "@") {
-		domain = from[strings.Index(from, "@")+1:]
+	if _, after, ok := strings.Cut(config.SMTP.From, "@"); ok {
+		domain = after
 	} else if h, err := os.Hostname(); err == nil {
 		domain = h
 	}

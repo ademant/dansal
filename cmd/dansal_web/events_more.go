@@ -40,7 +40,7 @@ const eventsMoreMaxBatches = 20
 // initial page load.
 func fetchEventsUntil(ctx context.Context, client *DansalClient, after, target int64) ([]Event, error) {
 	var all []Event
-	for i := 0; i < eventsMoreMaxBatches; i++ {
+	for range eventsMoreMaxBatches {
 		batch, err := client.GetEvents(ctx, strconv.FormatInt(after, 10))
 		if err != nil {
 			return all, err

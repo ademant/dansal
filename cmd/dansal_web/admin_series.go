@@ -6,6 +6,7 @@ import (
 	"github.com/ademant/dansal/internal/logging"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -392,9 +393,9 @@ func seriesDefaultsFromForm(r *http.Request, existingTimetable []TimetableEntry)
 		}
 	}
 	d := seriesDefaults{
-		HasBall:            sliceContains(tags, "bal-folk"),
-		HasWorkshop:        sliceContains(tags, "dance-workshop") || sliceContains(tags, "musician-workshop"),
-		HasFestival:        sliceContains(tags, "festival"),
+		HasBall:            slices.Contains(tags, "bal-folk"),
+		HasWorkshop:        slices.Contains(tags, "dance-workshop") || slices.Contains(tags, "musician-workshop"),
+		HasFestival:        slices.Contains(tags, "festival"),
 		WorkshopDifficulty: r.FormValue("workshop_difficulty"),
 		URL:                strings.TrimSpace(r.FormValue("url")),
 		BookingURL:         strings.TrimSpace(r.FormValue("booking_url")),

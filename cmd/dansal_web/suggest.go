@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -362,9 +363,9 @@ func suggestSubmitHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 			Description: description,
 			StartTime:   startTime,
 			EndTime:     r.FormValue("end_time"),
-			HasBall:     sliceContains(tags, "bal-folk"),
-			HasWorkshop: sliceContains(tags, "dance-workshop") || sliceContains(tags, "musician-workshop"),
-			HasFestival: sliceContains(tags, "festival"),
+			HasBall:     slices.Contains(tags, "bal-folk"),
+			HasWorkshop: slices.Contains(tags, "dance-workshop") || slices.Contains(tags, "musician-workshop"),
+			HasFestival: slices.Contains(tags, "festival"),
 			Tags:        tags,
 			DanceIDs:    danceIDsFromForm(r),
 			URL:         r.FormValue("url"),
@@ -816,9 +817,9 @@ func suggestManageSubmitHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			Description: r.FormValue("description"),
 			StartTime:   r.FormValue("start_time"),
 			EndTime:     r.FormValue("end_time"),
-			HasBall:     sliceContains(tags, "bal-folk"),
-			HasWorkshop: sliceContains(tags, "dance-workshop") || sliceContains(tags, "musician-workshop"),
-			HasFestival: sliceContains(tags, "festival"),
+			HasBall:     slices.Contains(tags, "bal-folk"),
+			HasWorkshop: slices.Contains(tags, "dance-workshop") || slices.Contains(tags, "musician-workshop"),
+			HasFestival: slices.Contains(tags, "festival"),
 			Tags:        tags,
 			DanceIDs:    danceIDs,
 			URL:         r.FormValue("url"),

@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"github.com/ademant/dansal/internal/logging"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -107,15 +109,6 @@ type TagOption struct {
 type TagGroup struct {
 	Category string
 	Tags     []TagOption
-}
-
-func sliceContains(slice []string, s string) bool {
-	for _, v := range slice {
-		if v == s {
-			return true
-		}
-	}
-	return false
 }
 
 func buildGroupedTags(tags []Tag, checked map[string]bool) []TagGroup {
@@ -925,14 +918,8 @@ func adminEventMergeHandler(cfg *Config, db *sql.DB, client *DansalClient) http.
 			}
 		}
 
-		tags := make([]string, 0, len(tagSet))
-		for t := range tagSet {
-			tags = append(tags, t)
-		}
-		mids := make([]int, 0, len(musicianSet))
-		for id := range musicianSet {
-			mids = append(mids, id)
-		}
+		tags := slices.Collect(maps.Keys(tagSet))
+		mids := slices.Collect(maps.Keys(musicianSet))
 
 		// event_dances lives only in the API's calendar.db, not in web.db.
 		// Resolve dance names (already collected from each event above) to IDs
@@ -1532,12 +1519,12 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 				var match bool
 				switch filterType {
 				case "ball":
-					match = sliceContains(e.Tags, "bal-folk") || sliceContains(e.Tags, "fest-noz")
+					match = slices.Contains(e.Tags, "bal-folk") || slices.Contains(e.Tags, "fest-noz")
 				case "workshop":
-					match = sliceContains(e.Tags, "workshop") || sliceContains(e.Tags, "dance-workshop") ||
-						sliceContains(e.Tags, "musician-workshop") || sliceContains(e.Tags, "music-course")
+					match = slices.Contains(e.Tags, "workshop") || slices.Contains(e.Tags, "dance-workshop") ||
+						slices.Contains(e.Tags, "musician-workshop") || slices.Contains(e.Tags, "music-course")
 				case "festival":
-					match = sliceContains(e.Tags, "festival")
+					match = slices.Contains(e.Tags, "festival")
 				}
 				if match {
 					filtered = append(filtered, e)
@@ -1991,9 +1978,9 @@ func parseTemplateForm(r *http.Request, client *DansalClient, bundle RefBundle) 
 		BookingURL:         strings.TrimSpace(r.FormValue("booking_url")),
 		StartTime:          templateTimeString(r.FormValue("start_time")),
 		EndTime:            templateTimeString(r.FormValue("end_time")),
-		HasBall:            sliceContains(tags, "bal-folk"),
-		HasWorkshop:        sliceContains(tags, "dance-workshop") || sliceContains(tags, "musician-workshop"),
-		HasFestival:        sliceContains(tags, "festival"),
+		HasBall:            slices.Contains(tags, "bal-folk"),
+		HasWorkshop:        slices.Contains(tags, "dance-workshop") || slices.Contains(tags, "musician-workshop"),
+		HasFestival:        slices.Contains(tags, "festival"),
 		WorkshopDifficulty: r.FormValue("workshop_difficulty"),
 		OrgID:              orgID,
 		LocID:              locID,
@@ -2607,9 +2594,9 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			Description:      strings.TrimSpace(r.FormValue("description")),
 			StartTime:        startTime,
 			EndTime:          endTime,
-			HasBall:          sliceContains(tags, "bal-folk"),
-			HasWorkshop:      sliceContains(tags, "dance-workshop") || sliceContains(tags, "musician-workshop"),
-			HasFestival:      sliceContains(tags, "festival"),
+			HasBall:          slices.Contains(tags, "bal-folk"),
+			HasWorkshop:      slices.Contains(tags, "dance-workshop") || slices.Contains(tags, "musician-workshop"),
+			HasFestival:      slices.Contains(tags, "festival"),
 			BookingURL:       strings.TrimSpace(r.FormValue("booking_url")),
 			Food:             r.FormValue("food"),
 			Drink:            r.FormValue("drink"),
@@ -3110,9 +3097,9 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			Description:          strings.TrimSpace(r.FormValue("description")),
 			StartTime:            startTime,
 			EndTime:              endTime,
-			HasBall:              sliceContains(tags, "bal-folk"),
-			HasWorkshop:          sliceContains(tags, "dance-workshop") || sliceContains(tags, "musician-workshop"),
-			HasFestival:          sliceContains(tags, "festival"),
+			HasBall:              slices.Contains(tags, "bal-folk"),
+			HasWorkshop:          slices.Contains(tags, "dance-workshop") || slices.Contains(tags, "musician-workshop"),
+			HasFestival:          slices.Contains(tags, "festival"),
 			BookingURL:           strings.TrimSpace(r.FormValue("booking_url")),
 			Food:                 r.FormValue("food"),
 			Drink:                r.FormValue("drink"),
@@ -3479,12 +3466,12 @@ func adminOrgDashboardHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 				var match bool
 				switch filterType {
 				case "ball":
-					match = sliceContains(e.Tags, "bal-folk") || sliceContains(e.Tags, "fest-noz")
+					match = slices.Contains(e.Tags, "bal-folk") || slices.Contains(e.Tags, "fest-noz")
 				case "workshop":
-					match = sliceContains(e.Tags, "workshop") || sliceContains(e.Tags, "dance-workshop") ||
-						sliceContains(e.Tags, "musician-workshop") || sliceContains(e.Tags, "music-course")
+					match = slices.Contains(e.Tags, "workshop") || slices.Contains(e.Tags, "dance-workshop") ||
+						slices.Contains(e.Tags, "musician-workshop") || slices.Contains(e.Tags, "music-course")
 				case "festival":
-					match = sliceContains(e.Tags, "festival")
+					match = slices.Contains(e.Tags, "festival")
 				}
 				if match {
 					filtered = append(filtered, e)

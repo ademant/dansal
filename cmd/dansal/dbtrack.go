@@ -5,8 +5,10 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
+	"maps"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -133,10 +135,7 @@ func logTrackedDB() {
 		return
 	}
 	groups, held := trackedOpenGroups(time.Now())
-	keys := make([]string, 0, len(groups))
-	for k := range groups {
-		keys = append(keys, k)
-	}
+	keys := slices.Collect(maps.Keys(groups))
 	sort.Strings(keys)
 	for _, k := range keys {
 		g := groups[k]

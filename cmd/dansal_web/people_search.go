@@ -85,8 +85,8 @@ var peopleTitleTokens = map[string]bool{"dr": true, "prof": true, "dipl": true, 
 // prefix ("Chant : Judith Laux"), punctuation and title tokens, and returns
 // the remaining words.
 func normalizePersonName(s string) []string {
-	if i := strings.LastIndex(s, ":"); i >= 0 && strings.TrimSpace(s[i+1:]) != "" {
-		s = s[i+1:]
+	if _, after, ok := strings.CutLast(s, ":"); ok && strings.TrimSpace(after) != "" {
+		s = after
 	}
 	words := foldWords(s)
 	out := words[:0]

@@ -606,8 +606,8 @@ func dynamicSVGHandler(imagesDir, key string, fallback []byte) http.HandlerFunc 
 
 // geoEvent is the compact event projection used for map markers, both in the
 func emailLocal(email string) string {
-	if idx := strings.Index(email, "@"); idx > 0 {
-		return email[:idx]
+	if local, _, ok := strings.Cut(email, "@"); ok && local != "" {
+		return local
 	}
 	return email
 }

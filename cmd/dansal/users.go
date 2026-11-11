@@ -10,7 +10,9 @@ import (
 	"fmt"
 	"github.com/ademant/dansal/internal/logging"
 	"io"
+	"maps"
 	"net/http"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -290,10 +292,7 @@ func getUserOrganizations(w http.ResponseWriter, r *http.Request) {
 	}
 
 	orgSet := userOrgSet(targetID)
-	ids := make([]int, 0, len(orgSet))
-	for id := range orgSet {
-		ids = append(ids, id)
-	}
+	ids := slices.Collect(maps.Keys(orgSet))
 	sort.Ints(ids)
 	json.NewEncoder(w).Encode(map[string][]int{"organization_ids": ids})
 }

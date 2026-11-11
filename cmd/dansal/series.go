@@ -477,7 +477,7 @@ func createSeries(w http.ResponseWriter, r *http.Request) {
 				n = 52
 			}
 			d := startDate
-			for i := 0; i < n; i++ {
+			for range n {
 				dates = append(dates, d)
 				d = d.AddDate(0, 0, interval)
 			}

@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -340,10 +342,7 @@ func jcalPropToICalLine(p any) (string, error) {
 
 	var head strings.Builder
 	head.WriteString(strings.ToUpper(name))
-	keys := make([]string, 0, len(paramsObj))
-	for k := range paramsObj {
-		keys = append(keys, k)
-	}
+	keys := slices.Collect(maps.Keys(paramsObj))
 	sort.Strings(keys)
 	for _, k := range keys {
 		var vals []string
@@ -485,10 +484,7 @@ func jcalDateToICal(s string) string {
 // RRULE/EXRULE value string. FREQ is emitted first (customary, not
 // required) with remaining keys in alphabetical order for determinism.
 func jcalRecurToICal(obj map[string]any) string {
-	keys := make([]string, 0, len(obj))
-	for k := range obj {
-		keys = append(keys, k)
-	}
+	keys := slices.Collect(maps.Keys(obj))
 	sort.Strings(keys)
 	sort.SliceStable(keys, func(i, j int) bool { return keys[i] == "freq" && keys[j] != "freq" })
 

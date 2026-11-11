@@ -435,8 +435,8 @@ func verifyInboxRequest(ctx context.Context, httpClient *http.Client, r *http.Re
 	if actorField != "" {
 		// Derive the base actor URL by stripping any key fragment.
 		keyBase := keyID
-		if idx := strings.Index(keyBase, "#"); idx != -1 {
-			keyBase = keyBase[:idx]
+		if before, _, ok := strings.Cut(keyBase, "#"); ok {
+			keyBase = before
 		}
 		effectiveOwner := owner
 		if effectiveOwner == "" {

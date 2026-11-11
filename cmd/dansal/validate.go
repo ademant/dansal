@@ -17,11 +17,10 @@ func isValidEmail(s string) bool {
 	if len(s) > 254 || len(s) == 0 {
 		return false
 	}
-	at := strings.Index(s, "@")
-	if at <= 0 || at == len(s)-1 || strings.Count(s, "@") != 1 {
+	local, domain, ok := strings.Cut(s, "@")
+	if !ok || local == "" || domain == "" || strings.ContainsRune(domain, '@') {
 		return false
 	}
-	local, domain := s[:at], s[at+1:]
 	if len(local) > 64 {
 		return false
 	}
@@ -38,7 +37,7 @@ func isValidEmail(s string) bool {
 // lookup, with an RFC 5321 §5.1 fallback to A/AAAA. DNS errors (SERVFAIL,
 // timeout) are logged and treated as pass-through to avoid false positives.
 func validateEmailDomain(ctx context.Context, email string) error {
-	domain := email[strings.Index(email, "@")+1:]
+	_, domain, _ := strings.Cut(email, "@")
 
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()

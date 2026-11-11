@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"github.com/ademant/dansal/internal/logging"
 	"io"
+	"maps"
 	"net/http"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -669,11 +671,7 @@ func adminLocationMergeHandler(cfg *Config, client *DansalClient) http.HandlerFu
 				aliasSet[a] = true
 			}
 		}
-		mergedOrgs := make([]int, 0, len(orgSet))
-		for oid := range orgSet {
-			mergedOrgs = append(mergedOrgs, oid)
-		}
-		base.OrganizationIDs = mergedOrgs
+		base.OrganizationIDs = slices.Collect(maps.Keys(orgSet))
 		mergedAliases := make([]string, 0, len(aliasSet))
 		for a := range aliasSet {
 			if a != base.Location {

@@ -554,7 +554,12 @@ function renderMiniCalendar(containerId, calEvents, months, opts){
       };
       if(!placeStart() && 'IntersectionObserver' in window){
         var io=new IntersectionObserver(function(entries){
-          if(entries[0].isIntersecting && placeStart()) io.disconnect();
+          if(!entries[0].isIntersecting) return;
+          var placed=placeStart();
+          // #1858: the arrows were computed while the calendar was hidden
+          // (zero width, both disabled). Refresh them now that it is shown.
+          updateBtns();
+          if(placed) io.disconnect();
         });
         io.observe(cal);
       }
@@ -582,6 +587,8 @@ function renderMiniCalendar(containerId, calEvents, months, opts){
       },{passive:true});
       cal._miniCalCarouselBound=true;
     }
+    // #1858: lets the page recompute the arrows when the calendar's tab opens.
+    cal._miniCalUpdateBtns=updateBtns;
     updateBtns();
   } else {
     cal.classList.remove('fest-carousel');

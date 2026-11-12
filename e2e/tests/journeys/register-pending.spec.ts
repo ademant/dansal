@@ -53,7 +53,12 @@ async function createRegistration(
 }
 
 // Verifies the email and sets a password, leaving the page on the waiting view.
-async function completeToWaiting(page: Page, token: string, name: string): Promise<void> {
+async function completeToWaiting(
+  page: Page,
+  token: string,
+  name: string,
+  email: string
+): Promise<void> {
   await page.goto(`/register/verify/email/${token}`, { waitUntil: "domcontentloaded" });
   await page.fill("#field-auth-display-name", name);
   await page.fill("#field-auth-password", PASSWORD);
@@ -110,7 +115,7 @@ test("withdraw asks first, then deletes a registration awaiting review", async (
   page,
 }) => {
   const reg = await createRegistration(browser, "withdraw");
-  await completeToWaiting(page, reg.token, reg.name);
+  await completeToWaiting(page, reg.token, reg.name, reg.email);
 
   // The waiting view is announced to screen readers.
   await expect(page.locator('[data-pending-poll][aria-live="polite"]')).toHaveCount(1);
@@ -137,7 +142,7 @@ test("approved registration: waiting -> approved, withdraw leaves it alone", asy
   page,
 }) => {
   const reg = await createRegistration(browser, "approved");
-  await completeToWaiting(page, reg.token, reg.name);
+  await completeToWaiting(page, reg.token, reg.name, reg.email);
   expect(await statusState(page)).toBe("waiting");
 
   await approveAsAdmin(browser, reg.email, reg.name);

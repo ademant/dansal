@@ -202,6 +202,9 @@ document.addEventListener('DOMContentLoaded', function(){
   if (!root) return;
   dansalMtabs(root, function(tab){
     if (tab === 'map' && window.festMap) window.festMap.invalidateSize();
+    // #1858: the carousel arrows were computed while the calendar was hidden.
+    var fc = document.getElementById('fest-calendar');
+    if (tab === 'calendar' && fc && fc._miniCalUpdateBtns) fc._miniCalUpdateBtns();
   });
 });
 </script>

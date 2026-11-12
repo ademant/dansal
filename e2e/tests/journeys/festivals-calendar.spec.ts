@@ -7,6 +7,7 @@
  */
 import { test, expect } from "../../helpers/fixtures";
 import { apiPost, getTokenFromCookie, seedLocation, seedOrg } from "../../helpers/seed";
+import { openMobileTab } from "../../helpers/nav";
 
 function isoDateTime(d: Date, hour: number, minute = 0): string {
   const dd = new Date(d);
@@ -60,6 +61,8 @@ test.describe("Festivals page month calendar (#1519)", () => {
     test.skip(testInfo.project.name !== "mobile", "grid-vs-carousel split is viewport-driven");
     await seedFestivalEvent(page);
     await page.goto("/festivals");
+    // Phones show only the active tab panel; the calendar is its own tab (#1816).
+    await openMobileTab(page, "calendar");
 
     const wrap = page.locator("#fest-cal-wrap");
     await expect(wrap).toBeVisible();

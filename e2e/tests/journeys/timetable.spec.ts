@@ -2,6 +2,7 @@ import { test, expect, gotoAndMeasure } from "../../helpers/fixtures";
 import { fullSeed, SeedResult } from "../../helpers/seed";
 import { AUTH_FILE } from "../../helpers/auth";
 import { EVENT_HREF_PREFIX } from "../../fixtures/data";
+import { openMobileTab } from "../../helpers/nav";
 
 let seed: SeedResult;
 
@@ -32,6 +33,8 @@ test.describe("Timetable view", () => {
 
   test("workshop entries have distinct badge", async ({ page }) => {
     await page.goto(`${EVENT_HREF_PREFIX}${seed.eventIds[0]}`);
+    // On phones only the active tab panel shows; open the timetable tab (#1816).
+    await openMobileTab(page, "timetable");
     // event.html renders each timetable entry twice — once in the compact
     // list (.tt-title) and once in the detail panel (.tt-panel-title) — so
     // one workshop entry legitimately produces two .tt-badge-ws elements.

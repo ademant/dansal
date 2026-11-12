@@ -587,6 +587,8 @@ function renderMiniCalendar(containerId, calEvents, months, opts){
       },{passive:true});
       cal._miniCalCarouselBound=true;
     }
+    // #1858: lets the page recompute the arrows when the calendar's tab opens.
+    cal._miniCalUpdateBtns=updateBtns;
     updateBtns();
   } else {
     cal.classList.remove('fest-carousel');

@@ -13,7 +13,7 @@ func TestRobotsTxtDisallowsWastedCrawlerPaths(t *testing.T) {
 	body := rec.Body.String()
 	for _, want := range []string{
 		"User-agent: *", "Disallow: /admin/", "Disallow: /api/",
-		"Disallow: /events-more", "Disallow: /events-past", "Disallow: /search/",
+		"Disallow: /events-more", "Disallow: /events-past", "Disallow: /search/", "Disallow: /search?\n",
 		"Disallow: /tiles/", "Disallow: /login", "Disallow: /events/*/board",
 		"Disallow: /events/*.ics$", "Sitemap: ",
 	} {

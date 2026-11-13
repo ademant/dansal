@@ -106,9 +106,10 @@ Contact the instance administrator for privacy inquiries.
 }
 
 // robotsDisallowBlock lists paths crawlers only waste requests on (#1353):
-// the JS lazy-load endpoints, search results/geocoding, the map tile proxy,
-// the login page, the POST-only board form URL, and per-event .ics
-// downloads (the /feed/ endpoints stay crawlable). Wildcards and "$" are
+// the JS lazy-load endpoints, search results/geocoding, parameterised
+// /search?… URLs (nearby-hint links; their canonical, bare /search, stays
+// crawlable), the map tile proxy, the login page, the POST-only board form
+// URL, and per-event .ics downloads (the /feed/ endpoints stay crawlable). Wildcards and "$" are
 // honoured by Google, Bing and the major AI crawlers; /events/N pages, the
 // sitemap and /feed/ stay allowed.
 const robotsDisallowBlock = "Disallow: /admin/\n" +
@@ -116,6 +117,7 @@ const robotsDisallowBlock = "Disallow: /admin/\n" +
 	"Disallow: /events-more\n" +
 	"Disallow: /events-past\n" +
 	"Disallow: /search/\n" +
+	"Disallow: /search?\n" +
 	"Disallow: /tiles/\n" +
 	"Disallow: /login\n" +
 	"Disallow: /events/*/board\n" +

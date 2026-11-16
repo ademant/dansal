@@ -693,6 +693,17 @@ document.addEventListener('DOMContentLoaded', function(){
   for (var i = 0; i < 6; i++) {
     months.push(new Date(d.getFullYear(), d.getMonth() + i, 1));
   }
+  // Extend beyond 6 months if events exist further in the future (#1863).
+  calEvents.forEach(function(ev) {
+    var ed = new Date(ev.s);
+    if (isNaN(ed)) return;
+    var em = new Date(ed.getFullYear(), ed.getMonth(), 1);
+    var last = months[months.length - 1];
+    while (last < em) {
+      last = new Date(last.getFullYear(), last.getMonth() + 1, 1);
+      months.push(last);
+    }
+  });
   document.getElementById('{{.ID}}-wrap').hidden = false;
   // #1696/#1697: the carousel opens on the first month with an event.
   renderMiniCalendar('{{.ID}}', calEvents, months,

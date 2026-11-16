@@ -92,7 +92,11 @@ when known, or the relay actor otherwise. `{slug}` must be a real tag slug
 page. The HTML page also carries `<link rel="alternate">` tags to the
 Atom/JSON Feed/ActivityPub variants below, and every tag chip shown anywhere
 on the site (event/org/location/musician/instructor pages, the weekly table)
-links to its `/tags/{slug}` page.
+links to its `/tags/{slug}` page. `dansal-web` also serves one
+API-namespaced convenience route: `GET /api/v1/tags/search?q=...` (#960,
+public, no auth) returns the subset of tags whose name or slug contains the
+query, case-insensitively — for autocomplete UIs; missing `q` answers `400`,
+an upstream API failure `502`.
 
 `/cities` and `/city/{slug}` (#965) are SEO-oriented city hub pages, distinct
 from `/search`'s free-text town filter: `/cities` only lists towns that
@@ -243,11 +247,12 @@ L.tileLayer('https://balfolk.jetzt/tiles/osm/{z}/{x}/{y}.png?t=' + TILE_TOKEN, {
 ```
 GET /embed/events            # filterable upcoming event list
 GET /embed/event/{id}        # single event card
+GET /embed/timetable/{id}    # single event's full multi-room/multi-day timetable grid
 GET /embed/org/{slug}        # organization profile card with upcoming events
 GET /embed/next              # minimal upcoming events ticker
 GET /embed/locations         # map of all locations with event counts
 GET /embed/calendar          # combined map + filterable event list
-GET /embed/manifest.json     # machine-readable description of the six widgets above
+GET /embed/manifest.json     # machine-readable description of the seven widgets above
 ```
 
 Designed to be placed in an `<iframe>` on a third-party site (e.g. the
@@ -300,6 +305,14 @@ Single event card. Only `lang=` is accepted.
 
 ```html
 <iframe src="https://balfolk.jetzt/embed/event/307" width="400" height="300" style="border:0"></iframe>
+```
+
+### `/embed/timetable/{id}`
+
+A single published event's full multi-room/multi-day timetable grid (#1175) — the same rendering as the event page's own timetable section, for a festival that wants to embed just its own program elsewhere. 404s for unknown or unpublished events. Only `lang=` is accepted.
+
+```html
+<iframe src="https://balfolk.jetzt/embed/timetable/307" width="100%" height="700" style="border:0"></iframe>
 ```
 
 ### `/embed/org/{slug}`

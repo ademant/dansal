@@ -23,14 +23,16 @@ dansal helps dance communities organize, publish, and discover events — from b
 **Event management**
 - Create, edit, publish, and cancel events via a web admin UI
 - Recurring event series with shared banner image and template defaults
+- Multi-location events (e.g. workshops and ball in different buildings) with a primary/extra location model
 - Image uploads (AVIF/JPEG) for events, series, organizations, musicians, venues, and instructors; AI-generated badge overlay when flagged
-- Suggest-an-event wizard for unauthenticated submissions (with image upload)
+- Suggest-an-event wizard for unauthenticated submissions (image upload and later amendments via a standing edit link; text edits on published suggestions go through admin review)
 - Multi-step duplicate detection (UID, URL, location+time, title+time, fuzzy)
 - Timetable per event (schedule slots)
 
 **Feeds & import**
-- Automatic import from iCal and JSON feeds, attached to organizations
+- Automatic import from iCal, JSON (Gancio), and RSS feeds, attached to organizations
 - Import preview with duplicate detection before confirming
+- Imports respect robots.txt; title-only cancellations ("ABGESAGT …") are flagged to an admin instead of silently cancelling
 - Location alias matching so feed venue names auto-resolve across imports
 - Suggest-a-feed wizard for unauthenticated visitors: preview + location mapping up front, admin/org-member approval before the feed goes live
 

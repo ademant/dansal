@@ -40,6 +40,7 @@ For the `dansal_web` frontend's own routes (public pages, feeds, `/embed/*` widg
 - [Anonymous Event Suggestions](#anonymous-event-suggestions)
 - [Invites](#invites)
 - [Telegram Webhook](#telegram-webhook)
+- [Entity Redirects](#entity-redirects)
 - [Deprecated routes](#deprecated-routes)
 - [Status Codes](#status-codes)
 
@@ -56,7 +57,7 @@ https://api.dansal.example.com
 
 ## Browser access (CORS)
 
-Every response carries `Access-Control-Allow-Origin`. When `server.allowed_origins` in `config.yaml` is set, a request's `Origin` is echoed back only if it matches an entry (an entry `*` allows any origin); otherwise no `Access-Control-Allow-Origin` header is sent. When the list is not set, the origin of `server.base_url` is sent, and `*` only if `base_url` is also empty. Responses with a specific origin add `Vary: Origin`.
+Every response carries `Access-Control-Allow-Origin`. When `server.allowed_origins` in `config.yaml` is set, a request's `Origin` is echoed back only if it matches an entry (an entry `*` allows any origin); otherwise no `Access-Control-Allow-Origin` header is sent. When the list is not set, the origin of `server.base_url` is sent. When `allowed_origins` and `base_url` are **both** unset, CORS is blocked for all origins — the server logs a warning at startup and sends no `Access-Control-Allow-Origin` header (#1856; the previously-vulnerable fallback to `*` was removed). Responses with a specific origin add `Vary: Origin`.
 
 Preflight (`OPTIONS` with `Access-Control-Request-Method`) is answered directly with `204`:
 
@@ -161,9 +162,10 @@ curl -X PATCH -H "Authorization: Bearer $TOKEN" \
 ```
 GET /api/v1/info
 GET /api/v1/health
+GET /.well-known/jwks.json
 ```
 
-Both are public. `/api/v1/info` returns server version and build metadata. `/api/v1/health` checks the database: it returns 200 with `"db":"ok"` when a pool connection answers `SELECT 1`, and 503 with `"status":"error"` and the reason otherwise. The systemd watchdog uses the same check.
+All are public. `/api/v1/info` returns server version and build metadata. `/api/v1/health` checks the database: it returns 200 with `"db":"ok"` when a pool connection answers `SELECT 1`, and 503 with `"status":"error"` and the reason otherwise. The systemd watchdog uses the same check. `/.well-known/jwks.json` publishes the public key invite links are signed with (#769): invite-link tokens are ES256 JWTs, so a client (e.g. the WordPress plugin) can verify authenticity, expiry and audience before ever hitting the redemption endpoint. Cacheable for one hour.
 
 ## Vocabulary
 
@@ -319,6 +321,7 @@ Everything that acts on the authenticated caller lives under one prefix (#1381):
 ```
 GET    /api/v1/me                              # own profile
 GET    /api/v1/me/stats                        # own event-authorship counts
+GET    /api/v1/me/export                       # GDPR Art. 15/20 self-service data export
 DELETE /api/v1/me                              # delete own account (not available to admin accounts)
 POST   /api/v1/me/password                     # change own password (empty new_password removes it; see OIDC / SSO)
 POST   /api/v1/me/magic-link                   # magic login link for yourself
@@ -334,6 +337,8 @@ DELETE /api/v1/me/totp
 ```
 
 The older spellings `/users/me`, `/user/…` and `/auth/totp` still work but are deprecated — see [Deprecated routes](#deprecated-routes).
+
+**`GET /api/v1/me/export`** (GDPR Art. 15/20, #1479, authenticated): returns every row across every table with a foreign key to the caller's `users(id)`, including the caller's own account row, as one JSON document. Fields that are hashed/secret server-side (password hash, second factors) are redacted.
 
 There is no user-creation or admin-driven password-reset endpoint, and no `DELETE /api/v1/users/{id}` for deleting another account — account lifecycle (creation, email/role changes by an admin, password resets, full deletion) is CLI-only (`dansal_admin`) or handled through the registration/invite flow. This is intentional (#613): the REST API only exposes self-service actions plus a few narrowly-scoped admin actions (verify, magic-link, Telegram message).
 
@@ -509,12 +514,15 @@ GET    /api/v1/register/verify/email/{token}    # confirm email address
 
 POST   /api/v1/register/passkey/begin           # passkey-based registration begin
 POST   /api/v1/register/passkey/finish          # passkey-based registration finish
+POST   /api/v1/register/password                # password-track registration (after email verification)
 
 GET    /api/v1/pending-registrations            # admin: list pending
 GET    /api/v1/pending-registrations/count      # admin: count pending
 POST   /api/v1/pending-registrations/{id}/approve  # admin: approve
 DELETE /api/v1/pending-registrations/{id}       # admin: reject
 ```
+
+**Choosing an auth method during registration (#1223):** after the email address is verified, the account's first authentication method is attached in a second call — either the WebAuthn pair above (`begin`/`finish`) or `POST /api/v1/register/password` with `{"pending_id": N, "verification_token": "...", "password": "...", "display_name": "optional"}`. Both create the disabled placeholder user bound to the pending registration and notify admins for the approval step; the account stays unusable until a pending registration is approved. Wrong token → `404`, expired → `410`, email not yet verified or an auth method already set → `409`; a too-weak password answers `422` with the reason.
 
 A registration's email/telegram verification token is valid for **7 days** from submission (`GET /api/v1/register/verify/email/{token}` after that returns expired). To limit spam, at most `max_open_tokens_per_address` (default 5) unverified pending registrations may be open for the same email address at once — further submissions to that address return `429` until one is verified or expires.
 
@@ -810,6 +818,8 @@ POST   /api/v1/organizations/{id}/members
 DELETE /api/v1/organizations/{id}/members/{user_id}
 GET    /api/v1/organizations/members?org_ids=1,2,3   # bulk membership lookup for several orgs
 GET    /api/v1/organizations/check-actor-name  # check ActivityPub actor name availability
+GET    /api/v1/organizations/{id}/merge-preview  # admin: preview which fields conflict when merging {id} into another org
+POST   /api/v1/organizations/merge               # admin: merge two organizations into one
 ```
 
 List and get are public. Create/update/delete require authentication. `GET /api/v1/organizations/members` requires authentication; non-admin callers only get results for orgs they belong to (others are silently omitted).
@@ -817,6 +827,8 @@ List and get are public. Create/update/delete require authentication. `GET /api/
 **Media links (#1361).** Organizations and locations (including rooms) carry the same `media` list as musicians (see [Musicians](#musicians-and-instructors): same shape, validation and limits). It is returned on `GET /api/v1/organizations/{id}` and `GET /api/v1/locations/{id}` and on create/update/patch responses, but not in list results or the Atom feed. `POST`, `PUT` and `PATCH` accept `media`: present replaces the whole list (`[]` clears it), omitted leaves it untouched — so an old client doing a `PUT` without the field never wipes the links. Invalid links reject the whole request with `400` before anything is written. Deleting an organization or location deletes its links (a location's rooms' links too); merging locations moves the deleted location's links to the survivor, skipping URLs it already has, up to the 20-link cap.
 
 `PUT` replaces every editable field with the body's values. `PATCH` requires `Content-Type: application/merge-patch+json` (RFC 7396) and only changes fields present in the body. In both, `name`/`actor_name` may only be changed by admins — a non-admin org member's `name`/`actor_name` value in the body is silently ignored rather than rejected, matching the pre-existing `PUT` behavior. A `PATCH` request with any other `Content-Type` is rejected with `415 Unsupported Media Type`. There is no `OPTIONS` schema-discovery endpoint for organizations, matching the exclusion for users/apikeys/publishers (see Vocabulary section) — organization management is meant to stay inside dansal rather than become an external self-service surface.
+
+**Merging duplicate organizations (admin only).** `GET /api/v1/organizations/{id}/merge-preview?merge_id=N` compares the two orgs and returns `{"keep": {...}, "merge": {...}, "fields": [{"field", "keep", "merge", "newer", "choice"}]}` — one entry per merging-relevant field, where non-conflicting fields are pre-decided via `choice` (`keep`/`merge`, defaulting to whichever side isn't empty, conflicts are left empty for the caller) and `newer` names the side with the more recent change. `POST /api/v1/organizations/merge` executes it with `{"keep_id": N, "merge_id": M, "choices": {"<field>": "keep"|"merge"}}`: every conflicting field must have an explicit choice (`400` listing the missing ones); events, series, feed sources, invites, OIDC providers, and pending registrations/suggestions are repointed to the survivor, memberships and location links move too (rows that would duplicate an existing membership/link are skipped), and the loser is deleted. A resulting name/actor-name clash with a *third* organisation answers `409`.
 
 ## Locations
 
@@ -946,9 +958,15 @@ GET    /api/v1/dances
 POST   /api/v1/dances       # admin only
 PUT    /api/v1/dances/{id}  # admin only — full replace (name + description)
 DELETE /api/v1/dances/{id}  # admin only
+
+GET    /api/v1/category-aliases          # public — feed category → tag mappings
+POST   /api/v1/category-aliases          # admin/user — upsert one mapping
+DELETE /api/v1/category-aliases?category=...  # admin/user
 ```
 
 Both list endpoints are public. Tags have three categories: `format`, `level`, `type`. See the vocabulary endpoint for valid slugs. A dance's `description` (#1290) is a free-text field, admin-editable via `/admin/dances`, used to build a default event description when the event itself has none.
+
+**Category aliases (#1840).** Feed `CATEGORIES` values that don't map cleanly to a tag (e.g. a venue's `Concert` being wanted as `bal-folk`) can be mapped with a `category_aliases` row: `POST /api/v1/category-aliases` accepts `{"category": "...", "tag_slug": "..."}` (the tag must be a known slug, `400` otherwise) and upserts it — one mapping per category string, so re-POSTing the same category replaces its tag. It applies on the *next* import; existing events are not retroactively retagged. `GET` returns every mapping as `[{"category","tag_slug"}]`; `DELETE ?category=...` removes one. Admin/user only, publishers refused (`403`) — the same write policy as fetch sources themselves.
 
 ## Events
 
@@ -964,14 +982,22 @@ POST   /api/v1/events/{id}/cancel
 POST   /api/v1/events/{id}/clone            # admin/user: duplicate an event, optionally into another org
 POST   /api/v1/events/{id}/enrich           # admin/publisher: attach musicians/pricing from an external lookup
 POST   /api/v1/events/{id}/remove-from-series  # admin/user (member of the event's org)
+POST   /api/v1/events/{id}/recheck-source   # admin/org member: re-fetch and merge the event's import source
+POST   /api/v1/events/{id}/decline          # admin/org member: decline an unpublished suggestion (reason required)
+GET    /api/v1/events/{id}/duplicate-check  # admin: run the 5-tier duplicate check for one event
+POST   /api/v1/events/{id}/duplicate-resolve # admin: clear a duplicate-review flag ("accept" or "resolved")
+GET    /api/v1/events/nearby-counts         # public: event counts per radius ring around a point
 POST   /api/v1/events/preview               # admin/user: preview-parse a feed without saving (multipart form)
 POST   /api/v1/events/bulk-set-attributes   # admin/user: bulk-apply org/tags/dances/musicians/instructors/amenities to event IDs
 POST   /api/v1/events/bulk-set-location     # admin/user: bulk-reassign event IDs to a location
 POST   /api/v1/events/bulk-set-time         # admin/user: bulk-update start/end time-of-day for event IDs
 POST   /api/v1/events/bulk-assign-org       # admin/user/publisher: {"ids": [...], "organization_id": N|null} — see below
 
-PUT    /api/v1/events/{id}/location                    # set the event's location
+PUT    /api/v1/events/{id}/location                    # set the event's (primary) location
 DELETE /api/v1/events/{id}/location                     # clear the event's location
+PUT    /api/v1/events/{id}/locations/{location_id}      # assign an additional location to the event
+DELETE /api/v1/events/{id}/locations/{location_id}      # remove one of the event's non-primary locations
+PUT    /api/v1/events/{id}/locations/{location_id}/primary   # promote an assigned location to primary
 PUT    /api/v1/events/{id}/organization                 # set the event's organization ({"organization_id": N}); also claims an orphaned event
 DELETE /api/v1/events/{id}/organization                 # clear the event's organization
 PUT    /api/v1/events/{id}/musicians/{musician_id}      # add one musician
@@ -984,7 +1010,9 @@ DELETE /api/v1/events/{id}/dances/{dance_id}            # remove one dance
 
 A room is just a [location](#locations) with `parent_id` set — to assign an event to a specific room rather than the whole venue, set `Event.location_id` directly to the room's `id` instead of the building's. There is no separate `room_id` field.
 
-**Relationship sub-resources:** the eight endpoints above are additive, REST-idiomatic alternatives to embedding `location_id`/`organization_id`/`musicians[]`/`instructors[]`/`dances[]` in the event write body — they don't replace that behavior. In particular, `PUT`/`DELETE .../location` and `.../organization` are the way to *clear* those two nullable references via the API: `PATCH`'s merge-patch semantics can't distinguish "omitted" from "explicitly cleared" for a plain `*int` field (see the `PUT` vs `PATCH` note below), so clearing `location_id`/`organization_id` requires either a full `PUT` on the event or one of these `DELETE` sub-resource calls. All eight require the caller to be an admin or an org member of the event (same check as `PATCH`/`PUT` on the event itself); setting `.../organization` additionally requires membership in the *target* organization — except that an event with no organization yet can be claimed by any member of the target organization (publishers included; this replaced `POST .../assign-org`, #1380). `musicians`/`instructors`/`dances` sub-resource calls are single-item add/remove on top of the existing whole-list `PUT /api/v1/events/{id}/instructors` and the `musicians`/`dances` arrays in the event write body — adding an already-linked ID, or removing one that isn't linked, is a no-op (`204`), not an error.
+**Relationship sub-resources:** the eleven endpoints above are additive, REST-idiomatic alternatives to embedding `location_id`/`organization_id`/`musicians[]`/`instructors[]`/`dances[]` in the event write body — they don't replace that behavior. In particular, `PUT`/`DELETE .../location` and `.../organization` are the way to *clear* those two nullable references via the API: `PATCH`'s merge-patch semantics can't distinguish "omitted" from "explicitly cleared" for a plain `*int` field (see the `PUT` vs `PATCH` note below), so clearing `location_id`/`organization_id` requires either a full `PUT` on the event or one of these `DELETE` sub-resource calls. All of them require the caller to be an admin or an org member of the event (same check as `PATCH`/`PUT` on the event itself); setting `.../organization` additionally requires membership in the *target* organization — except that an event with no organization yet can be claimed by any member of the target organization (publishers included; this replaced `POST .../assign-org`, #1380). `musicians`/`instructors`/`dances` sub-resource calls are single-item add/remove on top of the existing whole-list `PUT /api/v1/events/{id}/instructors` and the `musicians`/`dances` arrays in the event write body — adding an already-linked ID, or removing one that isn't linked, is a no-op (`204`), not an error.
+
+**Multiple locations per event.** An event can be held at more than one venue (e.g. a festival whose workshop and ball happen in different buildings): locations are additionally tracked in a per-event list via the three `.../locations/{location_id}` sub-resources above. `Event.location_id` stays the **primary** location; `PUT .../locations/{location_id}` assigns an additional one (and promotes it to primary automatically while no primary is set), `PUT .../primary` promotes an already-assigned one, and `DELETE` removes one — refused with `409` for the primary; promote another first. `GET /api/v1/events/{id}` returns every assigned location, primary included, as `locations: [...]` alongside the plain `location_id`. The multi-location endpoints follow the same admin/org-member checks as the other relationship sub-resources.
 
 **`bulk-set-time` request:** adjusts the time-of-day component of `start_time` and/or `end_time` for multiple events while keeping their dates. Times are in `"HH:MM"` format (Berlin timezone). At least one of `start_time` or `end_time` is required; omit the other to leave it unchanged. Events where the caller is not an org member are silently skipped (admins may affect all events). Returns `204`.
 
@@ -1077,6 +1105,20 @@ IDs are integers throughout the API, not strings.
 { "ids": [1, 2, 3], "organization_id": 7 }
 ```
 
+**`recheck-source` (#1112):** events created from a one-off iCal/JSON URL via the import-preview flow don't get the automatic change-detection that standing fetch sources get on every poll cycle. `POST /api/v1/events/{id}/recheck-source` re-fetches the URL the event was originally imported from (`events.source`) and merges any changes with the same parse/dedup/merge machinery as the recurring importer — without creating a fetch-source row. The publish state is never touched: a recheck never (un)publishes an event a human set. Admin or a member of the event's organization; `400` when the event has no source URL, `502` when the fetch/merge fails. Returns `{"outcome": "..."}` describing what happened.
+
+**`decline` (#1442, DSA Art. 17):** deletes an event that is still an unpublished suggestion and emails the suggester the admin's statement of reasons — body: `{"reason": "..."}` (required, `400` without one; `409` if the event is already published, in which case normal deletion applies instead). Distinct from `DELETE /api/v1/events/{id}`: same admin/org-member authorization, but reasons are mandatory and notice is sent. No notice goes out when the suggestion has no contact address (Art. 17(2)).
+
+**Duplicate review (`duplicate-check` / `duplicate-resolve`, admin only).** `GET /api/v1/events/{id}/duplicate-check` runs the 5-tier check on one event and returns the result — whether it is flagged for review, its partner event, and the collision reasons. `POST /api/v1/events/{id}/duplicate-resolve` clears the pair's review flag: `{"mode": "accept"}` asserts they are genuinely different events; `{"mode": "resolved"}` clears only if the pair no longer collides (e.g. the date/room was fixed by hand in the meantime) and otherwise answers `409` with the remaining check result. Fixing an event with a normal `PATCH`/`PUT` also auto-clears the flag once the collision is gone (#1427), so this endpoint is really for the admin review queue.
+
+**`nearby-counts` (#1436):** `GET /api/v1/events/nearby-counts?lat=&lon=&from=&to=` counts published, non-cancelled events starting in the `[from, to]` date window (ISO `YYYY-MM-DD`, both required) around a point, cumulatively for each radius in 10/50/100/200/500 km:
+
+```json
+{ "radii_km": [10, 50, 100, 200, 500], "counts": {"10": 0, "50": 4, "100": 12, "200": 30, "500": 87} }
+```
+
+Always public and published-only, regardless of caller — there is no authenticated "see my org's drafts" mode here. `to` earlier than `from` is `400`. Used to offer "no events here, but N within X km" instead of a dead end on a venue page whose season is over; the radius list deliberately matches the search page's own radius options.
+
 ### Syndication
 
 ```
@@ -1099,6 +1141,7 @@ DELETE /api/v1/series/{id}
 POST   /api/v1/series/{id}/add-date
 POST   /api/v1/series/{id}/descriptions
 POST   /api/v1/series/{id}/assign-events
+POST   /api/v1/series/{id}/apply-to-events
 POST   /api/v1/series/{id}/token/regenerate
 POST   /api/v1/series/{id}/token/revoke
 GET    /api/v1/series/{id}/events           # list events belonging to this series
@@ -1113,6 +1156,8 @@ Authentication required (except `GET /api/v1/series-by-token/{token}` and the PA
 **Ownership:** a series is owned by exactly one of `organization_id`, `musician_id`, or `instructor_id` (all nullable `int`, mutually exclusive in practice though not enforced as such). Musician/instructor ownership exists for teachers or performers who run their own recurring event (e.g. an independent dance course, or a musician booking their own gigs) without going through an organization. Non-admin callers must own whichever of the three fields is present on the request — `POST`/`PUT` independently validates every non-nil owner field (org membership via `isOrgMember`, musician/instructor ownership via `created_by_id`), and at least one owner field is required for non-admin callers. Admins may set/change any of the three. `GET /api/v1/series` accepts `org_id=`, `musician_id=`, or `instructor_id=` to filter by owner; non-admin callers additionally always see series they own via any of the three regardless of these filters. Events generated by `add-date`/series creation are tagged into `event_musicians`/`event_instructors` (in addition to the event's own `organization_id`) when the series has that owner type, so they show up in the owning musician's/instructor's event list.
 
 The `.../events/{event_id}` pair is the single-item counterpart to `assign-events`/`remove-from-series` (#727): `PUT` adds one event to the series (rejecting, with `409 Conflict`, an event whose `organization_id` doesn't match the series' organization — `assign-events` instead skips mismatches silently when bulk-assigning); `DELETE` removes one event, equivalent to `POST /api/v1/events/{id}/remove-from-series` but addressed from the series side.
+
+**`POST /api/v1/series/{id}/apply-to-events`** propagates the series' header fields (organization, default location) and template defaults (tags, URL, pricing, food/drink, musicians, instructors — everything but timetable entries) to all events already assigned to the series. Timetables are intentionally skipped: they are created once at occurrence-creation time, and adding them again would duplicate rows. When the series has a musician set and an event carries the `no_live_music` flag (#1612), that event is skipped — `?dry_run=true` returns `{"conflicts": [event ids]}` without writing anything, `?conflict=overwrite` clears the flag and applies anyway. Same authorization as any other series write.
 
 **Cadence (`cadence`, string, optional):** a single free-text, human-readable description of how often the series recurs (e.g. `"every 2nd + 4th Thursday, except holidays"`), shown to visitors on the event page and the org page's recurring-events list. Disclosure-only — there is no RRULE engine and it never generates occurrences; instances are still created/edited/cancelled individually via `add-date`/`assign-events`/deleting an event. It's denormalized onto every `GET /api/v1/events` response for that series as `series_cadence` (empty string when unset or the event has no series), so clients don't need a separate series lookup to display it.
 
@@ -1150,6 +1195,7 @@ POST|DELETE /api/v1/locations/{id}/site-plan         # location write access
 
 # served from (public)
 GET    /api/v1/images/{event_id}
+GET    /api/v1/event-banner/{event_id}
 GET    /api/v1/musician-images/{id}
 GET    /api/v1/org-images/{id}
 GET    /api/v1/series-images/{id}
@@ -1163,6 +1209,8 @@ DELETE /api/v1/musicians/{id}/gallery/{gid}      # delete one picture
 ```
 
 Images are stored as AVIF (or JPEG fallback) and resized on upload to fit within 1024×1024 pixels. Served directly via `http.ServeFile`. The pre-#1384 upload/delete paths (`POST`/`DELETE` on the GET paths above) still work as [deprecated aliases](#deprecated-routes).
+
+**Generated event banner (#1082, #1083).** When an event has no image of its own, `GET /api/v1/event-banner/{event_id}` serves a generated JPEG fallback so `og:image`/JSON-LD never points at nothing: the series' or organization's banner, resized to 768px wide, with the event's date/time (series tier) or title/date-time/location (org tier) overlaid. Generated on first request and cached to disk like every other image; `404` when the event has no series/org banner to derive one from, so callers fall back to the plain org/website banner. Public, and one of the image paths exempt from CORS origin checks so scrapers may hotlink it directly (`Cross-Origin-Resource-Policy: cross-origin`).
 
 ### Avatars
 
@@ -1194,6 +1242,7 @@ PATCH  /api/v1/feeds/{id}
 DELETE /api/v1/feeds/{id}
 POST   /api/v1/feeds/{id}/fetch       # start a single fetch as a background job (202)
 GET    /api/v1/feeds/{id}/fetch/{job} # poll that job
+POST   /api/v1/feeds/{id}/robots-ack  # admin/org member: accept the feed's robots.txt restriction
 POST   /api/v1/feeds/bulk-fetch       # trigger fetch for multiple IDs
 POST   /api/v1/feeds/bulk-delete
 POST   /api/v1/feeds/bulk-assign-org
@@ -1215,6 +1264,10 @@ Authentication required except where marked public. Fetch sources are iCal/JSON/
 
 Poll the job until `state` is no longer `running`. It is `ok` with a `result` (`events`, `new`, `updated`, `unchanged`, `failed`, and `timezone_fallback`/`unparsed` when non-zero), or `error` with `error` and, where a client must react to it, `error_code` (`robots_not_acknowledged`, when the feed is refused until an admin accepts its robots.txt restriction). A job keeps running even if the request that started it is cancelled. Only one run per source is active: a second `POST` while one is running returns that job instead of starting another. Finished jobs stay readable for 10 minutes, and a restart of the server drops them. Only the admin or an organisation member of the source can start or read a job; publishers are refused.
 
+**Robots.txt gating (#1545).** The refusal is signalled up front too: `GET /api/v1/feeds/{id}` carries the restricting rule as `robots_rule` on the source row. A feed refused on robots grounds is fetched on manual action only, never automatically, until it's accepted.
+
+**`POST /api/v1/feeds/{id}/robots-ack` (#1545):** an admin or a member of the source's organization accepts that robots.txt restricts this feed, which is what clears the refusal. Body `{"robots_ack_reason": "..."}` records who accepted, when, why and against which rule; the response is the updated source (unchanged, `200`, when robots.txt doesn't restrict the feed). Publishers are refused.
+
 **Note:** until #1384 this collection was `/api/v1/fetchurl` (and `/api/v1/fetchurl-suggestions`); those paths still work as [deprecated aliases](#deprecated-routes).
 
 **`category_filter` (array of strings, optional, iCal sources only):** when set, only VEVENTs whose `CATEGORIES` intersect the filter (case-insensitively) are imported — an empty/unset filter imports everything, same as before. Useful for a shared feed that mixes multiple event types (e.g. import only `CATEGORIES:Balfolk` entries from a venue's general events calendar) without needing separate title-keyword heuristics.
@@ -1231,6 +1284,7 @@ PATCH  /api/v1/contact-posts/{id}               # partial merge (management toke
 DELETE /api/v1/contact-posts/{id}               # delete (admin)
 DELETE /api/v1/contact-posts/token/{token}      # delete by management token
 POST   /api/v1/contact-posts/{id}/contact       # contact the poster (public)
+POST   /api/v1/contact-posts/resend-manage      # public: re-deliver manage URLs by email
 GET    /api/v1/contact-requests/verify/{token}  # verify a contact request
 
 GET    /api/v1/contact-post-images/{img_id}          # serve one image (public)
@@ -1244,26 +1298,51 @@ Public posts require email or Telegram verification before appearing.
 
 **Images** are gated by the same `?token={manage_token}` model, only supported for `lost_item`/`found_item` posts (`400` otherwise), capped at 5 per post (`409` past the cap), and follow the same upload validation as every other image endpoint — see [Upload errors](#upload-errors) under Images.
 
+**`POST /api/v1/contact-posts/resend-manage`:** public, body `{"email": "..."}`. Sends one email listing the manage URLs of all of that address's live, email-verified posts. Always returns `200` — enumeration resistance means the response carries no hint whether any posts exist for the address.
+
+### Board Sessions
+
+Board posts belong to no account, so dansal-web's edit/delete UI for already-verified posters is backed by a separate, long-lived **board session** token — sent as an `X-Board-Session` header by the board pages, not as a Bearer token, and entirely separate from user sessions:
+
+```
+POST   /api/v1/board-sessions                # create from a post's manage_token (public)
+GET    /api/v1/board-sessions/me             # who am I posted as: {"email","nickname","expires_at"}
+DELETE /api/v1/board-sessions/me             # log the board session out
+POST   /api/v1/board-sessions/renew-request  # public: email a one-time renew link
+GET    /api/v1/board-sessions/renew/{token}  # consume the renew link → new session (public)
+POST   /api/v1/board-sessions/renew          # same, renew token in the body or as Bearer (#1382)
+```
+
+`POST` with `{"manage_token": "..."}` (the token from a live, email-verified post) opens a session. Sessions slide for 30 days on every use, capped at 90 days absolute from creation. The renew link is the same pattern as booking verification: the emailed URL *is* the credential, so the token path form stays; the token is single-use, expires after 30 minutes, and a `renew-request` body is always answered `200` regardless of whether the address has any live posts.
+
 ## Bookings
 
 ```
 POST   /api/v1/events/{id}/bookings         # create booking (public)
 GET    /api/v1/bookings/verify/{token}      # verify booking via email link
+POST   /api/v1/bookings/verify              # verify booking (token as body/bearer, not in the URL)
 GET    /api/v1/events/{id}/bookings         # list bookings for event (auth required); paginated, see Pagination
 PATCH  /api/v1/bookings/{id}/status         # update status (auth required)
 GET    /api/v1/bookings/checkin/{qr_token}  # check in via QR code (auth required)
 DELETE /api/v1/bookings/{id}                # auth required
 ```
 
+Both verify forms consume the same single-use token: the `GET` path form exists because the token arrives as an emailed click-through link (the URL *is* the credential there), the `POST` form (token in the body or as `Authorization: Bearer <token>`, #1382) lets an app-driven caller avoid winding up in access logs and `Referer` headers. On success the booking is confirmed and a QR token for check-in is issued.
+
 ## Anonymous Event Suggestions
 
 ```
-POST   /api/v1/events/suggest-preview       # preview a suggestion before submitting
-POST   /api/v1/events/suggest               # submit a suggestion
-GET    /api/v1/events/suggest/verify/{token}  # legacy confirmation link (#1272 — see below)
+POST   /api/v1/events/suggest-preview          # preview a suggestion before submitting
+POST   /api/v1/events/suggest                  # submit a suggestion
+GET    /api/v1/events/suggest/verify/{token}   # legacy confirmation link (#1272 — see below)
+GET    /api/v1/events/suggest/manage/{token}   # read a suggestion back, token-gated (#928)
+PATCH  /api/v1/events/suggest/manage/{token}   # edit it, token-gated (#928)
+POST   /api/v1/events/suggest/manage/{token}/image  # attach an image, token-gated (multipart)
 ```
 
 Public. Suggestions are visible to admins for review immediately on submit — routed via Telegram, Matrix, or email (configured in `web.yaml`) — regardless of whether the submitter's email address is ever confirmed. `#1272` retired email confirmation as a gate: the honeypot field and IP rate limiting on `/api/v1/events/suggest` have proven sufficient anti-abuse on their own. The submitter's email now serves only to deliver a standing edit link (`/events/suggest/manage/{token}`), which they can also use to attach an image or amend details later. `GET /api/v1/events/suggest/verify/{token}` still exists purely to handle any confirmation links from before this change; nothing new points at it. The preview endpoint validates the suggestion and resolves the location without saving anything.
+
+**Self-service editing via the manage token (#928).** `POST /api/v1/events/suggest` returns (and emails) a `manage_token`, valid until three days after the event's end date. `GET .../manage/{token}` returns the event's current data (including musicians/instructors/timetable) for pre-filling the wizard; `PATCH` applies the same body shape as a new suggestion. Before the event is published the patch is applied directly; after publication only near-cosmetic fields (`title`, `description`, `start_time`, `end_time`) can still be applied directly, and titles/descriptions containing a URL are diverted into review too — everything else lands in `pending_edit_json` for admin/org review via `POST /api/v1/events/{id}/pending-edit/approve` / `.../pending-edit/reject` (same authorization as editing the event; approve applies the stored fields, reject discards them; `404` when nothing is pending). A moved-into-the-past `start_time` is rejected (`400`, error code `start_time_past`) unless the event was already on that day.
 
 ## Invites
 
@@ -1302,6 +1381,17 @@ POST /telegram/webhook
 ```
 
 Public (Telegram calls directly). Optional validation via `telegram_webhook_secret` in `web.yaml`.
+
+## Entity Redirects
+
+When a public resource is merged or hard-deleted, dansal records a durable forwarding row so old public IDs stay resolvable:
+
+```
+GET  /api/v1/redirects/{entity}/{id}   # resolve an old ID (public)
+POST /api/v1/entity-redirects           # set or update one (admin)
+```
+
+`{entity}` is `event` or `location`. The `GET` follows the chain (up to 16 hops) and returns `{"entity","old_id","new_id"}` with the live survivor; a missing mapping is a plain `404`, `410 Gone` marks the resource as deleted rather than redirected (hard-deleted events leave this tombstone, `new_id=0`), and a redirect loop is `409`. These rows are created automatically by location merges and event deletion; `POST /api/v1/entity-redirects` (admin, body `{"entity","old_id","new_id"}`) exists so an admin can also point an old ID at a chosen survivor by hand — the target must exist (`400` otherwise). `dansal-web` uses the `GET` to permanently redirect old `/events/{id}` and `/location/{id}` page URLs after a merge.
 
 ## Deprecated routes
 

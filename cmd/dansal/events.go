@@ -1471,11 +1471,16 @@ func insertEventCore(q querier, in EventInput) (int, string, string, error) {
 	var result sql.Result
 	var shortCode string
 	insChangedAt := time.Now().UTC().Unix()
+	// #1865: attribute a manual insert to its creator; "admin" only when no
+	// creator is known.
 	insChangedBy := "admin"
-	var insFetchSourceID any
+	var insChangedByID, insFetchSourceID any
 	if fetchSourceID > 0 {
 		insChangedBy = "fetch"
 		insFetchSourceID = fetchSourceID
+	} else if createdByID != nil && *createdByID > 0 {
+		insChangedBy = resolveDisplayNameQ(q, *createdByID)
+		insChangedByID = *createdByID
 	}
 	for range 5 {
 		shortCode, err = generateShortCode()
@@ -1491,8 +1496,8 @@ func insertEventCore(q querier, in EventInput) (int, string, string, error) {
 			createdByArg = *createdByID
 		}
 		result, err = q.Exec(
-			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, has_festival, is_cancelled, no_live_music, workshop_difficulty, is_published, organization_id, short_code, url, source, source_last_modified, pricing, booking_url, changed_at, changed_by, fetch_source_id, food, drink, floor_condition, attributes, contact_name, contact_email, created_by_id, image_ai_generated, email_verified, timetable_tracks, reservation_requested) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, jsonb(?), ?, ?, ?, ?, ?, ?, ?, jsonb(?), ?, ?, ?, ?, 1, jsonb(?), ?)",
-			uidArg, title, description, startTime, endTime, locIDArg, hasBall, hasWorkshop, hasFestival, isCancelled, noLiveMusic, workshopDifficulty, isPublished, orgIDArg, shortCode, urlVal(url), sourceArg, slmArg, pricingArg, urlVal(bookingURL), insChangedAt, insChangedBy, insFetchSourceID, food, drink, floorCondition, attrsJSON(attributes), contactName, contactEmail, createdByArg, imageAIGenerated, timetableTracksArg, reservationRequested,
+			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, has_festival, is_cancelled, no_live_music, workshop_difficulty, is_published, organization_id, short_code, url, source, source_last_modified, pricing, booking_url, changed_at, changed_by, changed_by_id, fetch_source_id, food, drink, floor_condition, attributes, contact_name, contact_email, created_by_id, image_ai_generated, email_verified, timetable_tracks, reservation_requested) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, jsonb(?), ?, ?, ?, ?, ?, ?, ?, ?, jsonb(?), ?, ?, ?, ?, 1, jsonb(?), ?)",
+			uidArg, title, description, startTime, endTime, locIDArg, hasBall, hasWorkshop, hasFestival, isCancelled, noLiveMusic, workshopDifficulty, isPublished, orgIDArg, shortCode, urlVal(url), sourceArg, slmArg, pricingArg, urlVal(bookingURL), insChangedAt, insChangedBy, insChangedByID, insFetchSourceID, food, drink, floorCondition, attrsJSON(attributes), contactName, contactEmail, createdByArg, imageAIGenerated, timetableTracksArg, reservationRequested,
 		)
 		if err == nil {
 			break

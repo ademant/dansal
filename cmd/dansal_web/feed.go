@@ -107,7 +107,12 @@ func feedEventICSHandler(cfg *Config, client *DansalClient, i18n *I18n) http.Han
 // index page's first 100 (see #650/#651).
 func feedMainHandler(cfg *Config, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		events, err := client.GetAllFutureEvents(r.Context())
+		past, err := feedPastParams(r, cfg, time.Now())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		events, err := client.GetAllFutureEvents(r.Context(), past)
 		if err != nil {
 			http.Error(w, "could not load events", http.StatusBadGateway)
 			return
@@ -156,7 +161,12 @@ func feedOrgHandler(cfg *Config, db *sql.DB, client *DansalClient, i18n *I18n) h
 			http.NotFound(w, r)
 			return
 		}
-		events, err := client.feedEventsQuery(r.Context(), fmt.Sprintf("is_published=true&organization_id=%d", actor.OrgID))
+		past, err := feedPastParams(r, cfg, time.Now())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		events, err := client.feedEventsQuery(r.Context(), withParams(fmt.Sprintf("is_published=true&organization_id=%d", actor.OrgID), past))
 		if err != nil {
 			http.Error(w, "could not load events", http.StatusBadGateway)
 			return
@@ -185,7 +195,12 @@ func feedMusicianHandler(cfg *Config, client *DansalClient, i18n *I18n) http.Han
 			http.NotFound(w, r)
 			return
 		}
-		events, err := client.feedEventsQuery(r.Context(), fmt.Sprintf("is_published=true&musician_id=%d", found.ID))
+		past, err := feedPastParams(r, cfg, time.Now())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		events, err := client.feedEventsQuery(r.Context(), withParams(fmt.Sprintf("is_published=true&musician_id=%d", found.ID), past))
 		if err != nil {
 			http.Error(w, "could not load events", http.StatusBadGateway)
 			return
@@ -206,7 +221,12 @@ func feedInstructorHandler(cfg *Config, client *DansalClient, i18n *I18n) http.H
 			http.NotFound(w, r)
 			return
 		}
-		events, err := client.feedEventsQuery(r.Context(), fmt.Sprintf("is_published=true&instructor_id=%d", id))
+		past, err := feedPastParams(r, cfg, time.Now())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		events, err := client.feedEventsQuery(r.Context(), withParams(fmt.Sprintf("is_published=true&instructor_id=%d", id), past))
 		if err != nil {
 			http.Error(w, "could not load events", http.StatusBadGateway)
 			return
@@ -237,7 +257,12 @@ func feedLocationHandler(cfg *Config, client *DansalClient, i18n *I18n) http.Han
 		}
 		// #1590: the location's events from the API, all pages. The old code
 		// filtered the first 100 events of the whole list by venue name.
-		events, err := client.feedEventsQuery(r.Context(), fmt.Sprintf("is_published=true&location_id=%d", found.ID))
+		past, err := feedPastParams(r, cfg, time.Now())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		events, err := client.feedEventsQuery(r.Context(), withParams(fmt.Sprintf("is_published=true&location_id=%d", found.ID), past))
 		if err != nil {
 			http.Error(w, "could not load events", http.StatusBadGateway)
 			return
@@ -263,7 +288,12 @@ func feedTypeHandler(cfg *Config, client *DansalClient, feedType string, i18n *I
 		// cursor value, not a raw querystring — "?tag="+tag would have been
 		// glued onto start_time_after= instead of becoming its own &tag=
 		// param. GetEventsFiltered builds the query correctly (issue #949).
-		events, err := client.feedEventsQuery(r.Context(), "is_published=true&tag="+url.QueryEscape(tag))
+		past, err := feedPastParams(r, cfg, time.Now())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		events, err := client.feedEventsQuery(r.Context(), withParams("is_published=true&tag="+url.QueryEscape(tag), past))
 		if err != nil {
 			logHTTPError(w, r, "could not load feed events", http.StatusBadGateway)
 			return

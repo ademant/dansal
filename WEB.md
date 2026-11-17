@@ -144,6 +144,13 @@ the more restrictive applies. `days` and `count` must be single integers from
 `webcal://` links take the same parameters. RSS, Atom and JSON Feed are not
 windowed.
 
+**Recent past events (#1862).** By default every feed holds only events that
+haven't ended yet. iCal feeds accept `?past_days=N` (1 to `ical_max_days`) to
+also include events that ended within the last N days, so calendar
+subscribers keep some history. `count` then limits only the upcoming events;
+every past event in the window is kept. Without the parameter the response is
+unchanged.
+
 Unlike the other feed families, tag feeds aren't limited to the three legacy
 ball/workshop/festival slugs — `/tags/{slug}.atom` and `/tags/{slug}.jsonfeed`
 work for any tag in `GET /api/v1/tags` (an unknown slug 404s). They're

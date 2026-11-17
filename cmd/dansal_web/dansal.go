@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/ademant/dansal/internal/logging"
 	"io"
+	"maps"
 	"math/rand"
 	"mime/multipart"
 	"net/http"
@@ -1417,11 +1418,14 @@ const maxEventsPages = 50
 // the API's offset pagination, deliberately bypassing GetEvents's shared,
 // 100-event-capped cache (eventsCache) used by the index page, embeds, and
 // the actor outbox. Used by feed handlers, where subscribers expect every
-// upcoming event, not just the index page's first page.
-func (c *DansalClient) GetAllFutureEvents(ctx context.Context) ([]Event, error) {
+// upcoming event, not just the index page's first page. extra adds API
+// parameters (e.g. feedPastParams for ?past_days=, #1862); nil keeps the
+// request future-only.
+func (c *DansalClient) GetAllFutureEvents(ctx context.Context, extra url.Values) ([]Event, error) {
 	var all []Event
 	for page := 0; page < maxEventsPages; page++ {
 		params := url.Values{"is_published": {"true"}, "limit": {"1000"}, "offset": {strconv.Itoa(page * 1000)}}
+		maps.Copy(params, extra)
 		batch, err := c.GetEventsFiltered(ctx, params)
 		if err != nil {
 			return nil, err

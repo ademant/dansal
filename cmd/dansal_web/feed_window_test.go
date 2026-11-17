@@ -38,6 +38,12 @@ func TestParseFeedWindow(t *testing.T) {
 		{"count over the bound", "count=1001", 0, feedWindow{}, true},
 		{"days given twice", "days=3&days=4", 0, feedWindow{}, true},
 		{"empty days", "days=", 0, feedWindow{}, true},
+		{"past_days valid", "past_days=30", 0, feedWindow{PastDays: 30}, false},
+		{"past_days with days and count", "past_days=7&days=14&count=3", 0, feedWindow{Days: 14, Count: 3, PastDays: 7}, false},
+		{"past_days zero is invalid", "past_days=0", 0, feedWindow{}, true},
+		{"past_days negative is invalid", "past_days=-1", 0, feedWindow{}, true},
+		{"past_days given twice", "past_days=1&past_days=2", 0, feedWindow{}, true},
+		{"past_days over the bound", "past_days=3651", 0, feedWindow{}, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -160,5 +166,81 @@ func TestFeedEventsQueryFollowsPages(t *testing.T) {
 	}
 	if events[total-1].ID != total {
 		t.Errorf("last id = %d, want %d", events[total-1].ID, total)
+	}
+}
+
+// #1862: with past events in the feed, count limits only the upcoming ones;
+// every past event in the window is kept.
+func TestApplyFeedWindowCountKeepsPastEvents(t *testing.T) {
+	now := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	ev := func(id, days int) Event {
+		start := now.AddDate(0, 0, days)
+		return Event{ID: id, StartTime: start.Format(time.RFC3339), EndTime: start.Add(2 * time.Hour).Format(time.RFC3339)}
+	}
+	events := []Event{ev(5, 5), ev(1, -20), ev(3, 1), ev(2, -3), ev(4, 2), ev(6, 9)}
+	// Running now (started 1 h ago, ends in 1 h) counts as upcoming.
+	running := Event{ID: 7, StartTime: now.Add(-time.Hour).Format(time.RFC3339), EndTime: now.Add(time.Hour).Format(time.RFC3339)}
+	events = append(events, running)
+
+	got := applyFeedWindow(events, feedWindow{Count: 2, PastDays: 30}, now)
+	var ids []string
+	for _, e := range got {
+		ids = append(ids, strconv.Itoa(e.ID))
+	}
+	if s := strings.Join(ids, ","); s != "1,2,7,3" {
+		t.Errorf("count=2 with past events = %s, want both past events then the next 2 upcoming (1,2,7,3)", s)
+	}
+}
+
+// #1862: without ?past_days= the API request is unchanged; with it, the
+// request asks for include_past and an end_time_after cutoff. Only iCal.
+func TestFeedPastDaysAPIRequest(t *testing.T) {
+	var gotQuery url.Values
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.Query()
+		w.Header().Set("X-Total-Count", "0")
+		w.Write([]byte("[]"))
+	}))
+	defer api.Close()
+	client := &DansalClient{BaseURL: api.URL, HTTP: api.Client()}
+	cfg := &Config{Domain: "example.test"}
+	i18n := loadI18n("")
+	req := func(format, query string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodGet, "/feed/events."+format+"?"+query, nil)
+		r.SetPathValue("format", format)
+		rec := httptest.NewRecorder()
+		gotQuery = nil
+		feedMainHandler(cfg, nil, client, i18n)(rec, r)
+		return rec
+	}
+
+	if rec := req("ics", ""); rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	if gotQuery.Has("include_past") || gotQuery.Has("end_time_after") {
+		t.Errorf("default request carries past parameters: %v", gotQuery)
+	}
+
+	before := time.Now().AddDate(0, 0, -30).Unix()
+	if rec := req("ics", "past_days=30"); rec.Code != http.StatusOK {
+		t.Fatalf("past_days=30 status = %d", rec.Code)
+	}
+	after := time.Now().AddDate(0, 0, -30).Unix()
+	cut, _ := strconv.ParseInt(gotQuery.Get("end_time_after"), 10, 64)
+	if gotQuery.Get("include_past") != "true" || cut < before || cut > after {
+		t.Errorf("past_days=30 query = %v, want include_past=true and end_time_after ≈ now-30d", gotQuery)
+	}
+
+	if rec := req("ics", "past_days=0"); rec.Code != http.StatusBadRequest {
+		t.Errorf("past_days=0 status = %d, want 400", rec.Code)
+	}
+
+	req("rss", "past_days=30")
+	if gotQuery.Has("include_past") {
+		t.Errorf("RSS must stay future-only, got %v", gotQuery)
+	}
+
+	if got := withParams("is_published=true&organization_id=7", url.Values{"include_past": {"true"}}); got != "is_published=true&organization_id=7&include_past=true" {
+		t.Errorf("withParams = %q", got)
 	}
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
@@ -13,6 +14,9 @@ import (
 // the more restrictive one applies. ical_feed_window_days is the operator's
 // default window; a request's ?days= replaces it. Only iCal responses are
 // windowed. RSS, Atom and JSON Feed are unchanged.
+//
+// ?past_days=N (#1862) opts an .ics feed into events that ended within the
+// last N days. Without it the feed stays future-only and byte-identical.
 
 // Built-in bounds, used when ical_max_days or ical_max_count is not set (a
 // zero-value Config, e.g. in tests).
@@ -51,8 +55,9 @@ func (c *Config) validateICalWindow() error {
 
 // feedWindow is the window one .ics response applies. Zero means no limit.
 type feedWindow struct {
-	Days  int
-	Count int
+	Days     int
+	Count    int
+	PastDays int
 }
 
 // parseWindowParam reads one ?days= or ?count= value. It must be a single
@@ -90,7 +95,54 @@ func parseFeedWindow(q url.Values, cfg *Config) (feedWindow, error) {
 		}
 		w.Count = n
 	}
+	if vals, ok := q["past_days"]; ok {
+		n, err := parseWindowParam("past_days", vals, cfg.icalMaxDays())
+		if err != nil {
+			return feedWindow{}, err
+		}
+		w.PastDays = n
+	}
 	return w, nil
+}
+
+// feedPastParams returns the extra API parameters a feed fetch needs for
+// ?past_days= (#1862): include_past plus an end_time_after cutoff. It is nil
+// for non-iCal formats and without the parameter, so the API request stays
+// unchanged. An invalid value is an error (the caller answers 400).
+func feedPastParams(r *http.Request, cfg *Config, now time.Time) (url.Values, error) {
+	if f := r.PathValue("format"); f != "ical" && f != "ics" {
+		return nil, nil
+	}
+	vals, ok := r.URL.Query()["past_days"]
+	if !ok {
+		return nil, nil
+	}
+	n, err := parseWindowParam("past_days", vals, cfg.icalMaxDays())
+	if err != nil {
+		return nil, err
+	}
+	return url.Values{
+		"include_past":   {"true"},
+		"end_time_after": {strconv.FormatInt(now.AddDate(0, 0, -n).Unix(), 10)},
+	}, nil
+}
+
+// withParams appends extra to a raw API query string.
+func withParams(query string, extra url.Values) string {
+	if len(extra) == 0 {
+		return query
+	}
+	return query + "&" + extra.Encode()
+}
+
+// eventEnded reports whether e ended before now. Without a parseable end, the
+// start decides; an undated event counts as upcoming.
+func eventEnded(e Event, now time.Time) bool {
+	if t, ok := parseEventStart(e.EndTime); ok {
+		return t.Before(now)
+	}
+	t, ok := parseEventStart(e.StartTime)
+	return ok && t.Before(now)
 }
 
 // applyFeedWindow returns the events that fall in the window, soonest first.
@@ -118,8 +170,20 @@ func applyFeedWindow(events []Event, w feedWindow, now time.Time) []Event {
 		}
 		out = kept
 	}
-	if w.Count > 0 && len(out) > w.Count {
-		out = out[:w.Count]
+	// count limits upcoming events only (#1862): past events from
+	// ?past_days= sort first and would otherwise use up the count.
+	if w.Count > 0 {
+		kept, upcoming := out[:0], 0
+		for _, e := range out {
+			if !eventEnded(e, now) {
+				if upcoming == w.Count {
+					continue
+				}
+				upcoming++
+			}
+			kept = append(kept, e)
+		}
+		out = kept
 	}
 	return out
 }

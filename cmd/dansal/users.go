@@ -190,8 +190,14 @@ func getUserByEmail(email string) (User, error) {
 // email local-part, then the numeric ID) for "last updated by" attribution
 // on events/locations/organizations/musicians/instructors.
 func resolveDisplayName(callerID int) string {
+	return resolveDisplayNameQ(db, callerID)
+}
+
+// resolveDisplayNameQ is resolveDisplayName through q, so callers inside a
+// transaction (insertEvent) read on the same connection.
+func resolveDisplayNameQ(q querier, callerID int) string {
 	var name string
-	if err := db.QueryRow(
+	if err := q.QueryRow(
 		"SELECT COALESCE(NULLIF(display_name,''), SUBSTR(email,1,INSTR(email,'@')-1)) FROM users WHERE id = ?", callerID,
 	).Scan(&name); err != nil || name == "" {
 		return strconv.Itoa(callerID)

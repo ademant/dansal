@@ -15,8 +15,11 @@ type PasskeyInfo struct {
 }
 
 type SettingsData struct {
-	User             UserInfo
-	ErrorKey         string
+	User     UserInfo
+	ErrorKey string
+	// ErrorMsg, when set, is an already-translated message shown instead of
+	// ErrorKey — the specific password rule that failed (#1876).
+	ErrorMsg         string
 	Saved            bool
 	TOTPNudge        bool   // true after first-time password set — prompts TOTP setup
 	VerifySent       string // channel name: "email", "telegram", "matrix"
@@ -422,6 +425,7 @@ func settingsChangePasswordHandler(cfg *Config, tmpls *Templates, client *Dansal
 			renderTemplate(w, tmpls.settings, tmplData(r, cfg, i18n, title, SettingsData{
 				User:     u,
 				ErrorKey: "settings_password_error",
+				ErrorMsg: passwordErrorMessage(i18n.Strings(i18n.detectLang(r)), err),
 				APIKeys:  keys,
 				Sessions: sessions,
 				Passkeys: passkeys,

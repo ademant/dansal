@@ -47,7 +47,7 @@ func invitePageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 // invitePasswordHandler handles POST /invites/{token}/password.
 // It creates the account via the password track and immediately logs the user
 // in, so they land on the dashboard rather than being redirected to /login.
-func invitePasswordHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+func invitePasswordHandler(cfg *Config, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := r.PathValue("token")
 		var req struct {
@@ -62,7 +62,9 @@ func invitePasswordHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 
 		ctx := r.Context()
 		if err := client.UseInvitePassword(ctx, token, req.Email, req.DisplayName, req.Password); err != nil {
-			writeJSONResponse(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			logInviteRedeemRejected(err)
+			status, msg := inviteRedeemError(i18n.Strings(i18n.detectLang(r)), err)
+			writeJSONResponse(w, status, map[string]string{"error": msg})
 			return
 		}
 

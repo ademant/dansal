@@ -139,7 +139,7 @@ Auf der Bestätigungsseite und per E-Mail wird direkt ein Link angeboten, um ein
 Mit dem ☆ neben einer Veranstaltung legst du sie auf deine Merkliste, z. B. für einen Wochenendausflug. Die Merkliste findest du über den Stern „Merkliste“ in der oberen Leiste bzw. unter `/watchlist`.
 
 - **Im Browser gespeichert:** Die Liste liegt in deinem Browser. Sie kann bis zu 200 Veranstaltungen enthalten. Mit „Als JSON-Datei speichern“ sicherst du sie als Datei, mit „JSON-Datei laden“ holst du sie wieder.
-- **Auf dem Server speichern (optional):** Du kannst die Liste auf dem Server ablegen lassen. Du erhältst dann einen zufälligen Schlüssel, mit dem du die Liste auf einem anderen Gerät wieder lädst. Verlierst du den Schlüssel, ist die Liste nicht wiederherstellbar. Gespeicherte Listen werden nach 12 Monaten gelöscht.
+- **Auf dem Server speichern (optional):** Du kannst die Liste auf dem Server ablegen lassen. Du erhältst dann einen zufälligen Schlüssel, mit dem du die Liste auf einem anderen Gerät wieder lädst. Verlierst du den Schlüssel, ist die Liste nicht wiederherstellbar. Gespeicherte Listen werden gelöscht, wenn sie 12 Monate lang weder geladen noch verändert wurden.
 - **Ohne Verbindung:** Die Merkliste zeigt den Stand vom letzten Besuch mit Verbindung und den Hinweis „Offline – Stand: …“. Veranstaltungen, die du nie mit Verbindung angesehen hast, sind als „nicht offline verfügbar“ markiert.
 - **Zum Ort navigieren:** Bei Einträgen mit Ort gibt es 🧭 „Navigation“, das deine Navigations-App öffnet. Ist keine App verfügbar, kannst du die Koordinaten mit „Koordinaten kopieren“ übernehmen.
 - **Entfernen:** „×“ in der Zeile entfernt die Veranstaltung aus der Liste.

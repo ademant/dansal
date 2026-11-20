@@ -208,11 +208,13 @@ Falls eine Veranstaltung aus mehreren zeitlich getrennten Abschnitten besteht (z
 
 1. Im Veranstaltung-Formular den Abschnitt **Zeitplan** öffnen
 2. Für jeden Programmpunkt:
+   - **Tag** (optional — bei mehrtägigen Veranstaltungen können mehreren Programmpunkten dasselbe Datum gegeben werden, z. B. allen für Samstag)
    - **Zeitraum** (Start, Ende)
    - **Titel** (z. B. "Tanzworkshop Anfänger")
    - **Beschreibung**
-   - **Ort / Raum** (optional; der Raum ist ein Freitextfeld, z. B. „Saal A")
+   - **Ort / Raum** (optional): Entweder ein Verweis auf einen Veranstaltungsort aus der Ortsdatenbank (der Name wird dann mit angezeigt) oder ein Freitextfeld (z. B. „Saal A")
    - **Typ** (Art des Programmpunkts, z. B. Bal, Workshop, Konzert, Session)
+   - **Schwierigkeitsgrad** (optional: Anfänger / Fortgeschritten / Profi) — so lässt sich bei mehreren Workshops im Zeitplan markieren, welcher Programmpunkt welches Niveau hat
    - **Musiker / Anleiter** (optional)
 
 **Beispiel:**
@@ -228,7 +230,9 @@ Raum B:
 - 17:00–18:30: Musikalitäts-Workshop
 ```
 
-**Mehrtägige Veranstaltungen:** Für jeden Tag kann ein eigener Zeitplan angelegt werden.
+**Mehrtägige Veranstaltungen:** Jeder Programmpunkt kann ein eigenes Datum haben (**Tag**, siehe oben). Programmpunkte ohne eigenes Datum erscheinen beim Starttag der Veranstaltung.
+
+**Parallel bearbeiten:** Der Zeitplan ist gegen gleichzeitige Änderungen geschützt — speichern zwei Personen denselben Programmpunkt, erhält die zweite Person einen Hinweis („seit dem letzten Lesen geändert“), statt die Änderung der ersten zu überschreiben.
 
 ---
 

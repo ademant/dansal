@@ -57,7 +57,7 @@ Die Seite bestätigt den Eingang. Du erhältst jetzt eine E-Mail zur Verifizieru
 
 ![Bestätigungs-E-Mail](images/screenshots/01_Registration_01_JoinOrg_03_confirmmail.png)
 
-Öffne die E-Mail von Dansal und klicke auf den Bestätigungslink. Der Link ist **72 Stunden** gültig.
+Öffne die E-Mail von Dansal und klicke auf den Bestätigungslink. Der Link ist **7 Tage** gültig.
 
 ---
 

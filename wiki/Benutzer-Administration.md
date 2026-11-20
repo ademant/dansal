@@ -111,7 +111,7 @@ Die wichtigsten Einstellungen in `config.yaml`:
 | `server.rate_limit` | Anfragen pro Minute pro IP (Standard 30) |
 | `server.login_rate_limit` | Login-Versuche pro Minute pro IP (Standard 5) |
 | `server.suggest_rate_limit` | Anonyme Veranstaltungsvorschläge pro IP und 10 Minuten (Standard 3). Auf Dev-/Testinstanzen mit vielen Vorschlägen im E2E-Lauf erhöhen |
-| `server.allowed_origins` | Für die API erlaubte CORS-Origins (Standard: alle) |
+| `server.allowed_origins` | Für die API erlaubte CORS-Origins. Ohne Angabe wird die Origin aus `base_url` verwendet; sind `base_url` und `allowed_origins` beide nicht gesetzt, sind alle Origins blockiert |
 
 Web-Frontend (`web.yaml`) und Webmin (`webmin.yaml`) haben jeweils eigene Schlüssel für Domain, ActivityPub, Branding und Verbindungseinstellungen – siehe die Beispiel-Konfigurationsdateien im Quellverzeichnis für die vollständige Liste.
 

@@ -26,6 +26,9 @@ type Config struct {
 	LogLevel  string `yaml:"log_level"` // debug | info (default) | warning | error (#1645)
 	BaseURL   string `yaml:"base_url"`  // optional; defaults to https://{domain}
 	DansalURL string `yaml:"dansal_url"`
+	// DocURL is the base URL of the dansal-doc site that the "how to" links
+	// point at (#1881, #1882). Empty hides those links.
+	DocURL string `yaml:"doc_url"`
 
 	// InternalSharedSecret is sent as X-Dansal-Internal on every backend call
 	// to the dansal API, exempting it from dansal's per-IP rate limiting.

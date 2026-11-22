@@ -83,13 +83,13 @@ func loadValidInviteOrError(w http.ResponseWriter, token string) (inviteRecord, 
 	case err == nil:
 		return invite, true
 	case err == sql.ErrNoRows:
-		writeError(w, "Invalid or expired invite link", http.StatusNotFound)
+		writeErrorCode(w, "invite_not_found", "Invalid or expired invite link", http.StatusNotFound)
 	case err == errInviteUsed:
-		writeError(w, "Invite link already used", http.StatusGone)
+		writeErrorCode(w, "invite_used", "Invite link already used", http.StatusGone)
 	case err == errInviteExpired:
-		writeError(w, "Invite link expired", http.StatusGone)
+		writeErrorCode(w, "invite_expired", "Invite link expired", http.StatusGone)
 	case err == errInviteBadToken:
-		writeError(w, "Invalid invite link", http.StatusBadRequest)
+		writeErrorCode(w, "invite_bad_token", "Invalid invite link", http.StatusBadRequest)
 	default:
 		writeError(w, "Internal server error", http.StatusInternalServerError)
 	}
@@ -441,7 +441,7 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 	// Email, display_name, and password are all optional — passkey-only accounts are supported.
 	if req.Email != "" && invite.PresetEmail == "" {
 		if !isValidEmail(req.Email) {
-			writeError(w, "invalid email address", http.StatusUnprocessableEntity)
+			writeErrorCode(w, "invalid_email", "invalid email address", http.StatusUnprocessableEntity)
 			return
 		}
 		if err := validateEmailDomain(r.Context(), req.Email); err != nil {
@@ -471,7 +471,7 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 	}
 	if isDisplayNameTaken(req.DisplayName, 0) {
 		logging.Debugf("invite redeem: id=%d begin=%s outcome=display-name-taken", invite.ID, tBegin)
-		writeError(w, "Display name is already taken", http.StatusConflict)
+		writeErrorCode(w, "display_name_taken", "Display name is already taken", http.StatusConflict)
 		return
 	}
 	if req.Password != "" {
@@ -493,7 +493,7 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 		emailVal, req.DisplayName, passwordHash, invite.Role, req.Telegram, req.Matrix, emailVerified,
 	)
 	if err != nil {
-		writeError(w, "Account with this email already exists", http.StatusConflict)
+		writeErrorCode(w, "email_exists", "Account with this email already exists", http.StatusConflict)
 		return
 	}
 	userID, _ := result.LastInsertId()

@@ -1,5 +1,5 @@
 ---
-nav_order: 5
+nav_order: 6
 ---
 
 # Anmeldung – Schritt-für-Schritt-Anleitung

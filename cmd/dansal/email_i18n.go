@@ -64,7 +64,9 @@ func registerLang(lang string) string {
 }
 
 // emailLoginURL is the sign-in link for an approved applicant. It carries the
-// address only, to prefill the login form; no token.
+// address only, to prefill the login form; no token. The address goes in the
+// fragment (#1877): a fragment is never sent to the server, so it stays out of
+// the access log and out of Referer.
 func emailLoginURL(base, email string) string {
-	return base + "/login?email=" + url.QueryEscape(email)
+	return base + "/login#email=" + url.QueryEscape(email)
 }

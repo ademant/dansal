@@ -646,6 +646,7 @@ endif
 	# deploy-nginx's shared log_format file.
 	install -m 644 deploy/fail2ban/filter.d/dansal.conf     /etc/fail2ban/filter.d/dansal.conf
 	install -m 644 deploy/fail2ban/filter.d/dansal-web.conf /etc/fail2ban/filter.d/dansal-web.conf
+	install -m 644 deploy/fail2ban/filter.d/dansal-scanner.conf /etc/fail2ban/filter.d/dansal-scanner.conf
 	sed \
 	    -e "s/\[dansal\]/[dansal-$(INSTANCE)]/" \
 	    -e "s/_SYSTEMD_UNIT=dansal\.service/_SYSTEMD_UNIT=dansal@$(INSTANCE).service/" \
@@ -654,18 +655,22 @@ endif
 	    -e "s/\[dansal-web\]/[dansal-web-$(INSTANCE)]/" \
 	    -e "s/_SYSTEMD_UNIT=dansal-web\.service/_SYSTEMD_UNIT=dansal-web@$(INSTANCE).service/" \
 	    deploy/fail2ban/jail.d/dansal-web.conf > /etc/fail2ban/jail.d/dansal-web-$(INSTANCE).conf
-	# Scanner jail (#1878) watches the instance's nginx access log, so it
-	# needs the domain from web.yaml (same lookup as deploy-logrotate).
+	# Scanner jail (#1878): the instance's access log, named after its domain.
 	WEB_CONF=$(SYSCONFDIR)/$(INSTANCE)/web.yaml
 	[ -f "$$WEB_CONF" ] || { echo "Error: $$WEB_CONF not found — run setup-instance first"; exit 1; }
-	DOMAIN=$$(grep -E '^domain:' "$$WEB_CONF" | sed -E 's/domain:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/')
-	echo "$$DOMAIN" | grep -q '\.' || { echo "Error: domain '$$DOMAIN' looks invalid"; exit 1; }
-	install -m 644 deploy/fail2ban/filter.d/dansal-scanner.conf /etc/fail2ban/filter.d/dansal-scanner.conf
+	SCANNER_DOMAIN=$$(grep -E '^domain:' "$$WEB_CONF" | sed -E 's/domain:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/')
+	[ -z "$$SCANNER_DOMAIN" ] && { echo "Error: domain not set in $$WEB_CONF"; exit 1; }
 	sed \
+	    -e "s/events\.example\.com/$$SCANNER_DOMAIN/g" \
 	    -e "s/\[dansal-scanner\]/[dansal-scanner-$(INSTANCE)]/" \
-	    -e "s/events\.example\.com/$$DOMAIN/g" \
+	    -e "s|__SERVER_IPS__|$$(hostname -I 2>/dev/null | xargs)|" \
 	    deploy/fail2ban/jail.d/dansal-scanner.conf > /etc/fail2ban/jail.d/dansal-scanner-$(INSTANCE).conf
-	fail2ban-client -t >/dev/null || { echo "Error: fail2ban config test failed"; rm -f /etc/fail2ban/jail.d/dansal-scanner-$(INSTANCE).conf; exit 1; }
+	# A broken jail would make the reload below fail silently: test the
+	# config first and drop the scanner jail again if it doesn't parse.
+	if command -v fail2ban-client >/dev/null && ! fail2ban-client -t >/dev/null 2>&1; then \
+	    rm -f /etc/fail2ban/jail.d/dansal-scanner-$(INSTANCE).conf; \
+	    echo "Error: fail2ban config test failed, dansal-scanner-$(INSTANCE).conf removed"; exit 1; \
+	fi
 	systemctl reload fail2ban 2>/dev/null || true
 	echo "Deployed /etc/fail2ban/jail.d/dansal-$(INSTANCE).conf, dansal-web-$(INSTANCE).conf and dansal-scanner-$(INSTANCE).conf"
 

@@ -143,6 +143,7 @@ Key settings (all others have sensible defaults):
 | `domain` | Public domain name (used for ActivityPub actor URLs) |
 | `dansal_url` | Internal URL of the dansal API |
 | `internal_shared_secret` | Must match `server.internal_shared_secret` in `config.yaml` |
+| `doc_url` | Base URL of this instance's dansal-doc site. The dashboard and the event, series and location forms link to its how-to pages; empty hides those links (#1881, #1882) |
 | `db_path` | SQLite database for ActivityPub keys and followers |
 | `poll_secs` | How often to push new events to fediverse followers (default 300) |
 | `pages_file` | Path to YAML file with per-language contact info and Impressum text |

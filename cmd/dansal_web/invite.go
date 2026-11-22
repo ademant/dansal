@@ -62,8 +62,7 @@ func invitePasswordHandler(cfg *Config, client *DansalClient, i18n *I18n) http.H
 
 		ctx := r.Context()
 		if err := client.UseInvitePassword(ctx, token, req.Email, req.DisplayName, req.Password); err != nil {
-			logInviteRedeemRejected(err)
-			status, msg := inviteRedeemError(i18n.Strings(i18n.detectLang(r)), err)
+			msg, status := invitePasswordFailure(r, i18n, err)
 			writeJSONResponse(w, status, map[string]string{"error": msg})
 			return
 		}

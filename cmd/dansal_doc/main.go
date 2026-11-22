@@ -15,7 +15,10 @@ import (
 	"time"
 
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/text"
 	"gopkg.in/yaml.v2"
 )
 
@@ -42,6 +45,40 @@ type Page struct {
 	Path     string
 	NavOrder int
 	HasOrder bool
+}
+
+// Section is one chapter (level 2) or subchapter (level 3) heading of a page.
+// The sidebar lists these under the page that is open, so a reader can jump
+// to a part without scrolling past the rest.
+type Section struct {
+	Level int
+	ID    string
+	Title string
+}
+
+// sections collects the level 2 and 3 headings of a parsed document. The
+// heading IDs come from goldmark's auto heading IDs, which the parser assigns
+// during Parse, so they match the anchors in the rendered HTML.
+func sections(md goldmark.Markdown, body []byte) []Section {
+	doc := md.Parser().Parse(text.NewReader(body))
+	var out []Section
+	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		h, ok := n.(*ast.Heading)
+		if !ok || (h.Level != 2 && h.Level != 3) {
+			return ast.WalkContinue, nil
+		}
+		id, _ := h.AttributeString("id")
+		idStr, _ := id.([]byte)
+		if len(idStr) == 0 {
+			return ast.WalkSkipChildren, nil
+		}
+		out = append(out, Section{Level: h.Level, ID: string(idStr), Title: string(h.Text(body))})
+		return ast.WalkSkipChildren, nil
+	})
+	return out
 }
 
 // frontMatter holds the optional metadata block at the top of a wiki page,
@@ -237,6 +274,7 @@ func newApp(cfg Config) (*App, error) {
 
 	markdown := goldmark.New(
 		goldmark.WithExtensions(extension.Table),
+		goldmark.WithParserOptions(parser.WithAutoHeadingID()),
 	)
 
 	return &App{cfg: cfg, pages: pages, nav: nav, imagesRoot: imagesRoot, markdown: markdown}, nil
@@ -304,19 +342,21 @@ func (app *App) handlePage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	model := struct {
-		Config  Config
-		Nav     []Page
-		Page    Page
-		HTML    template.HTML
-		Year    int
-		Version string
+		Config   Config
+		Nav      []Page
+		Page     Page
+		Sections []Section
+		HTML     template.HTML
+		Year     int
+		Version  string
 	}{
-		Config:  app.cfg,
-		Nav:     app.nav,
-		Page:    page,
-		HTML:    template.HTML(rewriteMarkdownLinks(rendered.String())),
-		Year:    time.Now().Year(),
-		Version: Version,
+		Config:   app.cfg,
+		Nav:      app.nav,
+		Page:     page,
+		Sections: sections(app.markdown, data),
+		HTML:     template.HTML(rewriteMarkdownLinks(rendered.String())),
+		Year:     time.Now().Year(),
+		Version:  Version,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -382,6 +422,10 @@ var pageTemplate = template.Must(template.New("page").Parse(`<!doctype html>
     nav { border-right:1px solid var(--line); padding-right:22px; }
     nav a { display:block; color:var(--text); text-decoration:none; padding:7px 0; }
     nav a.active { color:var(--accent); font-weight:700; }
+    /* Sections of the open page: shown under its link, subchapters indented (#1833). */
+    nav a.toc { padding:3px 0 3px 14px; font-size:.92rem; color:var(--muted); border-left:2px solid var(--line); }
+    nav a.toc-l3 { padding-left:28px; font-size:.86rem; }
+    nav a.toc:hover { color:var(--accent); }
     article { min-width:0; }
     article h1 { margin-top:0; line-height:1.15; }
     article h2, article h3 { margin-top:1.8em; line-height:1.25; }
@@ -410,6 +454,7 @@ var pageTemplate = template.Must(template.New("page").Parse(`<!doctype html>
       main { display:block; padding:18px; }
       nav { border-right:0; border-bottom:1px solid var(--line); padding:0 0 16px; margin-bottom:24px; }
       nav a { padding:9px 0; }
+      nav a.toc { display:none; }
     }
   </style>
 </head>
@@ -422,7 +467,7 @@ var pageTemplate = template.Must(template.New("page").Parse(`<!doctype html>
   </header>
   <main>
     <nav aria-label="Documentation">
-      {{range .Nav}}<a href="/{{.Slug}}" class="{{if eq $.Page.Slug .Slug}}active{{end}}">{{.Title}}</a>{{end}}
+      {{range .Nav}}<a href="/{{.Slug}}" class="{{if eq $.Page.Slug .Slug}}active{{end}}">{{.Title}}</a>{{if eq $.Page.Slug .Slug}}{{range $.Sections}}<a href="#{{.ID}}" class="toc toc-l{{.Level}}">{{.Title}}</a>{{end}}{{end}}{{end}}
     </nav>
     <article>{{.HTML}}</article>
   </main>

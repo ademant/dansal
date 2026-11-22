@@ -1,6 +1,7 @@
 {{template "base" .}}
 {{define "content"}}
 <h1>{{.Strings.T "series_new"}}</h1>
+{{with .DocURL}}<p class="hint"><a href="{{.}}/Benutzer-Veranstaltungen" target="_blank" rel="noopener">{{$.Strings.T "doc_link_create_series"}} ↗</a></p>{{end}}
 
 {{with .Data}}
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}

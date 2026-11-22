@@ -137,7 +137,10 @@ func loginPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 		title := i18n.T(r, "login_title")
 		flash := flashTake(r.URL.Query().Get("msg"))
 		renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{
-			Email:         r.URL.Query().Get("email"), // prefill from an approval mail (#1809)
+			// ?email= is what approval mails sent before #1877 carry. Those links
+			// are still valid for pending approvals (7 days), so the fallback
+			// stays; the fragment form (read in login.html) is the one to use.
+			Email:         r.URL.Query().Get("email"),
 			MagicSent:     r.URL.Query().Get("magic_sent"),
 			Next:          r.URL.Query().Get("next"),
 			FormToken:     tok,

@@ -465,11 +465,8 @@ func registerPasswordSubmitHandler(cfg *Config, client *DansalClient, i18n *I18n
 		}
 
 		if err := client.RegisterSetPassword(r.Context(), pendingID, token, req.DisplayName, req.Password); err != nil {
-			msg := passwordErrorMessage(i18n.Strings(i18n.detectLang(r)), err)
-			if msg == "" {
-				msg = apiErrUserMessage(err)
-			}
-			writeJSONResponse(w, http.StatusBadRequest, map[string]string{"error": msg})
+			msg, status := accountErrorMessage(r, i18n, err)
+			writeJSONResponse(w, status, map[string]string{"error": msg})
 			return
 		}
 

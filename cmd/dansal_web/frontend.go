@@ -25,6 +25,8 @@ type webContextKey int
 const ctxDashboardAttention webContextKey = 1
 
 type TemplateData struct {
+	// DocURL is the dansal-doc base for "how to" links; empty hides them (#1881).
+	DocURL string
 	// PasswordPolicy drives the password hints and minlength/maxlength (#1739).
 	PasswordPolicy PasswordPolicy
 	// PublishFlash (#1413): one-time warning after publishing events with an
@@ -217,6 +219,7 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) 
 	}
 
 	return TemplateData{
+		DocURL:         strings.TrimRight(cfg.DocURL, "/"),
 		PasswordPolicy: currentPasswordPolicy(),
 		PublishFlash:   publishFlash,
 		Title:          title,

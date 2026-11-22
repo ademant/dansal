@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"time"
 )
@@ -43,24 +44,40 @@ func forbidden(w http.ResponseWriter, r *http.Request) {
 	writeJSONError(w, r, http.StatusForbidden, "forbidden")
 }
 
-// parseAdminMultipart parses r's body as multipart/form-data up to
-// maxMultipartSize, falling back to ParseForm for non-multipart posts.
-func parseAdminMultipart(r *http.Request) error {
-	if err := r.ParseMultipartForm(maxMultipartSize); err != nil {
-		return r.ParseForm()
-	}
-	return nil
+// parseMultipartWithLimit parses r's body as multipart/form-data, capping the
+// whole request body at maxBytes (#1874). ParseMultipartForm's argument only
+// sets the in-memory threshold, so without the MaxBytesReader a large upload
+// could spill to disk without limit. A body over the cap fails with
+// *http.MaxBytesError; see multipartErrStatus.
+func parseMultipartWithLimit(w http.ResponseWriter, r *http.Request, maxBytes int64) error {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+	return r.ParseMultipartForm(maxBytes)
 }
 
-// parseMultipartWithLimit parses r's body as multipart/form-data up to
-// maxBytes, for an upload class whose cap intentionally differs from
-// maxMultipartSize (#1515) — currently maxEventImageMultipartSize. Unlike
-// parseAdminMultipart it does not fall back to ParseForm on failure: every
-// call site already returns its own 400 on error, and silently falling
-// through to a form with no files would just surface as a confusing
-// validation failure further down instead.
-func parseMultipartWithLimit(r *http.Request, maxBytes int64) error {
-	return r.ParseMultipartForm(maxBytes)
+// parseAdminMultipart parses r's body as multipart/form-data up to
+// maxMultipartSize, falling back to ParseForm for non-multipart posts. An
+// oversized body is not retried as a plain form: it is returned as is.
+func parseAdminMultipart(w http.ResponseWriter, r *http.Request) error {
+	err := parseMultipartWithLimit(w, r, maxMultipartSize)
+	if err == nil {
+		return nil
+	}
+	var tooLarge *http.MaxBytesError
+	if errors.As(err, &tooLarge) {
+		return err
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxMultipartSize)
+	return r.ParseForm()
+}
+
+// multipartErrStatus is 413 when a multipart body exceeded its cap, and 400
+// for any other malformed form (#1874).
+func multipartErrStatus(err error) int {
+	var tooLarge *http.MaxBytesError
+	if errors.As(err, &tooLarge) {
+		return http.StatusRequestEntityTooLarge
+	}
+	return http.StatusBadRequest
 }
 
 // memberOrgSet returns the set of org IDs the user belongs to, or nil for

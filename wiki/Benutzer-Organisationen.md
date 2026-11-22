@@ -1,5 +1,5 @@
 ---
-nav_order: 8
+nav_order: 9
 ---
 
 # Organisationen verwalten
@@ -62,7 +62,7 @@ Beim späteren **Bearbeiten** einer Quelle kommen weitere Angaben hinzu: **Tanzs
 - Über den **„Abrufen“**-Button lässt sich ein Abruf auch sofort manuell anstoßen, ohne auf den nächsten automatischen Lauf zu warten
 - **Wichtig**: Über diesen automatischen Weg importierte Veranstaltungen werden **sofort veröffentlicht** – es gibt hier keinen Freigabe-Schritt wie beim manuellen Import. Feeds sollten daher nur eingerichtet werden, wenn ihr Inhalt vertrauenswürdig ist
 
-**Von Besuchern vorgeschlagene Feeds:** Ein Besucher kann ganz ohne Konto einen neuen Feed für eure Organisation vorschlagen (`/feeds/suggest`, siehe Besucher-Guide). Solche Vorschläge erscheinen unter **Feeds → N ausstehende Feed-Vorschläge** (`/admin/fetchurl-suggestions`) und können von jedem aktiven Mitglied der betroffenen Organisation genehmigt oder abgelehnt werden – nicht nur von Administratoren. Bei Genehmigung wird die Quelle wie eine selbst angelegte behandelt und sofort erstmalig abgerufen.
+**Von Besuchern vorgeschlagene Feeds:** Ein Besucher kann ganz ohne Konto einen neuen Feed für eure Organisation vorschlagen (`/feeds/suggest`, siehe Besucher-Empfehlen). Solche Vorschläge erscheinen unter **Feeds → N ausstehende Feed-Vorschläge** (`/admin/fetchurl-suggestions`) und können von jedem aktiven Mitglied der betroffenen Organisation genehmigt oder abgelehnt werden – nicht nur von Administratoren. Bei Genehmigung wird die Quelle wie eine selbst angelegte behandelt und sofort erstmalig abgerufen.
 
 ## 📐 Vorlagen (Templates)
 

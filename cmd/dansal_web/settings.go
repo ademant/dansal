@@ -15,11 +15,9 @@ type PasskeyInfo struct {
 }
 
 type SettingsData struct {
-	User     UserInfo
-	ErrorKey string
-	// ErrorMsg, when set, is an already-translated message shown instead of
-	// ErrorKey — the specific password rule that failed (#1876).
-	ErrorMsg         string
+	User             UserInfo
+	ErrorKey         string
+	ErrorText        string // a password rule message, shown instead of ErrorKey (#1876)
 	Saved            bool
 	TOTPNudge        bool   // true after first-time password set — prompts TOTP setup
 	VerifySent       string // channel name: "email", "telegram", "matrix"
@@ -422,13 +420,20 @@ func settingsChangePasswordHandler(cfg *Config, tmpls *Templates, client *Dansal
 			sessions, _ := client.GetSessions(r.Context(), token)
 			passkeys, _ := client.ListPasskeys(r.Context(), token)
 			title := i18n.T(r, "settings_title")
+			// Name the rule that failed when the API gave its code (#1876);
+			// otherwise the generic key below is shown.
+			ruleMsg := ""
+			var apiErr *apiHTTPError
+			if errors.As(err, &apiErr) && apiErr.ErrorCode != "" {
+				ruleMsg, _ = accountErrorMessage(r, i18n, err)
+			}
 			renderTemplate(w, tmpls.settings, tmplData(r, cfg, i18n, title, SettingsData{
-				User:     u,
-				ErrorKey: "settings_password_error",
-				ErrorMsg: passwordErrorMessage(i18n.Strings(i18n.detectLang(r)), err),
-				APIKeys:  keys,
-				Sessions: sessions,
-				Passkeys: passkeys,
+				User:      u,
+				ErrorText: ruleMsg,
+				ErrorKey:  "settings_password_error",
+				APIKeys:   keys,
+				Sessions:  sessions,
+				Passkeys:  passkeys,
 			}))
 			return
 		}

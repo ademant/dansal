@@ -84,7 +84,7 @@ func adminImportEventsHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 			}))
 		}
 
-		if err := r.ParseMultipartForm(maxMultipartSize); err != nil {
+		if err := parseMultipartWithLimit(w, r, maxMultipartSize); err != nil {
 			renderErr("invalid form", "", "ical")
 			return
 		}

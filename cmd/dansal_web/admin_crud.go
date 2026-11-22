@@ -94,8 +94,8 @@ func (e *adminEntity[E]) Create(cfg *Config, tmpls *Templates, client *DansalCli
 		if !ok {
 			return
 		}
-		if err := parseAdminMultipart(r); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
+		if err := parseAdminMultipart(w, r); err != nil {
+			http.Error(w, "bad request", multipartErrStatus(err))
 			return
 		}
 		item := e.fromForm(r)
@@ -155,8 +155,8 @@ func (e *adminEntity[E]) Save(cfg *Config, tmpls *Templates, client *DansalClien
 		if !ok {
 			return
 		}
-		if err := parseAdminMultipart(r); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
+		if err := parseAdminMultipart(w, r); err != nil {
+			http.Error(w, "bad request", multipartErrStatus(err))
 			return
 		}
 		from := safeReturnPath(r.FormValue("from"))

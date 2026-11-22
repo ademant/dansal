@@ -1,6 +1,7 @@
 {{template "base" .}}
 {{define "content"}}
 <h1>{{.Strings.T "admin_edit"}} — {{if .Data.Location.ShortName}}{{.Data.Location.ShortName}}{{else}}{{.Data.Location.Location}}{{end}}</h1>
+{{if not .Data.Location.ID}}{{with .DocURL}}<p class="hint"><a href="{{.}}/Benutzer-Veranstaltungsorte" target="_blank" rel="noopener">{{$.Strings.T "doc_link_create_location"}} ↗</a></p>{{end}}{{end}}
 
 <div class="edit-wrap">
 {{with .Data}}

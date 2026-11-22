@@ -436,7 +436,7 @@ func registerVerifyHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 // WebAuthn ceremony used for the passkey track. Unlike invitePasswordHandler,
 // it does not log the user in -- the account stays disabled until an admin
 // approves the pending registration.
-func registerPasswordSubmitHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+func registerPasswordSubmitHandler(cfg *Config, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		c, err := r.Cookie(pendingRegCookie)
 		if err != nil {
@@ -465,7 +465,8 @@ func registerPasswordSubmitHandler(cfg *Config, client *DansalClient) http.Handl
 		}
 
 		if err := client.RegisterSetPassword(r.Context(), pendingID, token, req.DisplayName, req.Password); err != nil {
-			writeJSONResponse(w, http.StatusBadRequest, map[string]string{"error": apiErrUserMessage(err)})
+			msg, status := accountErrorMessage(r, i18n, err)
+			writeJSONResponse(w, status, map[string]string{"error": msg})
 			return
 		}
 

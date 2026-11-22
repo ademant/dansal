@@ -382,7 +382,7 @@ func contactManageImageUploadHandler(client *DansalClient) http.HandlerFunc {
 			http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
 			return
 		}
-		if err := r.ParseMultipartForm(maxMultipartSize); err != nil {
+		if err := parseMultipartWithLimit(w, r, maxMultipartSize); err != nil {
 			http.Redirect(w, r, "/contact-posts/manage/"+token, http.StatusSeeOther)
 			return
 		}

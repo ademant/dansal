@@ -50,7 +50,7 @@ func TestEmailTextsCoverAllLanguagesAndKeys(t *testing.T) {
 
 func TestApprovalMailCarriesSignInLink(t *testing.T) {
 	link := emailLoginURL("https://balfolk.example", "anna+x@example.test")
-	if link != "https://balfolk.example/login?email=anna%2Bx%40example.test" {
+	if link != "https://balfolk.example/login#email=anna%2Bx%40example.test" {
 		t.Fatalf("login URL = %q", link)
 	}
 	_, body := emailMessage("de", "subject_approved", "approved_password", link)

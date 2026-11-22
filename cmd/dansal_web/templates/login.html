@@ -88,6 +88,16 @@
 </div>
 
 <script nonce="{{$.Nonce}}">
+  // #1877: an approval mail links to /login#email=<address>. The fragment never
+  // reaches the server or an access log, so the address is read here, put in
+  // the field, and the fragment is removed from the address bar.
+  (function () {
+    var m = /^#email=(.*)$/.exec(location.hash);
+    if (!m) return;
+    var idEl = document.getElementById('identifier');
+    try { if (idEl && !idEl.value) idEl.value = decodeURIComponent(m[1]); } catch (e) {}
+    if (history.replaceState) history.replaceState(null, '', location.pathname + location.search);
+  })();
 (function(){
   function b64url(buf){
     return btoa(String.fromCharCode.apply(null,new Uint8Array(buf)))

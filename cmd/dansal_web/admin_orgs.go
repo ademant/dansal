@@ -199,11 +199,9 @@ func adminOrgCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		if !ok {
 			return
 		}
-		if err := r.ParseMultipartForm(maxMultipartSize); err != nil {
-			if err := r.ParseForm(); err != nil {
-				http.Error(w, "bad request", http.StatusBadRequest)
-				return
-			}
+		if err := parseAdminMultipart(w, r); err != nil {
+			http.Error(w, "bad request", multipartErrStatus(err))
+			return
 		}
 		org := orgFromForm(r)
 		if err := validateURLDomain(r.Context(), org.Website); err != nil {
@@ -559,11 +557,9 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dans
 			return
 		}
 
-		if err := r.ParseMultipartForm(maxMultipartSize); err != nil {
-			if err := r.ParseForm(); err != nil {
-				http.Error(w, "bad request", http.StatusBadRequest)
-				return
-			}
+		if err := parseAdminMultipart(w, r); err != nil {
+			http.Error(w, "bad request", multipartErrStatus(err))
+			return
 		}
 		from := safeReturnPath(r.FormValue("from"))
 		org := orgFromForm(r)

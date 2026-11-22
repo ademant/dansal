@@ -230,7 +230,7 @@ func main() {
 		r.HandleFunc("GET /feeds/suggest/done", fetchSuggestDoneHandler(cfg, tmpls, i18n))
 
 		r.HandleFunc("GET /invites/{token}", invitePageHandler(cfg, tmpls, client, i18n))
-		r.HandleFunc("POST /invites/{token}/password", invitePasswordHandler(cfg, client))
+		r.HandleFunc("POST /invites/{token}/password", invitePasswordHandler(cfg, client, i18n))
 		r.HandleFunc("POST /invites/{token}/webauthn/begin", webauthnInviteProxy(cfg, client, "begin"))
 		r.HandleFunc("POST /invites/{token}/webauthn/finish", webauthnInviteProxy(cfg, client, "finish"))
 		r.HandleFunc("POST /auth/webauthn/login/begin", webauthnProxy(cfg, client, "/api/v1/auth/webauthn/login/begin"))
@@ -242,7 +242,7 @@ func main() {
 		r.HandleFunc("POST /register", registerSubmitHandler(cfg, tmpls, client, i18n))
 		r.HandleFunc("GET /register/done", registerDoneHandler(cfg, tmpls, i18n))
 		r.HandleFunc("GET /register/verify/email/{token}", registerVerifyHandler(cfg, tmpls, client, i18n))
-		r.HandleFunc("POST /register/password", registerPasswordSubmitHandler(cfg, client))
+		r.HandleFunc("POST /register/password", registerPasswordSubmitHandler(cfg, client, i18n))
 		r.HandleFunc("POST /register/resend", registerResendHandler(cfg, client))
 		r.HandleFunc("POST /register/cancel", registerCancelHandler(cfg, client))
 		r.HandleFunc("GET /register/status", registerStatusHandler(client))

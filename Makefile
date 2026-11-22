@@ -646,6 +646,7 @@ endif
 	# deploy-nginx's shared log_format file.
 	install -m 644 deploy/fail2ban/filter.d/dansal.conf     /etc/fail2ban/filter.d/dansal.conf
 	install -m 644 deploy/fail2ban/filter.d/dansal-web.conf /etc/fail2ban/filter.d/dansal-web.conf
+	install -m 644 deploy/fail2ban/filter.d/dansal-scanner.conf /etc/fail2ban/filter.d/dansal-scanner.conf
 	sed \
 	    -e "s/\[dansal\]/[dansal-$(INSTANCE)]/" \
 	    -e "s/_SYSTEMD_UNIT=dansal\.service/_SYSTEMD_UNIT=dansal@$(INSTANCE).service/" \
@@ -654,8 +655,18 @@ endif
 	    -e "s/\[dansal-web\]/[dansal-web-$(INSTANCE)]/" \
 	    -e "s/_SYSTEMD_UNIT=dansal-web\.service/_SYSTEMD_UNIT=dansal-web@$(INSTANCE).service/" \
 	    deploy/fail2ban/jail.d/dansal-web.conf > /etc/fail2ban/jail.d/dansal-web-$(INSTANCE).conf
+	# Scanner jail (#1878): the instance's access log, named after its domain.
+	WEB_CONF=$(SYSCONFDIR)/$(INSTANCE)/web.yaml
+	[ -f "$$WEB_CONF" ] || { echo "Error: $$WEB_CONF not found — run setup-instance first"; exit 1; }
+	SCANNER_DOMAIN=$$(grep -E '^domain:' "$$WEB_CONF" | sed -E 's/domain:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/')
+	[ -z "$$SCANNER_DOMAIN" ] && { echo "Error: domain not set in $$WEB_CONF"; exit 1; }
+	sed \
+	    -e "s/events\.example\.com/$$SCANNER_DOMAIN/g" \
+	    -e "s/\[dansal-scanner\]/[dansal-scanner-$(INSTANCE)]/" \
+	    -e "s|__SERVER_IPS__|$$(hostname -I 2>/dev/null | xargs)|" \
+	    deploy/fail2ban/jail.d/dansal-scanner.conf > /etc/fail2ban/jail.d/dansal-scanner-$(INSTANCE).conf
 	systemctl reload fail2ban 2>/dev/null || true
-	echo "Deployed /etc/fail2ban/jail.d/dansal-$(INSTANCE).conf and dansal-web-$(INSTANCE).conf"
+	echo "Deployed /etc/fail2ban/jail.d/dansal-$(INSTANCE).conf, dansal-web-$(INSTANCE).conf and dansal-scanner-$(INSTANCE).conf"
 
 # Deploy logrotate config for one instance's nginx logs (#1481, compliance
 # G7): the per-domain access/error/feed log files deploy-nginx creates

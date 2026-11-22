@@ -929,8 +929,8 @@ func adminLocationSitePlanUploadHandler(cfg *Config, client *DansalClient) http.
 		}
 		// Extend deadline: AVIF re-encode can take 20-40 s.
 		adminWriteDeadline(w)
-		if err := parseMultipartWithLimit(r, maxEventImageMultipartSize); err != nil {
-			writeJSONError(w, r, http.StatusBadRequest, "invalid multipart")
+		if err := parseMultipartWithLimit(w, r, maxEventImageMultipartSize); err != nil {
+			writeJSONError(w, r, multipartErrStatus(err), "invalid multipart")
 			return
 		}
 		file, header, ferr := r.FormFile("site_plan")

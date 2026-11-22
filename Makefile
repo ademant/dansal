@@ -665,6 +665,12 @@ endif
 	    -e "s/\[dansal-scanner\]/[dansal-scanner-$(INSTANCE)]/" \
 	    -e "s|__SERVER_IPS__|$$(hostname -I 2>/dev/null | xargs)|" \
 	    deploy/fail2ban/jail.d/dansal-scanner.conf > /etc/fail2ban/jail.d/dansal-scanner-$(INSTANCE).conf
+	# A broken jail would make the reload below fail silently: test the
+	# config first and drop the scanner jail again if it doesn't parse.
+	if command -v fail2ban-client >/dev/null && ! fail2ban-client -t >/dev/null 2>&1; then \
+	    rm -f /etc/fail2ban/jail.d/dansal-scanner-$(INSTANCE).conf; \
+	    echo "Error: fail2ban config test failed, dansal-scanner-$(INSTANCE).conf removed"; exit 1; \
+	fi
 	systemctl reload fail2ban 2>/dev/null || true
 	echo "Deployed /etc/fail2ban/jail.d/dansal-$(INSTANCE).conf, dansal-web-$(INSTANCE).conf and dansal-scanner-$(INSTANCE).conf"
 

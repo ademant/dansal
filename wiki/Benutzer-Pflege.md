@@ -1,5 +1,5 @@
 ---
-nav_order: 11
+nav_order: 12
 ---
 
 # Daten pflegen
@@ -48,7 +48,7 @@ Mit **CSV exportieren** lädst du genau die gefilterten Veranstaltungen als Tabe
 
 ## Terminempfehlungen
 
-Besucher können Veranstaltungen empfehlen. Diese sind zunächst nicht veröffentlicht. Über den Filter **„Nicht verifiziert"** (👁️, mit Zähler `*`, sofern offene Einträge vorhanden sind) lassen sie sich anzeigen und einzeln veröffentlichen. Empfehlungen können auch abgelehnt werden; der Ablehnungsgrund wird dem Empfehlenden per E-Mail mitgeteilt.
+Besucher können Veranstaltungen empfehlen (siehe [Besucher-Empfehlen](Besucher-Empfehlen)). Diese sind zunächst nicht veröffentlicht. Über den Filter **„Nicht verifiziert"** (👁️, mit Zähler `*`, sofern offene Einträge vorhanden sind) lassen sie sich anzeigen und einzeln veröffentlichen. Empfehlungen können auch abgelehnt werden; der Ablehnungsgrund wird dem Empfehlenden per E-Mail mitgeteilt.
 
 ## Duplikate
 

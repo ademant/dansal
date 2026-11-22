@@ -2,6 +2,8 @@
 
 **Besucher**
 - [Besucher](Besucher)
+- [Besucher-Empfehlen](Besucher-Empfehlen)
+- [Besucher-Datenschutz](Besucher-Datenschutz)
 
 **Benutzer**
 - [Benutzer](Benutzer)

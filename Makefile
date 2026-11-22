@@ -654,8 +654,20 @@ endif
 	    -e "s/\[dansal-web\]/[dansal-web-$(INSTANCE)]/" \
 	    -e "s/_SYSTEMD_UNIT=dansal-web\.service/_SYSTEMD_UNIT=dansal-web@$(INSTANCE).service/" \
 	    deploy/fail2ban/jail.d/dansal-web.conf > /etc/fail2ban/jail.d/dansal-web-$(INSTANCE).conf
+	# Scanner jail (#1878) watches the instance's nginx access log, so it
+	# needs the domain from web.yaml (same lookup as deploy-logrotate).
+	WEB_CONF=$(SYSCONFDIR)/$(INSTANCE)/web.yaml
+	[ -f "$$WEB_CONF" ] || { echo "Error: $$WEB_CONF not found — run setup-instance first"; exit 1; }
+	DOMAIN=$$(grep -E '^domain:' "$$WEB_CONF" | sed -E 's/domain:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/')
+	echo "$$DOMAIN" | grep -q '\.' || { echo "Error: domain '$$DOMAIN' looks invalid"; exit 1; }
+	install -m 644 deploy/fail2ban/filter.d/dansal-scanner.conf /etc/fail2ban/filter.d/dansal-scanner.conf
+	sed \
+	    -e "s/\[dansal-scanner\]/[dansal-scanner-$(INSTANCE)]/" \
+	    -e "s/events\.example\.com/$$DOMAIN/g" \
+	    deploy/fail2ban/jail.d/dansal-scanner.conf > /etc/fail2ban/jail.d/dansal-scanner-$(INSTANCE).conf
+	fail2ban-client -t >/dev/null || { echo "Error: fail2ban config test failed"; rm -f /etc/fail2ban/jail.d/dansal-scanner-$(INSTANCE).conf; exit 1; }
 	systemctl reload fail2ban 2>/dev/null || true
-	echo "Deployed /etc/fail2ban/jail.d/dansal-$(INSTANCE).conf and dansal-web-$(INSTANCE).conf"
+	echo "Deployed /etc/fail2ban/jail.d/dansal-$(INSTANCE).conf, dansal-web-$(INSTANCE).conf and dansal-scanner-$(INSTANCE).conf"
 
 # Deploy logrotate config for one instance's nginx logs (#1481, compliance
 # G7): the per-domain access/error/feed log files deploy-nginx creates

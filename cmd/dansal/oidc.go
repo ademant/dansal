@@ -797,7 +797,7 @@ func oidcLoginExisting(w http.ResponseWriter, r *http.Request, issuer, subject s
 		writeError(w, "Account disabled", http.StatusForbidden)
 		return
 	}
-	issueSessionResponse(w, r, http.StatusOK, userID, email, role, func() {
+	issueSessionResponse(w, r, http.StatusOK, userID, email, role, loginMethodOIDC, func() {
 		writeError(w, "Internal server error", http.StatusInternalServerError)
 	})
 }
@@ -863,7 +863,7 @@ func oidcRedeemInvite(w http.ResponseWriter, r *http.Request, inviteToken, issue
 
 	logging.Infof("oidc: new user id=%d (role=%s) registered via invite id=%d, issuer=%s", userID, invite.Role, invite.ID, issuer)
 
-	issueSessionResponse(w, r, http.StatusCreated, int(userID), "", invite.Role, func() {
+	issueSessionResponse(w, r, http.StatusCreated, int(userID), "", invite.Role, loginMethodOIDC, func() {
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]any{"status": "created"})
 	})

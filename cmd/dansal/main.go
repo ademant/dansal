@@ -3018,6 +3018,21 @@ func migrateDB() {
 			db.Exec("ALTER TABLE pending_registrations ADD COLUMN lang TEXT NOT NULL DEFAULT ''")
 		}
 	}
+	// #1888: how a session was started (password, magic, passkey, oidc,
+	// cert), so a recent non-password login may set a new password without
+	// the old one. Empty for sessions from before this column.
+	if !applied(54) {
+		db.Exec("ALTER TABLE tokens ADD COLUMN login_method TEXT NOT NULL DEFAULT ''")
+		mark(54)
+	}
+	// Safety net: ensure login_method exists even if migration 54 was pre-marked.
+	{
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('tokens') WHERE name='login_method'").Scan(&n)
+		if n == 0 {
+			db.Exec("ALTER TABLE tokens ADD COLUMN login_method TEXT NOT NULL DEFAULT ''")
+		}
+	}
 	// Safety net: ensure the window columns exist even if migration 50 was pre-marked.
 	for col, def := range map[string]string{"max_past_days": "1", "max_future_days": "365"} {
 		var n int
@@ -4038,6 +4053,7 @@ func createTables() error {
 		fingerprint TEXT,
 		last_seen_at INTEGER,
 		ip_pinned INTEGER NOT NULL DEFAULT 0,
+		login_method TEXT NOT NULL DEFAULT '',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);

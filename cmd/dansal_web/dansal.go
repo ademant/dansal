@@ -3324,6 +3324,21 @@ type SessionInfo struct {
 	LastSeenAt  string `json:"last_seen_at"`
 	ExpiresAt   string `json:"expires_at"`
 	Current     bool   `json:"current"`
+	LoginMethod string `json:"login_method,omitempty"`
+	// PasswordChangeWithoutOld (#1888): set on the current session when it
+	// was started by a recent non-password login.
+	PasswordChangeWithoutOld bool `json:"password_change_without_old,omitempty"`
+}
+
+// passwordChangeWithoutOld reports whether the current session among
+// sessions may set a new password without the old one (#1888).
+func passwordChangeWithoutOld(sessions []SessionInfo) bool {
+	for _, s := range sessions {
+		if s.Current {
+			return s.PasswordChangeWithoutOld
+		}
+	}
+	return false
 }
 
 func (c *DansalClient) GetSessions(ctx context.Context, token string) ([]SessionInfo, error) {
@@ -3856,8 +3871,11 @@ func (c *DansalClient) DeletePublisher(ctx context.Context, publisherID int, tok
 	return c.do(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/publishers/%d", publisherID), token, nil, nil, http.StatusNoContent)
 }
 
-func (c *DansalClient) ChangePassword(ctx context.Context, oldPassword, newPassword, token string) error {
-	body, _ := json.Marshal(map[string]string{"old_password": oldPassword, "new_password": newPassword})
+// ChangePassword sets the caller's password. The change is authorised by
+// oldPassword, or totpCode, or (neither given) a recent non-password login of
+// the session (#1888). lang is the language of the notification e-mail.
+func (c *DansalClient) ChangePassword(ctx context.Context, oldPassword, newPassword, totpCode, lang, token string) error {
+	body, _ := json.Marshal(map[string]string{"old_password": oldPassword, "new_password": newPassword, "totp_code": totpCode, "lang": lang})
 	return c.do(ctx, http.MethodPost, "/api/v1/me/password", token, body, nil, http.StatusNoContent)
 }
 

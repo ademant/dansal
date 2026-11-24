@@ -14,6 +14,8 @@ de:
   subject_rejected: "Registrierung nicht genehmigt"
   rejected: "Deine Registrierung wurde nicht genehmigt.\n\nAlle eingereichten Daten wurden gelöscht. Du kannst dich jederzeit mit derselben E-Mail-Adresse erneut registrieren."
   rejected_reason: "Deine Registrierung wurde nicht genehmigt.\n\nGrund: %s\n\nAlle eingereichten Daten wurden gelöscht. Du kannst dich jederzeit mit derselben E-Mail-Adresse erneut registrieren."
+  subject_password_changed: "Dein Passwort wurde geändert"
+  password_changed: "Das Passwort deines Kontos in diesem Veranstaltungskalender wurde gerade geändert oder entfernt.\n\nWenn du das selbst warst, musst du nichts tun. Wenn nicht, melde dich per E-Mail-Link an, setze ein neues Passwort und beende in den Einstellungen alle anderen Sitzungen."
 en:
   subject_verify: "Confirm your registration"
   verify: "You requested an account on this event calendar. Please confirm your email address:\n\n%s\n\nThis link expires in 72 hours. If you did not request this, you can ignore this email."
@@ -24,6 +26,8 @@ en:
   subject_rejected: "Registration not approved"
   rejected: "Your registration request was not approved.\n\nAll submitted data has been deleted. You are welcome to register again at any time using the same email address."
   rejected_reason: "Your registration request was not approved.\n\nReason: %s\n\nAll submitted data has been deleted. You are welcome to register again at any time using the same email address."
+  subject_password_changed: "Your password was changed"
+  password_changed: "The password of your account on this event calendar was just changed or removed.\n\nIf this was you, there is nothing to do. If not, sign in with an e-mail link, set a new password and end all other sessions in your settings."
 br:
   subject_verify: "Kadarnait ho enrolladenn"
   verify: "Goulennet ho peus ur gont en deiziadur-mañ. Kadarnait ho chomlec'h postel, mar plij:\n\n%s\n\nEont a ra al liamm-mañ e-pad 72 eur. Ma n'ho peus ket goulennet, gallout a rit dilezel ar postel-mañ."
@@ -34,6 +38,8 @@ br:
   subject_rejected: "Enrolladenn disaprouet"
   rejected: "Ne oa ket aprouet ho ceulad enrollañ.\n\nKement a oa roet a zo bet diverket. Degemer a reer ac'hanoc'h en-dro, a-viskoazh, gant ar memes chomlec'h postel."
   rejected_reason: "Ne oa ket aprouet ho ceulad enrollañ.\n\nAbeg: %s\n\nKement a oa roet a zo bet diverket. Degemer a reer ac'hanoc'h en-dro, a-viskoazh, gant ar memes chomlec'h postel."
+  subject_password_changed: "Cheñchet eo bet ho ker-tremen"
+  password_changed: "Cheñchet pe lamet eo bet ger-tremen ho kont en deiziadur-mañ.\n\nMa'z oa c'hwi, n'eus netra d'ober. Ma ne oa ket, kevreit gant ul liamm postel, lakait ur ger-tremen nevez ha serrit an holl dalc'hoù all en hoc'h arventennoù."
 ca:
   subject_verify: "Confirma el teu registre"
   verify: "Has sol·licitat un compte en aquest calendari d'esdeveniments. Confirma la teva adreça de correu electrònic:\n\n%s\n\nAquest enllaç caduca en 72 hores. Si no ho has sol·licitat, pots ignorar aquest correu."
@@ -44,6 +50,8 @@ ca:
   subject_rejected: "Registre no aprovat"
   rejected: "La teva sol·licitud de registre no ha estat aprovada.\n\nTotes les dades enviades s'han eliminat. Pots tornar a registrar-te en qualsevol moment amb la mateixa adreça de correu electrònic."
   rejected_reason: "La teva sol·licitud de registre no ha estat aprovada.\n\nMotiu: %s\n\nTotes les dades enviades s'han eliminat. Pots tornar a registrar-te en qualsevol moment amb la mateixa adreça de correu electrònic."
+  subject_password_changed: "S'ha canviat la teva contrasenya"
+  password_changed: "La contrasenya del teu compte en aquest calendari d'esdeveniments s'acaba de canviar o eliminar.\n\nSi has estat tu, no cal fer res. Si no, inicia sessió amb un enllaç per correu electrònic, estableix una contrasenya nova i tanca totes les altres sessions a la configuració."
 cs:
   subject_verify: "Potvrďte svou registraci"
   verify: "Požádali jste o účet v tomto kalendáři akcí. Potvrďte prosím svou e-mailovou adresu:\n\n%s\n\nTento odkaz vyprší za 72 hodin. Pokud jste o účet nežádali, můžete tento e-mail ignorovat."
@@ -54,6 +62,8 @@ cs:
   subject_rejected: "Registrace nebyla schválena"
   rejected: "Vaše žádost o registraci nebyla schválena.\n\nVšechna odeslaná data byla smazána. Můžete se kdykoli znovu zaregistrovat se stejnou e-mailovou adresou."
   rejected_reason: "Vaše žádost o registraci nebyla schválena.\n\nDůvod: %s\n\nVšechna odeslaná data byla smazána. Můžete se kdykoli znovu zaregistrovat se stejnou e-mailovou adresou."
+  subject_password_changed: "Vaše heslo bylo změněno"
+  password_changed: "Heslo vašeho účtu v tomto kalendáři akcí bylo právě změněno nebo odstraněno.\n\nPokud jste to byli vy, nemusíte nic dělat. Pokud ne, přihlaste se pomocí odkazu z e-mailu, nastavte nové heslo a v nastavení ukončete všechny ostatní relace."
 es:
   subject_verify: "Confirma tu registro"
   verify: "Has solicitado una cuenta en este calendario de eventos. Confirma tu dirección de correo electrónico:\n\n%s\n\nEste enlace caduca en 72 horas. Si no lo has solicitado, puedes ignorar este correo."
@@ -64,6 +74,8 @@ es:
   subject_rejected: "Registro no aprobado"
   rejected: "Tu solicitud de registro no ha sido aprobada.\n\nTodos los datos enviados se han eliminado. Puedes volver a registrarte en cualquier momento con la misma dirección de correo electrónico."
   rejected_reason: "Tu solicitud de registro no ha sido aprobada.\n\nMotivo: %s\n\nTodos los datos enviados se han eliminado. Puedes volver a registrarte en cualquier momento con la misma dirección de correo electrónico."
+  subject_password_changed: "Se ha cambiado tu contraseña"
+  password_changed: "La contraseña de tu cuenta en este calendario de eventos se acaba de cambiar o eliminar.\n\nSi has sido tú, no tienes que hacer nada. Si no, inicia sesión con un enlace por correo electrónico, establece una contraseña nueva y cierra todas las demás sesiones en la configuración."
 fr:
   subject_verify: "Confirmez votre inscription"
   verify: "Vous avez demandé un compte sur ce calendrier d'événements. Veuillez confirmer votre adresse e-mail :\n\n%s\n\nCe lien expire dans 72 heures. Si vous n'avez pas fait cette demande, vous pouvez ignorer ce message."
@@ -74,6 +86,8 @@ fr:
   subject_rejected: "Inscription non approuvée"
   rejected: "Votre demande d'inscription n'a pas été approuvée.\n\nToutes les données transmises ont été supprimées. Vous pouvez vous réinscrire à tout moment avec la même adresse e-mail."
   rejected_reason: "Votre demande d'inscription n'a pas été approuvée.\n\nMotif : %s\n\nToutes les données transmises ont été supprimées. Vous pouvez vous réinscrire à tout moment avec la même adresse e-mail."
+  subject_password_changed: "Votre mot de passe a été modifié"
+  password_changed: "Le mot de passe de votre compte sur ce calendrier d'événements vient d'être modifié ou supprimé.\n\nSi c'était vous, vous n'avez rien à faire. Sinon, connectez-vous avec un lien par e-mail, définissez un nouveau mot de passe et fermez toutes les autres sessions dans vos paramètres."
 it:
   subject_verify: "Conferma la tua registrazione"
   verify: "Hai richiesto un account su questo calendario degli eventi. Conferma il tuo indirizzo e-mail:\n\n%s\n\nIl link scade tra 72 ore. Se non l'hai richiesto, puoi ignorare questa e-mail."
@@ -84,6 +98,8 @@ it:
   subject_rejected: "Registrazione non approvata"
   rejected: "La tua richiesta di registrazione non è stata approvata.\n\nTutti i dati inviati sono stati eliminati. Puoi registrarti di nuovo in qualsiasi momento con lo stesso indirizzo e-mail."
   rejected_reason: "La tua richiesta di registrazione non è stata approvata.\n\nMotivo: %s\n\nTutti i dati inviati sono stati eliminati. Puoi registrarti di nuovo in qualsiasi momento con lo stesso indirizzo e-mail."
+  subject_password_changed: "La tua password è stata modificata"
+  password_changed: "La password del tuo account su questo calendario di eventi è stata appena modificata o rimossa.\n\nSe sei stato tu, non devi fare nulla. Altrimenti accedi con un link via e-mail, imposta una nuova password e chiudi tutte le altre sessioni nelle impostazioni."
 nl:
   subject_verify: "Bevestig je registratie"
   verify: "Je hebt een account aangevraagd op deze evenementenkalender. Bevestig je e-mailadres:\n\n%s\n\nDe link verloopt over 72 uur. Als jij dit niet hebt aangevraagd, kun je deze e-mail negeren."
@@ -94,6 +110,8 @@ nl:
   subject_rejected: "Registratie niet goedgekeurd"
   rejected: "Je registratieaanvraag is niet goedgekeurd.\n\nAlle ingediende gegevens zijn verwijderd. Je kunt je altijd opnieuw registreren met hetzelfde e-mailadres."
   rejected_reason: "Je registratieaanvraag is niet goedgekeurd.\n\nReden: %s\n\nAlle ingediende gegevens zijn verwijderd. Je kunt je altijd opnieuw registreren met hetzelfde e-mailadres."
+  subject_password_changed: "Je wachtwoord is gewijzigd"
+  password_changed: "Het wachtwoord van je account op deze evenementenkalender is zojuist gewijzigd of verwijderd.\n\nAls jij dit was, hoef je niets te doen. Zo niet, log dan in met een e-maillink, stel een nieuw wachtwoord in en beëindig alle andere sessies in je instellingen."
 pl:
   subject_verify: "Potwierdź swoją rejestrację"
   verify: "Zażądano konta w tym kalendarzu wydarzeń. Potwierdź swój adres e-mail:\n\n%s\n\nTen link wygasa za 72 godziny. Jeśli nie zażądano tego przez Ciebie, możesz zignorować tę wiadomość."
@@ -104,6 +122,8 @@ pl:
   subject_rejected: "Rejestracja nie została zatwierdzona"
   rejected: "Twoje zgłoszenie rejestracyjne nie zostało zatwierdzone.\n\nWszystkie przesłane dane zostały usunięte. Możesz zarejestrować się ponownie w dowolnym momencie, używając tego samego adresu e-mail."
   rejected_reason: "Twoje zgłoszenie rejestracyjne nie zostało zatwierdzone.\n\nPowód: %s\n\nWszystkie przesłane dane zostały usunięte. Możesz zarejestrować się ponownie w dowolnym momencie, używając tego samego adresu e-mail."
+  subject_password_changed: "Twoje hasło zostało zmienione"
+  password_changed: "Hasło Twojego konta w tym kalendarzu wydarzeń zostało właśnie zmienione lub usunięte.\n\nJeśli to Ty, nie musisz nic robić. Jeśli nie, zaloguj się przez link e-mail, ustaw nowe hasło i zakończ wszystkie inne sesje w ustawieniach."
 pt:
   subject_verify: "Confirme o seu registo"
   verify: "Pediu uma conta neste calendário de eventos. Confirme o seu endereço de e-mail:\n\n%s\n\nEsta ligação expira em 72 horas. Se não fez este pedido, pode ignorar este e-mail."
@@ -114,6 +134,8 @@ pt:
   subject_rejected: "Registo não aprovado"
   rejected: "O seu pedido de registo não foi aprovado.\n\nTodos os dados enviados foram eliminados. Pode voltar a registar-se a qualquer momento com o mesmo endereço de e-mail."
   rejected_reason: "O seu pedido de registo não foi aprovado.\n\nMotivo: %s\n\nTodos os dados enviados foram eliminados. Pode voltar a registar-se a qualquer momento com o mesmo endereço de e-mail."
+  subject_password_changed: "A tua palavra-passe foi alterada"
+  password_changed: "A palavra-passe da tua conta neste calendário de eventos acabou de ser alterada ou removida.\n\nSe foste tu, não tens de fazer nada. Caso contrário, inicia sessão com um link por e-mail, define uma nova palavra-passe e termina todas as outras sessões nas definições."
 uk:
   subject_verify: "Підтвердіть вашу реєстрацію"
   verify: "Ви запросили обліковий запис у цьому календарі подій. Будь ласка, підтвердіть свою адресу електронної пошти:\n\n%s\n\nЦе посилання дійсне 72 години. Якщо ви цього не запитували, можете проігнорувати цей лист."
@@ -124,3 +146,5 @@ uk:
   subject_rejected: "Реєстрацію не схвалено"
   rejected: "Вашу заявку на реєстрацію не схвалено.\n\nУсі надіслані дані видалено. Ви можете зареєструватися знову в будь-який час з тією самою адресою електронної пошти."
   rejected_reason: "Вашу заявку на реєстрацію не схвалено.\n\nПричина: %s\n\nУсі надіслані дані видалено. Ви можете зареєструватися знову в будь-який час з тією самою адресою електронної пошти."
+  subject_password_changed: "Ваш пароль змінено"
+  password_changed: "Пароль вашого облікового запису в цьому календарі подій щойно змінено або видалено.\n\nЯкщо це були ви, нічого робити не потрібно. Якщо ні, увійдіть за посиланням з e-mail, встановіть новий пароль і завершіть усі інші сеанси в налаштуваннях."

@@ -44,11 +44,18 @@
       <input type="text" name="phone2" class="hp-field" tabindex="-1" autocomplete="off">
       <label for="identifier">{{$.Strings.T "login_identifier"}}</label>
       <input id="identifier" type="text" name="email" value="{{.Email}}"
-             inputmode="email" autocomplete="username"{{if .ErrorKey}} autofocus{{end}}>
+             inputmode="email" autocomplete="username"{{if .ErrorKey}} autofocus{{end}}
+             data-on="input" data-fn="updateMagicBtn" data-args="[]">
       <label for="password">{{$.Strings.T "login_password"}}</label>
       <input id="password" type="password" name="password"
              autocomplete="current-password" data-on="input" data-fn="updateLoginBtn" data-args="[]">
-      <button type="submit" id="btn-login" class="btn-login" disabled>{{$.Strings.T "login_submit"}}</button>
+      {{/* #1887: the e-mail login link sits next to the password button, for
+           users who forgot their password. Enabled once the field holds an
+           e-mail address (updateMagicBtn). */}}
+      <div class="pw-actions">
+        <button type="submit" id="btn-login" class="btn-login" disabled>{{$.Strings.T "login_submit"}}</button>
+        <button type="button" id="btn-magic-email" class="btn-login btn-magic-email" data-fn="submitMagic" data-args='["email"]' disabled>{{$.Strings.T "login_magic_email_btn"}}</button>
+      </div>
     </form>
 
     <div class="passkey-or"><span>{{$.Strings.T "login_or"}}</span></div>
@@ -58,7 +65,6 @@
     <div class="alt-btns">
       <button type="button" id="btn-passkey-instant" data-fn="passkeyLoginDiscoverable" data-args="[]" class="btn-alt btn-passkey-instant-alt">{{$.Strings.T "login_passkey_instant"}}</button>
       <button type="button" data-fn="doPasskeyFromShared" data-args="[]" class="btn-alt btn-passkey-alt">{{$.Strings.T "login_passkey_submit"}}</button>
-      <button type="button" data-fn="submitMagic" data-args='["email"]' class="btn-alt">{{$.Strings.T "login_magic_submit"}}</button>
       <button type="button" data-fn="submitMagic" data-args='["telegram"]' class="btn-alt btn-telegram">{{$.Strings.T "login_magic_submit_telegram"}}</button>
       <button type="button" data-fn="submitMagic" data-args='["matrix"]' class="btn-alt btn-matrix">{{$.Strings.T "login_magic_submit_matrix"}}</button>
     </div>
@@ -204,6 +210,18 @@
     if(pwd && btn && pwd.value) btn.disabled = false;
   });
 
+  // #1887: a plain address check (something@domain.tld); the server decides
+  // whether an account with that address exists.
+  var emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  window.updateMagicBtn = function() {
+    var idEl = document.getElementById('identifier');
+    var btn = document.getElementById('btn-magic-email');
+    if(idEl && btn) btn.disabled = !emailRx.test(idEl.value.trim());
+  };
+  // The field can already be filled (server-side value, the #email= fragment
+  // above, browser autofill before this script ran).
+  window.updateMagicBtn();
+
   window.submitMagic = function(channel) {
     var idEl = document.getElementById('identifier');
     document.getElementById('magic-identifier').value = idEl ? idEl.value.trim() : '';
@@ -225,6 +243,10 @@
 .btn-passkey-instant-alt{background:#0a7c4a!important;color:#fff!important;border-color:#065e37!important;font-weight:600}
 .btn-passkey-instant-alt:hover{background:#065e37!important}
 .btn-login:disabled{opacity:.45;cursor:default}
+.pw-actions{display:flex;gap:.4rem;flex-wrap:wrap}
+.pw-actions button{flex:1 1 auto}
+.login-form .btn-magic-email{background:var(--bg-subtle);color:var(--fg);border:1px solid var(--border-mid)}
+.login-form .btn-magic-email:hover:not(:disabled){background:var(--bg-hover)}
 .passkey-or{display:flex;align-items:center;gap:.5rem;color:var(--fg-hint);font-size:.8rem;margin:.1rem 0}
 .passkey-or::before,.passkey-or::after{content:'';flex:1;border-top:1px solid var(--border)}
 .login-section-title{font-weight:700;font-size:.95rem;color:var(--fg-2)}

@@ -16,7 +16,7 @@ require (
 	github.com/prometheus/client_golang v1.25.0
 	github.com/srwiley/oksvg v0.0.0-20221011165216-be6e8873101c
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef
-	github.com/tdewolff/minify/v2 v2.24.25
+	github.com/tdewolff/minify/v2 v2.25.0
 	github.com/temoto/robotstxt v1.1.2
 	github.com/yuin/goldmark v1.8.7
 	golang.org/x/crypto v0.59.0
@@ -49,7 +49,7 @@ require (
 	github.com/prometheus/client_model v0.6.3 // indirect
 	github.com/prometheus/common v0.72.0 // indirect
 	github.com/prometheus/procfs v0.22.0 // indirect
-	github.com/tdewolff/parse/v2 v2.8.20 // indirect
+	github.com/tdewolff/parse/v2 v2.25.0 // indirect
 	github.com/tetratelabs/wazero v1.12.0 // indirect
 	github.com/tinylib/msgp v1.6.4 // indirect
 	github.com/x448/float16 v0.8.4 // indirect

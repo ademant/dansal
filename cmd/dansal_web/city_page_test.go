@@ -154,3 +154,58 @@ func TestCityMapTabEmptyWithoutPoints(t *testing.T) {
 		t.Error("map tab must not be empty when GeoJSON has points")
 	}
 }
+
+// TestCityPageIntro covers #1891: the "Today" and "This weekend" sections,
+// the intro lines and the organisation links render; an empty section is
+// left out.
+func TestCityPageIntro(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.Exec(`CREATE TABLE site_settings (key TEXT PRIMARY KEY, value TEXT)`)
+	siteCfg = newSiteSettingsCache(db)
+
+	tmpls := loadTemplates()
+	i18n := loadI18n("")
+	cfg := &Config{Domain: "example.test"}
+	req := httptest.NewRequest(http.MethodGet, "/city/koeln", nil)
+	req.Header.Set("Accept-Language", "en")
+
+	ev := Event{ID: 5, Title: "Saturday Ball", StartTime: "2026-11-28T19:00:00Z", Location: &Location{ID: 9, Location: "Bürgerhaus", Town: "Köln"}}
+	data := CityData{
+		City:   City{Town: "Köln", Slug: "koeln"},
+		Events: []Event{ev},
+		Intro: CityIntro{
+			Weekend:    []Event{ev},
+			SoonCount:  1,
+			Orgs:       []cityOrgRef{{Name: "Folkclub Köln", Slug: "folkclub-koeln"}},
+			Venues:     []string{"Bürgerhaus"},
+			AgendaURL:  "/agenda?location=9",
+			HasContent: true,
+		},
+	}
+	rec := httptest.NewRecorder()
+	renderTemplate(rec, tmpls.city, tmplData(req, cfg, i18n, "Balfolk in Köln", data))
+	html, _ := io.ReadAll(rec.Body)
+	body := string(html)
+	if strings.Contains(body, "template error") {
+		t.Fatalf("template error: %s", body[max(0, len(body)-400):])
+	}
+	for _, want := range []string{
+		"This weekend",
+		"Events in the next three months: 1",
+		`<a href="/org/folkclub-koeln">Folkclub Köln</a>`,
+		"Bürgerhaus",
+		`href="/agenda?location=9"`,
+		"Agenda for Köln",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("city page missing %q", want)
+		}
+	}
+	if strings.Contains(body, `<h2 class="city-soon-title">Today</h2>`) {
+		t.Error("empty Today section must be left out")
+	}
+}

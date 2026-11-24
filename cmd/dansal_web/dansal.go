@@ -575,8 +575,9 @@ type City struct {
 	NextEventStart string   `json:"next_event_start,omitempty"`
 	// OrgCount and SingleOrgID mirror the API (#1588): SingleOrgID is set only
 	// when exactly one organisation has a location in the town.
-	OrgCount    int  `json:"org_count"`
-	SingleOrgID *int `json:"single_org_id,omitempty"`
+	OrgCount    int   `json:"org_count"`
+	SingleOrgID *int  `json:"single_org_id,omitempty"`
+	OrgIDs      []int `json:"org_ids,omitempty"` // #1891
 }
 
 type TimetableEntry struct {

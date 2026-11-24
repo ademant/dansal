@@ -54,4 +54,11 @@ func TestGetCitiesOrganisationCounts(t *testing.T) {
 	if koeln.OrgCount != 2 || koeln.SingleOrgID != nil {
 		t.Errorf("Köln: org_count=%d single_org_id=%v, want 2 and none", koeln.OrgCount, koeln.SingleOrgID)
 	}
+	// #1891: the organisation IDs, ascending, once each.
+	if len(koeln.OrgIDs) != 2 || koeln.OrgIDs[0] != 1 || koeln.OrgIDs[1] != 2 {
+		t.Errorf("Köln org_ids = %v, want [1 2]", koeln.OrgIDs)
+	}
+	if len(bonn.OrgIDs) != 1 || bonn.OrgIDs[0] != 1 {
+		t.Errorf("Bonn org_ids = %v, want [1]", bonn.OrgIDs)
+	}
 }

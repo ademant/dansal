@@ -38,6 +38,35 @@
 <img class="city-banner" src="{{.Banner}}" alt="" loading="eager">
 <h1>{{$.Strings.T "city_title_prefix"}}{{.City.Town}}</h1>
 
+{{/* #1891: today / this weekend, then a short intro generated from the
+     city's events, organisations and venues. Empty sections are left out. */}}
+{{with .Intro}}
+{{if .Today}}
+<section class="city-soon">
+  <h2 class="city-soon-title">{{$.Strings.T "city_today"}}</h2>
+  <ul class="city-event-list">
+    {{range .Today}}{{template "city-event-item" (dict "Event" . "LangCode" $.LangCode "DateFormat" $.DateFormat)}}{{end}}
+  </ul>
+</section>
+{{end}}
+{{if .Weekend}}
+<section class="city-soon">
+  <h2 class="city-soon-title">{{$.Strings.T "city_weekend"}}</h2>
+  <ul class="city-event-list">
+    {{range .Weekend}}{{template "city-event-item" (dict "Event" . "LangCode" $.LangCode "DateFormat" $.DateFormat)}}{{end}}
+  </ul>
+</section>
+{{end}}
+{{if .HasContent}}
+<div class="city-intro">
+  {{if .SoonCount}}<p>{{$.Strings.TF "city_intro_events" .SoonCount}}</p>{{end}}
+  {{if .Orgs}}<p><strong>{{$.Strings.T "city_intro_orgs"}}</strong> {{range $i, $o := .Orgs}}{{if $i}}, {{end}}<a href="/org/{{$o.Slug}}">{{$o.Name}}</a>{{end}}</p>{{end}}
+  {{if .Venues}}<p><strong>{{$.Strings.T "city_intro_venues"}}</strong> {{range $i, $v := .Venues}}{{if $i}}, {{end}}{{$v}}{{end}}</p>{{end}}
+  {{with .AgendaURL}}<p><a href="{{.}}">{{$.Strings.TF "city_intro_agenda" $.Data.City.Town}}</a></p>{{end}}
+</div>
+{{end}}
+{{end}}
+
 <script nonce="{{$.Nonce}}" defer src="/static/leaflet/leaflet.js"></script>
 
 {{/* #1675: phone tab bar. Map is the default tab, and the city name above
@@ -182,6 +211,11 @@
 .empty-msg a { color: var(--link); font-weight: 600; }
 .loc-past-events { margin-top: 1.25rem; }
 .loc-events-total { color: var(--fg-faint); font-size: .85rem; margin-top: .5rem; }
+.city-soon { margin: 0 0 1rem; }
+.city-soon-title { font-size: 1.1rem; margin: 0 0 .25rem; }
+.city-intro { font-size: .92rem; color: var(--fg-dim); margin: 0 0 1rem; }
+.city-intro p { margin: .2rem 0; }
+.city-intro a { color: var(--link); }
 </style>
 {{end}}
 {{end}}

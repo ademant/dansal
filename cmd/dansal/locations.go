@@ -1738,6 +1738,9 @@ type CityInfo struct {
 	// the town (#1588). SingleOrgID is set only when there is exactly one.
 	OrgCount    int  `json:"org_count"`
 	SingleOrgID *int `json:"single_org_id,omitempty"`
+	// OrgIDs lists those organisations (#1891), ascending, so the city page
+	// can name them in its description and intro text.
+	OrgIDs []int `json:"org_ids,omitempty"`
 }
 
 // townSlug converts a city name to a URL-safe slug, shared with the web
@@ -1810,7 +1813,8 @@ func getCities(w http.ResponseWriter, r *http.Request) {
 	// being weighted by the number of organisations.
 	if len(cities) > 0 {
 		orgRows, err := db.Query(`
-			SELECT l.town, COUNT(DISTINCT lo.organization_id), MIN(lo.organization_id)
+			SELECT l.town, COUNT(DISTINCT lo.organization_id), MIN(lo.organization_id),
+			       GROUP_CONCAT(DISTINCT lo.organization_id)
 			FROM locations l
 			JOIN location_organizations lo ON lo.location_id = l.id
 			WHERE l.town IS NOT NULL AND l.town != ''
@@ -1822,14 +1826,15 @@ func getCities(w http.ResponseWriter, r *http.Request) {
 		}
 		defer orgRows.Close()
 		for orgRows.Next() {
-			var town string
+			var town, idList string
 			var n, only int
-			if err := orgRows.Scan(&town, &n, &only); err != nil {
+			if err := orgRows.Scan(&town, &n, &only, &idList); err != nil {
 				writeInternalError(w, err)
 				return
 			}
 			if c, ok := cityByTown[town]; ok {
 				c.OrgCount = n
+				c.OrgIDs = parseCSVIDs(idList)
 				if n == 1 {
 					id := only
 					c.SingleOrgID = &id
@@ -1878,4 +1883,17 @@ func getCities(w http.ResponseWriter, r *http.Request) {
 		cities = []CityInfo{}
 	}
 	writeJSON(w, cities)
+}
+
+// parseCSVIDs turns a GROUP_CONCAT of integer IDs ("3,1,7") into a sorted
+// slice. Malformed entries are skipped.
+func parseCSVIDs(s string) []int {
+	var ids []int
+	for _, part := range strings.Split(s, ",") {
+		if id, err := strconv.Atoi(strings.TrimSpace(part)); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	slices.Sort(ids)
+	return ids
 }

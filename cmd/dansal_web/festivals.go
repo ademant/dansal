@@ -147,9 +147,11 @@ func festivalsPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 		mapEvents = append(mapEvents, yearEvents...)
 		mapEvents = append(mapEvents, folded...)
 
-		title := i18n.T(r, "festivals_title")
 		lang := i18n.detectLang(r)
 		strs := i18n.Strings(lang)
+		// #1892: the page title names balfolk and the year shown; the <h1>
+		// keeps festivals_title.
+		title := strs.TF("festivals_page_title", year)
 		metaDesc := strs.TF("meta_desc_festivals", len(yearEvents), year, year+1)
 		td := tmplData(r, cfg, i18n, title, FestivalsData{})
 		td.MetaDescription = metaDesc

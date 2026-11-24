@@ -1077,7 +1077,9 @@ func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClien
 				return
 			}
 		}
-		title := i18n.T(r, "events_title")
+		// #1890: the home page title leads with "Balfolk"; the <h1> keeps
+		// events_title.
+		title := i18n.T(r, "home_title")
 		// Count unique towns from loaded events for the meta description (#1720).
 		towns := make(map[string]bool)
 		for _, ev := range events {

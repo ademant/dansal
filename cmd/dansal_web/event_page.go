@@ -287,10 +287,13 @@ func eventCanManage(su *SessionUser, event Event, members []OrgMember) bool {
 	return false
 }
 
-// eventPageTitle builds the "Title – Town, Date" page title.
+// eventPageTitle builds the "Title – Town, Date" page title. The town is
+// left out when the title already names it (#1892), e.g. "Folkfest
+// Hohnstein" in Hohnstein.
 func eventPageTitle(event Event, lang string) string {
 	var suffix []string
-	if event.Location != nil && event.Location.Town != "" {
+	if event.Location != nil && event.Location.Town != "" &&
+		!strings.Contains(strings.ToLower(event.Title), strings.ToLower(event.Location.Town)) {
 		suffix = append(suffix, event.Location.Town)
 	}
 	if d := formatDateStr(lang, siteCfg.DateFormat(), event.StartTime); d != event.StartTime {

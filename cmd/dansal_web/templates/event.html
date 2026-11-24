@@ -133,7 +133,7 @@
   {{else}}
   <a href="/">{{.Strings.T "nav_events"}}</a>
   <span class="breadcrumb-sep" aria-hidden="true">/</span>
-  <span>{{.Data.Event.Title}}{{with formatDate .LangCode $.DateFormat .Data.Event.StartTime}} · {{.}}{{end}}{{with .Data.Event.Location}}{{with .Town}} {{$.Strings.T "breadcrumb_in"}} {{.}}{{end}}{{end}}</span>
+  <span>{{.Data.Event.Title}}{{with formatDate .LangCode $.DateFormat .Data.Event.StartTime}} · {{.}}{{end}}{{with .Data.Event.Location}}{{if .Town}} {{$.Strings.T "breadcrumb_in"}} {{if .Latitude}}<a href="/city/{{townSlug .Town}}">{{.Town}}</a>{{else}}{{.Town}}{{end}}{{end}}{{end}}</span>
   {{end}}
 </nav>
 {{end}}
@@ -633,7 +633,8 @@
       {{if or .Address .Zipcode .Town}}
       <div class="evt-loc-addr">
         {{if .Address}}<span>{{.Address}}</span><br>{{end}}
-        {{if or .Zipcode .Town}}<span>{{.Zipcode}} {{.Town}}</span>{{end}}
+        {{/* #1891: the town links to its city page (one exists for every town with a geo-tagged venue). */}}
+        {{if or .Zipcode .Town}}<span>{{.Zipcode}} {{if and .Town .Latitude}}<a href="/city/{{townSlug .Town}}" class="evt-city-link">{{.Town}}</a>{{else}}{{.Town}}{{end}}</span>{{end}}
         {{if .DisplayCountry}}<br><span>{{.DisplayCountry}}</span>{{end}}
       </div>
       {{end}}

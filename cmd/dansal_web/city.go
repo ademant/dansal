@@ -160,6 +160,7 @@ type CityData struct {
 	PastEventsTotal int         // #1506: total past events ever held in this town (X-Total-Count)
 	NearbyHint      *NearbyHint // #1506: "no upcoming events here, but N within X km" fallback
 	Banner          string      // #1588: the single organisation's banner, else the site banner
+	Intro           CityIntro   // #1891: today / this weekend / generated intro
 }
 
 type cityGeoEvent struct {
@@ -308,6 +309,19 @@ func cityHubHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I
 		}
 
 		banner := cityBanner(r.Context(), client, city)
+
+		// #1891: the organisations of the city, by name, for the description
+		// and the intro. GetOrganizations is cached.
+		var orgs []cityOrgRef
+		if len(city.OrgIDs) > 0 {
+			if all, oErr := client.GetOrganizations(r.Context()); oErr == nil {
+				orgs = cityOrgs(city.OrgIDs, all)
+			}
+		}
+		now := time.Now()
+		upcoming := notEndedEvents(events, now)
+		intro := buildCityIntro(upcoming, orgs, now)
+
 		title := i18n.T(r, "city_title_prefix") + city.Town
 		td := tmplData(r, cfg, i18n, title, CityData{
 			City:            city,
@@ -318,10 +332,14 @@ func cityHubHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I
 			PastEventsTotal: pastTotal,
 			NearbyHint:      hint,
 			Banner:          banner,
+			Intro:           intro,
 		})
-		// #1588: the description counts the city's organisations and locations.
-		strs := i18n.Strings(i18n.detectLang(r))
-		td.MetaDescription = metaDesc(strs.TF("city_meta_desc", city.Town, city.OrgCount, city.LocationCount), metaDescMaxLen)
+		// #1891: the description names today's / this weekend's events or the
+		// next dates; without upcoming events it counts the city's
+		// organisations and locations (#1588).
+		lang := i18n.detectLang(r)
+		strs := i18n.Strings(lang)
+		td.MetaDescription = cityMetaDescription(strs, lang, siteCfg.DateFormat(), city, upcoming, intro.Today, intro.Weekend, orgs)
 		if strings.HasPrefix(banner, "/") {
 			td.OGImage = "https://" + cfg.Domain + banner
 		} else {

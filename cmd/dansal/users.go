@@ -703,22 +703,44 @@ func changeOwnPassword(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		OldPassword string `json:"old_password"`
 		NewPassword string `json:"new_password"`
+		// TOTPCode (#1888) authorises the change instead of the old password
+		// when the account has TOTP enabled.
+		TOTPCode string `json:"totp_code"`
+		// Lang is the language of the change notification e-mail.
+		Lang string `json:"lang"`
 	}
 	if !decodeJSONBody(w, r, &req) {
 		return
 	}
-	var existingHash string
-	db.QueryRow("SELECT COALESCE(password_hash,'') FROM users WHERE id=?", userID).Scan(&existingHash)
+	var existingHash, email string
+	db.QueryRow("SELECT COALESCE(password_hash,''), COALESCE(email,'') FROM users WHERE id=?", userID).Scan(&existingHash, &email)
 
+	// authorisedBy names what allowed the change, for the log (#1888).
+	authorisedBy := "first-password"
 	if existingHash != "" {
-		if req.OldPassword == "" {
-			writeError(w, "Current password is required", http.StatusBadRequest)
-			return
-		}
-		ok, _ := checkPassword(req.OldPassword, existingHash)
-		if !ok {
-			writeError(w, "Current password is incorrect", http.StatusUnauthorized)
-			return
+		switch {
+		case req.OldPassword != "":
+			ok, _ := checkPassword(req.OldPassword, existingHash)
+			if !ok {
+				writeError(w, "Current password is incorrect", http.StatusUnauthorized)
+				return
+			}
+			authorisedBy = "old-password"
+		case req.TOTPCode != "":
+			secret := getUserTOTPSecret(userID)
+			if secret == "" || !totpCheckAndMark(userID, secret, req.TOTPCode, time.Now()) {
+				writeError(w, "Invalid TOTP code", http.StatusUnauthorized)
+				return
+			}
+			authorisedBy = "totp"
+		default:
+			sessionID, _ := strconv.Atoi(r.Header.Get("X-Session-ID"))
+			method, ok := recentNonPasswordLogin(userID, sessionID)
+			if !ok {
+				writeError(w, "Current password is required", http.StatusBadRequest)
+				return
+			}
+			authorisedBy = "recent-" + method + "-login"
 		}
 	}
 
@@ -739,6 +761,8 @@ func changeOwnPassword(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Failed to update password", http.StatusInternalServerError)
 			return
 		}
+		logging.Infof("password: user %d removed their password (authorised by %s)", userID, authorisedBy)
+		notifyPasswordChanged(email, req.Lang, existingHash != "")
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -757,5 +781,58 @@ func changeOwnPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Failed to update password", http.StatusInternalServerError)
 		return
 	}
+	logging.Infof("password: user %d set a new password (authorised by %s)", userID, authorisedBy)
+	notifyPasswordChanged(email, req.Lang, existingHash != "")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// passwordResetWindow is how recent a non-password login must be for its
+// session to set a new password without the old one (#1888).
+const passwordResetWindow = 15 * time.Minute
+
+// recentNonPasswordLogin reports whether sessionID belongs to userID, was
+// started by a magic link, passkey or SSO login, and is at most
+// passwordResetWindow old. It returns the login method. A session started by
+// password (or one from before tokens.login_method existed) never qualifies:
+// its holder is expected to know the password. So does an API key, which
+// has no session ID.
+func recentNonPasswordLogin(userID, sessionID int) (string, bool) {
+	if sessionID == 0 {
+		return "", false
+	}
+	var method string
+	err := db.QueryRow(
+		`SELECT login_method FROM tokens
+		 WHERE id=? AND user_id=? AND login_method IN (?, ?, ?)
+		   AND created_at >= datetime('now', ?)
+		   AND expires_at > strftime('%s','now')`,
+		sessionID, userID, loginMethodMagic, loginMethodPasskey, loginMethodOIDC,
+		fmt.Sprintf("-%d seconds", int(passwordResetWindow.Seconds())),
+	).Scan(&method)
+	if err != nil {
+		return "", false
+	}
+	return method, true
+}
+
+// notifyPasswordChanged mails the account's address that its password was
+// changed (#1888), so an owner whose live session was misused learns of it.
+// Only a change or removal of an existing password is reported, not the
+// first one being set. Sent in a goroutine; errors are only logged.
+func notifyPasswordChanged(email, lang string, hadPassword bool) {
+	if email == "" || !hadPassword {
+		return
+	}
+	subject, body := emailMessage(registerLang(lang), "subject_password_changed", "password_changed")
+	// The SMTP config is captured here, not read in the goroutine (see
+	// sendEmailWithConfig).
+	if config == nil {
+		return
+	}
+	smtpCfg := config.SMTP
+	go func() {
+		if _, err := sendEmailWithConfig(smtpCfg, email, subject, body, false); err != nil {
+			logging.Errorf("password: send change notification: %v", err)
+		}
+	}()
 }

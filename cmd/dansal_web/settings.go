@@ -34,6 +34,9 @@ type SettingsData struct {
 	Linked           bool           // true right after a successful link
 	LinkError        bool
 	UnlinkError      bool
+	// PasswordWithoutOld (#1888): the session was started by a recent
+	// non-password login, so the password form omits the old password.
+	PasswordWithoutOld bool
 }
 
 // settingsThrottleCheck redirects to /settings when the client's IP is
@@ -82,6 +85,8 @@ func settingsPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			Linked:          flash.SettingsLinked,
 			LinkError:       flash.SettingsLinkError,
 			UnlinkError:     flash.SettingsUnlinkError,
+
+			PasswordWithoutOld: passwordChangeWithoutOld(sessions),
 		}))
 	}
 }
@@ -413,9 +418,12 @@ func settingsChangePasswordHandler(cfg *Config, tmpls *Templates, client *Dansal
 		token := getSessionToken(r)
 		oldPw := r.FormValue("old_password")
 		newPw := r.FormValue("new_password")
-		firstPassword := oldPw == "" // no old password field means first-time set
-		if err := client.ChangePassword(r.Context(), oldPw, newPw, token); err != nil {
-			u, _ := client.GetUser(r.Context(), su.ID, token)
+		totpCode := r.FormValue("totp_code")
+		// #1888: an empty old password no longer means a first-time set, so
+		// ask the API whether a password exists (for the TOTP nudge).
+		u, _ := client.GetUser(r.Context(), su.ID, token)
+		firstPassword := !u.HasPassword
+		if err := client.ChangePassword(r.Context(), oldPw, newPw, totpCode, i18n.detectLang(r), token); err != nil {
 			keys, _ := client.ListAPIKeys(r.Context(), token)
 			sessions, _ := client.GetSessions(r.Context(), token)
 			passkeys, _ := client.ListPasskeys(r.Context(), token)
@@ -434,6 +442,8 @@ func settingsChangePasswordHandler(cfg *Config, tmpls *Templates, client *Dansal
 				APIKeys:   keys,
 				Sessions:  sessions,
 				Passkeys:  passkeys,
+
+				PasswordWithoutOld: passwordChangeWithoutOld(sessions),
 			}))
 			return
 		}

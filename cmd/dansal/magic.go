@@ -281,7 +281,7 @@ func useMagicLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	clientIP := getClientIP(r)
-	sessionToken, sessionExpiry, err := createTokenInDB(user.ID, r.UserAgent(), clientIP, "")
+	sessionToken, sessionExpiry, err := createTokenInDB(user.ID, r.UserAgent(), clientIP, "", loginMethodMagic)
 	if err != nil {
 		logging.Errorf("magic: failed to create session for user %d: %v", user.ID, err)
 		writeError(w, "Failed to create session", http.StatusInternalServerError)

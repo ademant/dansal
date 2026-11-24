@@ -16,6 +16,11 @@ type Session struct {
 	LastSeenAt  string `json:"last_seen_at,omitempty"`
 	ExpiresAt   string `json:"expires_at"`
 	Current     bool   `json:"current"`
+	LoginMethod string `json:"login_method,omitempty"`
+	// PasswordChangeWithoutOld (#1888), current session only: it was started
+	// by a recent non-password login, so a new password may be set without
+	// the old one (see recentNonPasswordLogin).
+	PasswordChangeWithoutOld bool `json:"password_change_without_old,omitempty"`
 }
 
 // GET /api/v1/sessions — list active sessions for the authenticated user.
@@ -32,7 +37,8 @@ func getSessions(w http.ResponseWriter, r *http.Request) {
 		       CASE WHEN fingerprint IS NOT NULL AND fingerprint != '' THEN 1 ELSE 0 END,
 		       created_at,
 		       COALESCE(last_seen_at,''),
-		       expires_at
+		       expires_at,
+		       login_method
 		FROM tokens
 		WHERE user_id = ? AND expires_at > strftime('%s','now')
 		ORDER BY COALESCE(last_seen_at, created_at) DESC`, userID)
@@ -46,7 +52,7 @@ func getSessions(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var s Session
 		var hasFP int
-		if err := rows.Scan(&s.ID, &s.UserAgent, &s.IP, &hasFP, &s.CreatedAt, &s.LastSeenAt, &s.ExpiresAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.UserAgent, &s.IP, &hasFP, &s.CreatedAt, &s.LastSeenAt, &s.ExpiresAt, &s.LoginMethod); err != nil {
 			writeInternalError(w, err)
 			return
 		}
@@ -54,6 +60,9 @@ func getSessions(w http.ResponseWriter, r *http.Request) {
 		s.ExpiresAt = epochStrToRFC3339(s.ExpiresAt)
 		s.Fingerprint = hasFP == 1
 		s.Current = s.ID == currentSessionID
+		if s.Current {
+			_, s.PasswordChangeWithoutOld = recentNonPasswordLogin(userID, s.ID)
+		}
 		sessions = append(sessions, s)
 	}
 	json.NewEncoder(w).Encode(sessions)

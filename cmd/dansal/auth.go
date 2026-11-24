@@ -160,8 +160,20 @@ func resolveLoginUser(identifier string, requirePassword bool) (authUserRow, err
 	return u, nil
 }
 
+// Login methods stored in tokens.login_method (#1888): how the session was
+// started. Only the non-password ones let a recent session set a new
+// password without the old one (see recentNonPasswordLogin).
+const (
+	loginMethodPassword = "password"
+	loginMethodMagic    = "magic"
+	loginMethodPasskey  = "passkey"
+	loginMethodOIDC     = "oidc"
+	loginMethodCert     = "cert"
+)
+
 // createTokenInDB stores the token with session metadata in the database.
-func createTokenInDB(userID int, userAgent, ip, fingerprint string) (string, time.Time, error) {
+// method is one of the loginMethod* constants.
+func createTokenInDB(userID int, userAgent, ip, fingerprint, method string) (string, time.Time, error) {
 	token, err := generateToken(32)
 	if err != nil {
 		return "", time.Time{}, err
@@ -178,8 +190,8 @@ func createTokenInDB(userID int, userAgent, ip, fingerprint string) (string, tim
 		fpVal = fingerprint
 	}
 	_, err = db.Exec(
-		"INSERT INTO tokens (user_id, token, expires_at, user_agent, ip, fingerprint) VALUES (?, ?, ?, ?, ?, ?)",
-		userID, sha256Hex(token), expiresAt.Unix(), userAgent, ip, fpVal,
+		"INSERT INTO tokens (user_id, token, expires_at, user_agent, ip, fingerprint, login_method) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		userID, sha256Hex(token), expiresAt.Unix(), userAgent, ip, fpVal, method,
 	)
 	if err != nil {
 		return "", time.Time{}, err
@@ -424,7 +436,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate token / session
-	token, expiresAt, err := createTokenInDB(user.ID, r.UserAgent(), clientIP, req.Fingerprint)
+	token, expiresAt, err := createTokenInDB(user.ID, r.UserAgent(), clientIP, req.Fingerprint, loginMethodPassword)
 	if err != nil {
 		logging.Errorf("Error creating token: %v", err)
 		writeError(w, "Failed to create token", http.StatusInternalServerError)
@@ -476,7 +488,7 @@ func certLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, expiresAt, err := createTokenInDB(user.ID, r.UserAgent(), "cert", "")
+	token, expiresAt, err := createTokenInDB(user.ID, r.UserAgent(), "cert", "", loginMethodCert)
 	if err != nil {
 		writeError(w, "failed to create session", http.StatusInternalServerError)
 		return

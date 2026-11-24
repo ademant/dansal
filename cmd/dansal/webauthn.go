@@ -285,8 +285,8 @@ func webauthnInviteBegin(w http.ResponseWriter, r *http.Request) {
 // standard {token, expires_at, user_id, email, role} JSON response with the
 // given status code. On token-creation failure, onErr is called to write an
 // alternate response — each call site has its own fallback behavior.
-func issueSessionResponse(w http.ResponseWriter, r *http.Request, status int, userID int, email, role string, onErr func()) {
-	sessionToken, expiresAt, err := createTokenInDB(userID, r.UserAgent(), getClientIP(r), "")
+func issueSessionResponse(w http.ResponseWriter, r *http.Request, status int, userID int, email, role, method string, onErr func()) {
+	sessionToken, expiresAt, err := createTokenInDB(userID, r.UserAgent(), getClientIP(r), "", method)
 	if err != nil {
 		onErr()
 		return
@@ -379,7 +379,7 @@ func webauthnInviteFinish(w http.ResponseWriter, r *http.Request) {
 	}
 	logging.Infof("webauthn: new user %q (role=%s) registered via invite id=%d", identifier, invite.Role, invite.ID)
 
-	issueSessionResponse(w, r, http.StatusCreated, stored.UserID, stored.Email, invite.Role, func() {
+	issueSessionResponse(w, r, http.StatusCreated, stored.UserID, stored.Email, invite.Role, loginMethodPasskey, func() {
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]any{"status": "created"})
 	})
@@ -527,7 +527,7 @@ func webauthnLoginFinish(w http.ResponseWriter, r *http.Request) {
 			issueWATOTPPending(w, discUserID, discEmail, discRole)
 			return
 		}
-		issueSessionResponse(w, r, http.StatusOK, discUserID, discEmail, discRole, func() {
+		issueSessionResponse(w, r, http.StatusOK, discUserID, discEmail, discRole, loginMethodPasskey, func() {
 			writeError(w, "Could not create session", http.StatusInternalServerError)
 		})
 		return
@@ -587,7 +587,7 @@ func webauthnLoginFinish(w http.ResponseWriter, r *http.Request) {
 		issueWATOTPPending(w, stored.UserID, userEmail, role)
 		return
 	}
-	issueSessionResponse(w, r, http.StatusOK, stored.UserID, userEmail, role, func() {
+	issueSessionResponse(w, r, http.StatusOK, stored.UserID, userEmail, role, loginMethodPasskey, func() {
 		writeError(w, "Could not create session", http.StatusInternalServerError)
 	})
 }
@@ -623,7 +623,7 @@ func webauthnTOTPChallenge(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Invalid TOTP code", http.StatusUnauthorized)
 		return
 	}
-	issueSessionResponse(w, r, http.StatusOK, pending.UserID, pending.Email, pending.Role, func() {
+	issueSessionResponse(w, r, http.StatusOK, pending.UserID, pending.Email, pending.Role, loginMethodPasskey, func() {
 		writeError(w, "Could not create session", http.StatusInternalServerError)
 	})
 }

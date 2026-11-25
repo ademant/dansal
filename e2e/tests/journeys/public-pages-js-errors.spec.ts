@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { PUBLIC_PATHS } from "../../fixtures/public-paths";
 
 // #1385: base.js is loaded with `defer` (#1326), so an inline script that
 // calls one of its functions at plain top-level parse time throws
@@ -6,31 +7,14 @@ import { test, expect } from "@playwright/test";
 // (the suggest wizard's address search lost its geo_token that way and
 // answered 403 to every anonymous visitor). Load the public pages as an
 // anonymous visitor and fail on any uncaught page error.
-const PATHS = [
-  "/",
-  "/events/suggest",
-  "/feeds/suggest",
-  "/search",
-  "/board",
-  "/organizations",
-  "/musicians",
-  "/instructors",
-  "/login",
-  "/register",
-  "/help",
-  "/cities",
-  "/festivals",
-  // #1542: impressum/privacy/terms render through the same base.html chrome
-  // as every other public page (and 404 harmlessly when unconfigured — see
-  // about-and-info-pages.spec.ts), so they belong in this sweep too.
-  "/impressum",
-  "/privacy",
-  "/terms",
-];
+//
+// #1906: tagged @public-smoke, so the sweep also runs on Firefox and WebKit
+// (playwright.config.ts). Detail pages are in public-smoke.spec.ts.
+const PATHS = PUBLIC_PATHS;
 
 test.describe("Public pages load without JavaScript errors (#1385)", () => {
   for (const path of PATHS) {
-    test(`no page errors on ${path}`, async ({ browser }) => {
+    test(`no page errors on ${path}`, { tag: "@public-smoke" }, async ({ browser }) => {
       const context = await browser.newContext({
         storageState: { cookies: [], origins: [] },
       });
@@ -44,7 +28,7 @@ test.describe("Public pages load without JavaScript errors (#1385)", () => {
     });
   }
 
-  test("an event page has no page errors", { tag: "@smoke" }, async ({ browser }) => {
+  test("an event page has no page errors", { tag: ["@smoke", "@public-smoke"] }, async ({ browser }) => {
     const context = await browser.newContext({
       storageState: { cookies: [], origins: [] },
     });

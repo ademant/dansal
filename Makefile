@@ -12,7 +12,7 @@ SYSTEMDDIR := /etc/systemd/system
 .DEFAULT_GOAL := build
 
 .PHONY: build build-dansal build-dansal_web build-dansal_admin build-dansal_webmin build-dansal_doc \
-        run fmt vet vulncheck bench stress k6-install test-deps e2e-up e2e-down e2e-status e2e-run e2e-test e2e-smoke clean install install-web install-webmin install-doc install-units setup-instance \
+        run fmt vet vulncheck bench stress k6-install test-deps e2e-up e2e-down e2e-status e2e-run e2e-test e2e-smoke e2e-smoke-ladybird clean install install-web install-webmin install-doc install-units setup-instance \
         update check-config deb deploy-nginx deploy-nginx-webmin deploy-nginx-doc deploy-nginx-default install-nginx-brotli deploy-fail2ban deploy-logrotate deploy-full \
         wp-zip deploy-wp rollback list
 
@@ -108,7 +108,8 @@ e2e-status:
 	scripts/e2e-stack.sh status
 
 # e2e-run runs Playwright against an already-running stack. Variables:
-#   E2E_PROJECT  desktop | mobile | all (default all)
+#   E2E_PROJECT  desktop | mobile | firefox | webkit | webkit-iphone, several
+#                space-separated, or all (default all)
 #   E2E_SPEC     spec path or glob, e.g. tests/journeys/checkin.spec.ts
 #   E2E_GREP     only tests whose title matches this pattern
 E2E_PROJECT ?= all
@@ -119,13 +120,28 @@ E2E_ENV     := BASE_URL=http://127.0.0.1:18080 API_URL=http://127.0.0.1:18000 \
 
 e2e-run:
 	cd e2e && $(E2E_ENV) npx playwright test \
-		$(if $(filter-out all,$(E2E_PROJECT)),--project=$(E2E_PROJECT)) \
+		$(foreach p,$(filter-out all,$(E2E_PROJECT)),--project=$(p)) \
 		$(E2E_SPEC) $(if $(E2E_GREP),--grep "$(E2E_GREP)")
 
-# e2e-smoke runs only the @smoke-tagged journeys, desktop, the same set CI
-# gates PRs on (see e2e/README.md).
+# e2e-smoke runs the @smoke-tagged journeys on Chromium desktop plus the
+# @public-smoke anonymous-visitor set on Firefox and WebKit (#1906) — the
+# same set CI gates PRs on (see e2e/README.md).
+E2E_OTHER_ENGINES := firefox webkit webkit-iphone
 e2e-smoke:
-	$(MAKE) e2e-test E2E_PROJECT=desktop E2E_GREP=@smoke
+	$(MAKE) e2e-up
+	@status=0; \
+	$(MAKE) e2e-run E2E_PROJECT=desktop E2E_GREP=@smoke || status=$$?; \
+	$(MAKE) e2e-run E2E_PROJECT="$(E2E_OTHER_ENGINES)" E2E_GREP=@public-smoke || status=$$?; \
+	$(MAKE) e2e-down; exit $$status
+
+# e2e-smoke-ladybird walks the public pages in Ladybird through its own
+# WebDriver server (e2e/ladybird/run.ts). Report-only: it never fails the
+# build until Ladybird's WebDriver support is stable. Needs a Ladybird build
+# and its WebDriver server running (see e2e/README.md); runs against an
+# already-running stack (make e2e-up).
+LADYBIRD_WEBDRIVER ?= http://127.0.0.1:4444
+e2e-smoke-ladybird:
+	cd e2e && BASE_URL=http://127.0.0.1:18080 LADYBIRD_WEBDRIVER=$(LADYBIRD_WEBDRIVER) npx tsx ladybird/run.ts
 
 # e2e-test brings the stack up, runs the suite, and always stops the stack
 # again, returning the test exit status.
@@ -134,7 +150,7 @@ e2e-test:
 	@status=0; $(MAKE) e2e-run || status=$$?; $(MAKE) e2e-down; exit $$status
 
 e2e-install:
-	cd e2e && npm ci && npx playwright install --with-deps chromium
+	cd e2e && npm ci && npx playwright install --with-deps chromium firefox webkit
 
 e2e: e2e-install
 	$(MAKE) e2e-test E2E_PROJECT=all

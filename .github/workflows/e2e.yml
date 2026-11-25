@@ -2,8 +2,10 @@ name: E2E Tests
 
 # Two tiers (#1555 follow-up):
 #   smoke — the @smoke-tagged journeys, desktop only, on every PR and push to
-#           main. Fast enough to gate a merge.
-#   full  — every journey on desktop and mobile, plus the WCAG sweep. Runs on
+#           main, plus the @public-smoke anonymous-visitor set on Firefox,
+#           WebKit and WebKit/iPhone (#1906). Fast enough to gate a merge.
+#   full  — every journey on desktop and mobile, the @public-smoke set on the
+#           other engines, plus the WCAG sweep. Runs on
 #           release tags (called from release.yml, which waits for it before
 #           packaging), nightly, and on manual dispatch.
 on:
@@ -48,10 +50,10 @@ jobs:
         run: |
           if [ "$SUITE" = smoke ]; then
             echo 'suite=smoke' >> "$GITHUB_OUTPUT"
-            echo 'matrix={"include":[{"project":"desktop","grep":"@smoke"}]}' >> "$GITHUB_OUTPUT"
+            echo 'matrix={"include":[{"project":"desktop","grep":"@smoke"},{"project":"firefox","grep":"@public-smoke"},{"project":"webkit","grep":"@public-smoke"},{"project":"webkit-iphone","grep":"@public-smoke"}]}' >> "$GITHUB_OUTPUT"
           else
             echo 'suite=full' >> "$GITHUB_OUTPUT"
-            echo 'matrix={"include":[{"project":"desktop","grep":""},{"project":"mobile","grep":""}]}' >> "$GITHUB_OUTPUT"
+            echo 'matrix={"include":[{"project":"desktop","grep":""},{"project":"mobile","grep":""},{"project":"firefox","grep":"@public-smoke"},{"project":"webkit","grep":"@public-smoke"},{"project":"webkit-iphone","grep":"@public-smoke"}]}' >> "$GITHUB_OUTPUT"
           fi
 
   e2e-journeys:

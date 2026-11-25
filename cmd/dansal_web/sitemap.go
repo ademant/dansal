@@ -12,6 +12,17 @@ import (
 	"time"
 )
 
+// The sitemap is an index (#1900) pointing to two child sitemaps:
+// /sitemap-current.xml holds all non-event pages plus events that are upcoming
+// or started within the last sitemapRecentMonths; /sitemap-archive.xml holds
+// older events and cancelled events. Both stay reachable: no event is noindexed.
+const (
+	sitemapIndexName    = "index"
+	sitemapCurrentName  = "current"
+	sitemapArchiveName  = "archive"
+	sitemapRecentMonths = 12
+)
+
 // sitemapXML is the root element of a sitemap document.
 type sitemapXML struct {
 	XMLName xml.Name     `xml:"urlset"`
@@ -19,91 +30,102 @@ type sitemapXML struct {
 	URLs    []sitemapURL `xml:"url"`
 }
 
+// sitemapIndexXML is the root element of a sitemap index (#1900).
+type sitemapIndexXML struct {
+	XMLName  xml.Name     `xml:"sitemapindex"`
+	NS       string       `xml:"xmlns,attr"`
+	Sitemaps []sitemapRef `xml:"sitemap"`
+}
+
+type sitemapRef struct {
+	Loc     string `xml:"loc"`
+	LastMod string `xml:"lastmod,omitempty"`
+}
+
+// sitemapURL has no changefreq: Google ignores it (#1900).
 type sitemapURL struct {
-	Loc        string `xml:"loc"`
-	LastMod    string `xml:"lastmod,omitempty"`
-	ChangeFreq string `xml:"changefreq,omitempty"`
-	Priority   string `xml:"priority,omitempty"`
+	Loc      string `xml:"loc"`
+	LastMod  string `xml:"lastmod,omitempty"`
+	Priority string `xml:"priority,omitempty"`
+}
+
+// sitemapPart is one generated document with its validator.
+type sitemapPart struct {
+	data []byte
+	etag string
 }
 
 type sitemapCache struct {
 	mu        sync.Mutex
-	data      []byte
+	parts     map[string]sitemapPart
 	fetchedAt time.Time
-	etag      string
 }
 
 var smCache sitemapCache
 
 const sitemapTTL = 30 * time.Minute
 
-func sitemapHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		smCache.mu.Lock()
-		if time.Since(smCache.fetchedAt) < sitemapTTL && len(smCache.data) > 0 {
-			data := smCache.data
-			fetchedAt := smCache.fetchedAt
-			etag := smCache.etag
-			smCache.mu.Unlock()
-			w.Header().Set("Content-Type", "application/xml; charset=utf-8")
-			w.Header().Set("Cache-Control", "public, max-age=1800")
-			w.Header().Set("ETag", etag)
-			if r.Header.Get("If-None-Match") == etag {
-				w.WriteHeader(http.StatusNotModified)
-				return
-			}
-			// #1129: fetchedAt bounds freshness to sitemapTTL already, so it's
-			// a safe Last-Modified value even though it's a build time, not a
-			// content-change time.
-			if checkLastModified(w, r, fetchedAt) {
-				return
-			}
-			w.Write(data)
-			return
+// load returns the named sitemap document, rebuilding all of them when the
+// cache is older than sitemapTTL. The fetch time bounds freshness and serves as
+// Last-Modified (#1129).
+func (c *sitemapCache) load(r *http.Request, cfg *Config, client *DansalClient, name string) (sitemapPart, time.Time, error) {
+	c.mu.Lock()
+	if time.Since(c.fetchedAt) < sitemapTTL {
+		if p, ok := c.parts[name]; ok {
+			fetchedAt := c.fetchedAt
+			c.mu.Unlock()
+			return p, fetchedAt, nil
 		}
-		smCache.mu.Unlock()
+	}
+	c.mu.Unlock()
 
-		data, err := buildSitemap(r, cfg, client)
+	parts, err := buildSitemaps(r, cfg, client)
+	if err != nil {
+		return sitemapPart{}, time.Time{}, err
+	}
+	fetchedAt := time.Now()
+	c.mu.Lock()
+	c.parts = parts
+	c.fetchedAt = fetchedAt
+	c.mu.Unlock()
+	return parts[name], fetchedAt, nil
+}
+
+func sitemapHandler(cfg *Config, client *DansalClient, name string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		part, fetchedAt, err := smCache.load(r, cfg, client, name)
 		if err != nil {
 			http.Error(w, "could not generate sitemap", http.StatusInternalServerError)
 			return
 		}
-
-		fetchedAt := time.Now()
-		sum := sha256.Sum256(data)
-		etag := fmt.Sprintf(`"%x"`, sum[:])
-		smCache.mu.Lock()
-		smCache.data = data
-		smCache.fetchedAt = fetchedAt
-		smCache.etag = etag
-		smCache.mu.Unlock()
-
 		w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 		w.Header().Set("Cache-Control", "public, max-age=1800")
-		w.Header().Set("ETag", etag)
-		if r.Header.Get("If-None-Match") == etag {
+		w.Header().Set("ETag", part.etag)
+		if r.Header.Get("If-None-Match") == part.etag {
 			w.WriteHeader(http.StatusNotModified)
 			return
 		}
 		if checkLastModified(w, r, fetchedAt) {
 			return
 		}
-		w.Write(data)
+		w.Write(part.data)
 	}
 }
 
-func buildSitemap(r *http.Request, cfg *Config, client *DansalClient) ([]byte, error) {
+// buildSitemaps generates the index and both child sitemaps in one pass, so
+// they always agree on the event split.
+func buildSitemaps(r *http.Request, cfg *Config, client *DansalClient) (map[string]sitemapPart, error) {
 	base := cfg.publicBaseURL()
 	today := time.Now().UTC().Format("2006-01-02")
 	ctx := r.Context()
 	epoch := time.Unix(0, 0)
 
 	urls := []sitemapURL{
-		{Loc: base + "/", LastMod: today, ChangeFreq: "daily", Priority: "1.0"},
-		{Loc: base + "/musicians", ChangeFreq: "weekly", Priority: "0.6"},
-		{Loc: base + "/instructors", ChangeFreq: "weekly", Priority: "0.6"},
-		{Loc: base + "/organizations", ChangeFreq: "weekly", Priority: "0.6"},
-		{Loc: base + "/festivals", ChangeFreq: "weekly", Priority: "0.6"},
+		{Loc: base + "/", LastMod: today, Priority: "1.0"},
+		{Loc: base + "/musicians", Priority: "0.6"},
+		{Loc: base + "/instructors", Priority: "0.6"},
+		{Loc: base + "/organizations", Priority: "0.6"},
+		{Loc: base + "/festivals", Priority: "0.6"},
 	}
 
 	// /board — lastmod is the newest active post's created_at (daily changing).
@@ -120,43 +142,58 @@ func buildSitemap(r *http.Request, cfg *Config, client *DansalClient) ([]byte, e
 			}
 		}
 	}
-	urls = append(urls, sitemapURL{
-		Loc:        base + "/board",
-		LastMod:    boardLastMod,
-		ChangeFreq: "daily",
-		Priority:   "0.7",
-	})
+	urls = append(urls, sitemapURL{Loc: base + "/board", LastMod: boardLastMod, Priority: "0.7"})
 
 	// Static/legal pages
 	for _, page := range []string{"/impressum", "/privacy", "/terms"} {
-		urls = append(urls, sitemapURL{
-			Loc:        base + page,
-			ChangeFreq: "monthly",
-			Priority:   "0.3",
-		})
+		urls = append(urls, sitemapURL{Loc: base + page, Priority: "0.3"})
 	}
 
-	// Events — all published (past + future) so archived pages stay indexed.
+	// Events — all published (past + future) so archived pages stay indexed,
+	// split between the two child sitemaps below.
 	events, err := client.GetAllEvents(ctx)
 	if err != nil {
 		logging.Errorf("sitemap: could not load events: %v", err)
 	}
-	now := time.Now().Unix()
+	now := time.Now()
+	nowUnix := now.Unix()
+	recentFrom := now.AddDate(0, -sitemapRecentMonths, 0)
+
+	// Entities that have events, and the newest event change per venue (#1895).
+	eventLocs := map[int]bool{}
+	locChanged := map[int]string{}
+	eventMusicians := map[int]bool{}
+	eventInstructors := map[int]bool{}
+
+	var currentEvents, archiveEvents []sitemapURL
 	for _, e := range events {
+		changed := ""
+		if e.ChangedAt != "" && e.ChangedAt != "0" {
+			if t, err := parseUnixOrRFC3339(e.ChangedAt); err == nil && t.After(epoch) {
+				changed = t.UTC().Format("2006-01-02")
+			}
+		}
+		for _, id := range eventLocationIDs(e) {
+			eventLocs[id] = true
+			if changed > locChanged[id] {
+				locChanged[id] = changed
+			}
+		}
+		for _, m := range e.Musicians {
+			eventMusicians[m.ID] = true
+		}
+		for _, ins := range e.Instructors {
+			eventInstructors[ins.ID] = true
+		}
+
 		lastMod := ""
 		// BoardLatestAt (#1722): a new board post is fresh content; use it when
 		// it's newer than the last event edit so search engines re-crawl promptly.
 		if e.BoardLatestAt > 0 {
-			boardT := time.Unix(e.BoardLatestAt, 0)
-			lastMod = boardT.UTC().Format("2006-01-02")
+			lastMod = time.Unix(e.BoardLatestAt, 0).UTC().Format("2006-01-02")
 		}
-		if e.ChangedAt != "" && e.ChangedAt != "0" {
-			if t, err := parseUnixOrRFC3339(e.ChangedAt); err == nil && t.After(epoch) {
-				d := t.UTC().Format("2006-01-02")
-				if lastMod == "" || d > lastMod {
-					lastMod = d
-				}
-			}
+		if changed > lastMod {
+			lastMod = changed
 		}
 		if lastMod == "" && e.CreatedAt != "" {
 			if t, err := parseUnixOrRFC3339(e.CreatedAt); err == nil && t.After(epoch) {
@@ -165,36 +202,50 @@ func buildSitemap(r *http.Request, cfg *Config, client *DansalClient) ([]byte, e
 		}
 		// Priority: upcoming events rank higher than past ones; cancelled lowest.
 		priority := "0.8"
+		st, stErr := parseUnixOrRFC3339(e.StartTime)
 		if e.IsCancelled {
 			priority = "0.3"
-		} else if st, err := parseUnixOrRFC3339(e.StartTime); err == nil && st.Unix() < now {
+		} else if stErr == nil && st.Unix() < nowUnix {
 			priority = "0.4"
 		}
-		urls = append(urls, sitemapURL{
-			Loc:        base + fmt.Sprintf("/events/%d", e.ID),
-			LastMod:    lastMod,
-			ChangeFreq: "weekly",
-			Priority:   priority,
-		})
+		u := sitemapURL{
+			Loc:      base + fmt.Sprintf("/events/%d", e.ID),
+			LastMod:  lastMod,
+			Priority: priority,
+		}
+		// Cancelled events and events older than the recent window go to the archive.
+		if e.IsCancelled || (stErr == nil && st.Before(recentFrom)) {
+			archiveEvents = append(archiveEvents, u)
+		} else {
+			currentEvents = append(currentEvents, u)
+		}
 	}
 
-	// Locations
+	// Locations (#1895): a venue is listed when it has events or its own notes;
+	// a room only when it has events of its own; a building also when one of its
+	// rooms has events.
 	locs, err := client.GetLocations(ctx)
 	if err != nil {
 		logging.Errorf("sitemap: could not load locations: %v", err)
 	}
+	roomWithEvents := map[int]bool{}
 	for _, l := range locs {
-		lastMod := ""
-		if l.CreatedAt != "" {
-			if t, err := parseUnixOrRFC3339(l.CreatedAt); err == nil {
-				lastMod = t.UTC().Format("2006-01-02")
+		if l.ParentID != nil && eventLocs[l.ID] {
+			roomWithEvents[*l.ParentID] = true
+		}
+	}
+	for _, l := range locs {
+		if l.ParentID != nil {
+			if !eventLocs[l.ID] {
+				continue
 			}
+		} else if !eventLocs[l.ID] && l.NotesMd == "" && !roomWithEvents[l.ID] {
+			continue
 		}
 		urls = append(urls, sitemapURL{
-			Loc:        base + fmt.Sprintf("/location/%d", l.ID),
-			LastMod:    lastMod,
-			ChangeFreq: "monthly",
-			Priority:   "0.6",
+			Loc:      base + fmt.Sprintf("/location/%d", l.ID),
+			LastMod:  locChanged[l.ID],
+			Priority: "0.6",
 		})
 	}
 
@@ -204,11 +255,7 @@ func buildSitemap(r *http.Request, cfg *Config, client *DansalClient) ([]byte, e
 		logging.Errorf("sitemap: could not load tags: %v", err)
 	}
 	for _, t := range tags {
-		urls = append(urls, sitemapURL{
-			Loc:        base + "/tags/" + t.Slug,
-			ChangeFreq: "weekly",
-			Priority:   "0.6",
-		})
+		urls = append(urls, sitemapURL{Loc: base + "/tags/" + t.Slug, Priority: "0.6"})
 	}
 
 	// Cities — hub pages for each town with upcoming events.
@@ -217,11 +264,7 @@ func buildSitemap(r *http.Request, cfg *Config, client *DansalClient) ([]byte, e
 		logging.Errorf("sitemap: could not load cities: %v", err)
 	}
 	for _, c := range cities {
-		urls = append(urls, sitemapURL{
-			Loc:        base + "/city/" + townSlug(c.Town),
-			ChangeFreq: "weekly",
-			Priority:   "0.7",
-		})
+		urls = append(urls, sitemapURL{Loc: base + "/city/" + townSlug(c.Town), Priority: "0.7"})
 	}
 
 	// Organizations — every org has a public page at effectiveSlug(o),
@@ -231,53 +274,89 @@ func buildSitemap(r *http.Request, cfg *Config, client *DansalClient) ([]byte, e
 		logging.Errorf("sitemap: could not load organizations: %v", err)
 	}
 	for _, o := range orgs {
-		urls = append(urls, sitemapURL{
-			Loc:        base + "/org/" + effectiveSlug(o),
-			ChangeFreq: "weekly",
-			Priority:   "0.7",
-		})
+		urls = append(urls, sitemapURL{Loc: base + "/org/" + effectiveSlug(o), Priority: "0.7"})
 	}
 
-	// Musicians
+	// Musicians (#1895): listed when they have events or a description/biography.
 	musicians, err := client.GetMusicians(ctx)
 	if err != nil {
 		logging.Errorf("sitemap: could not load musicians: %v", err)
 	}
 	for _, m := range musicians {
-		urls = append(urls, sitemapURL{
-			Loc:        base + fmt.Sprintf("/musicians/%d", m.ID),
-			ChangeFreq: "monthly",
-			Priority:   "0.5",
-		})
+		if !eventMusicians[m.ID] && m.Description == "" && m.Biography == "" {
+			continue
+		}
+		urls = append(urls, sitemapURL{Loc: base + fmt.Sprintf("/musicians/%d", m.ID), Priority: "0.5"})
 	}
 
-	// Instructors
+	// Instructors (#1895): listed when they have events or a bio.
 	instructors, err := client.GetInstructors(ctx)
 	if err != nil {
 		logging.Errorf("sitemap: could not load instructors: %v", err)
 	}
 	for _, ins := range instructors {
-		urls = append(urls, sitemapURL{
-			Loc:        base + fmt.Sprintf("/instructors/%d", ins.ID),
-			ChangeFreq: "monthly",
-			Priority:   "0.5",
-		})
+		if !eventInstructors[ins.ID] && ins.Bio == "" {
+			continue
+		}
+		urls = append(urls, sitemapURL{Loc: base + fmt.Sprintf("/instructors/%d", ins.ID), Priority: "0.5"})
 	}
 
-	sm := sitemapXML{
-		NS:   "http://www.sitemaps.org/schemas/sitemap/0.9",
-		URLs: urls,
-	}
-	// No indentation: sitemaps are machine-only, and pretty-printing adds
-	// ~16% pure whitespace to the raw response for zero benefit (gzip already
-	// compresses the indentation away almost for free, so the wire size barely
-	// moves — this mainly helps clients that don't request gzip, plus a little
-	// server-side CPU/memory on every cache rebuild).
-	out, err := xml.Marshal(sm)
+	current := append(urls, currentEvents...)
+	currentXML, err := marshalURLSet(current)
 	if err != nil {
 		return nil, err
 	}
-	return append([]byte(xml.Header), out...), nil
+	archiveXML, err := marshalURLSet(archiveEvents)
+	if err != nil {
+		return nil, err
+	}
+	indexXML, err := xml.Marshal(sitemapIndexXML{
+		NS: "http://www.sitemaps.org/schemas/sitemap/0.9",
+		Sitemaps: []sitemapRef{
+			{Loc: base + "/sitemap-current.xml", LastMod: today},
+			{Loc: base + "/sitemap-archive.xml", LastMod: today},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]sitemapPart{
+		sitemapIndexName:   newSitemapPart(indexXML),
+		sitemapCurrentName: newSitemapPart(currentXML),
+		sitemapArchiveName: newSitemapPart(archiveXML),
+	}, nil
+}
+
+// marshalURLSet renders a urlset body (without the XML header, which
+// newSitemapPart adds). No indentation: sitemaps are machine-only, and gzip
+// already removes most of the whitespace anyway.
+func marshalURLSet(urls []sitemapURL) ([]byte, error) {
+	return xml.Marshal(sitemapXML{
+		NS:   "http://www.sitemaps.org/schemas/sitemap/0.9",
+		URLs: urls,
+	})
+}
+
+// newSitemapPart attaches the content-derived ETag to a generated document.
+func newSitemapPart(body []byte) sitemapPart {
+	doc := append([]byte(xml.Header), body...)
+	sum := sha256.Sum256(doc)
+	return sitemapPart{data: doc, etag: fmt.Sprintf(`"%x"`, sum[:])}
+}
+
+// eventLocationIDs returns the venue IDs an event takes place at.
+func eventLocationIDs(e Event) []int {
+	var ids []int
+	if e.Location != nil && e.Location.ID > 0 {
+		ids = append(ids, e.Location.ID)
+	}
+	for _, l := range e.Locations {
+		if l.ID > 0 {
+			ids = append(ids, l.ID)
+		}
+	}
+	return ids
 }
 
 // parseUnixOrRFC3339 accepts a Unix timestamp string or an RFC3339 datetime.

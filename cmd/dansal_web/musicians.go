@@ -75,11 +75,14 @@ func musicianHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *
 			HasPast:        len(past) > 0,
 			IncludePast:    includePast,
 		})
+		// #1894: the description names the next dates; the biography follows
+		// when it still fits. Without either, the site default applies.
 		desc := musician.Biography
 		if desc == "" {
 			desc = musician.Description
 		}
-		td.MetaDescription = metaDesc(desc, metaDescMaxLen)
+		seoStrs, seoLang, seoDateFormat := entitySEOLang(i18n, r)
+		td.MetaDescription = entityDescription(seoStrs, "seo_entity_desc", musician.Bandname, upcoming, seoLang, seoDateFormat, desc)
 		if musician.ImageURL != "" {
 			td.OGImage = "https://" + cfg.Domain + musician.ImageURL
 		}

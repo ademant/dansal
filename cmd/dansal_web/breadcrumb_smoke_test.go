@@ -125,8 +125,8 @@ func TestSmokeBreadcrumbJSONLD(t *testing.T) {
 		// org image with the generated title/date/location overlay, and the
 		// URL is now made absolute like every other JSON-LD image (js filter
 		// escapes "/").
-		if !strings.Contains(body, `"image": "https:\/\/example.test\/api\/v1\/event-banner\/1"`) {
-			t.Errorf("event without image should fall back to the generated org banner overlay (#1065, #1083)")
+		if !strings.Contains(body, `"image": "https:\/\/example.test\/api\/v1\/event-banner\/1?format=jpeg"`) {
+			t.Errorf("event without image should fall back to the generated banner (#1065, #1083, #1897)")
 		}
 	})
 
@@ -354,11 +354,11 @@ func TestSmokeBreadcrumbJSONLD(t *testing.T) {
 			EndTime:   "2026-08-06T01:00:00Z",
 		}, &Organization{ID: 2, Name: "Test Org"}, "test-org")
 		checkBlocks(t, body, true)
-		// #1072: JSON-LD always emits an image, falling back to the website banner
-		// when neither event, series, nor org has one. The js filter escapes
+		// #1072/#1897: JSON-LD always emits an image; with no event, series or
+		// org image the generated plain banner is used. The js filter escapes
 		// forward slashes, hence the \/\/ in the expected string.
-		if !strings.Contains(body, `"image": "https:\/\/example.test\/banner.avif"`) {
-			t.Errorf("event JSON-LD should fall back to website banner image when no other image exists (#1072)")
+		if !strings.Contains(body, `"image": "https:\/\/example.test\/api\/v1\/event-banner\/3?format=jpeg"`) {
+			t.Errorf("event JSON-LD should fall back to the generated plain banner when no other image exists (#1072, #1897)")
 		}
 		if !strings.Contains(body, `"audienceType": "dancers"`) {
 			t.Errorf("event without musician tags should keep audienceType \"dancers\" (#1063)")

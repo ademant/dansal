@@ -777,6 +777,15 @@ func adminPruneImages() adminResponse {
 		// a simple row-exists check, so these are handled separately from the
 		// generic .avif path below.
 		if name := d.Name(); strings.HasSuffix(name, ".jpg") && strings.HasPrefix(name, "banner-") {
+			// Plain-tier files are banner-plain-{id}-{hash}.jpg (#1897): stale
+			// once the event's title, date or venue no longer hash to {hash}.
+			if rest, ok := strings.CutPrefix(strings.TrimSuffix(name, ".jpg"), "banner-plain-"); ok {
+				idPart, hash, found := strings.Cut(rest, "-")
+				if id, convErr := strconv.Atoi(idPart); convErr == nil && found && !plainBannerFileValid(id, hash) {
+					remove(path)
+				}
+				return nil
+			}
 			tier := "series"
 			idStr := strings.TrimPrefix(name, "banner-")
 			if strings.HasPrefix(idStr, "org-") {

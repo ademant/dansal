@@ -71,6 +71,13 @@ func minifyBytes(mediatype, label string, raw []byte) []byte {
 // instead of per request, the (slower) encode time at quality 11 doesn't
 // matter either.
 var (
+	baseCSSMin        []byte
+	baseCSSMinGzip    []byte
+	baseCSSMinBrotli  []byte
+	eventCSSMin       []byte
+	eventCSSMinGzip   []byte
+	eventCSSMinBrotli []byte
+
 	baseJSMin       []byte
 	baseJSMinGzip   []byte
 	baseJSMinBrotli []byte
@@ -119,6 +126,13 @@ type negotiatedAsset struct {
 }
 
 func init() {
+	baseCSSMin = minifyBytes("text/css", "base.css", baseCSS)
+	baseCSSMinGzip = mustGzip(baseCSSMin)
+	baseCSSMinBrotli = mustBrotli(baseCSSMin)
+	eventCSSMin = minifyBytes("text/css", "event.css", eventCSS)
+	eventCSSMinGzip = mustGzip(eventCSSMin)
+	eventCSSMinBrotli = mustBrotli(eventCSSMin)
+
 	baseJSMin = minifyBytes("application/javascript", "base.js", baseJS)
 	baseJSMinGzip = mustGzip(baseJSMin)
 	baseJSMinBrotli = mustBrotli(baseJSMin)

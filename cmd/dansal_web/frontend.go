@@ -64,6 +64,12 @@ type TemplateData struct {
 	Path                   string // current request path, for building "return to this page" links
 	CanonicalURL           string // absolute canonical URL for this page (may include ?lang=XX)
 	HreflangBaseURL        string // same as CanonicalURL but never includes ?lang= — used as the base for hreflang hrefs so bots don't accumulate ?lang=X?lang=Y chains (#1089)
+	// OGType overrides og:type (#1898); empty means "website". Event pages use "article".
+	OGType string
+	// OGImageAlt is the og:image:alt text for the page's social image (#1897).
+	OGImageAlt string
+	// OGLocale is the og:locale value (xx_XX) for the page language; empty omits it (#1898).
+	OGLocale               string
 	Hreflang               bool   // emit <link rel="alternate" hreflang> tags for this page (only where content is 100% i18n-driven, not organizer-entered)
 	MetaDescription        string // page-specific meta description (falls back to i18n string in template)
 	OGImage                string // absolute URL of the primary image for OG/Twitter card
@@ -510,6 +516,15 @@ var qrcodeJS []byte
 
 //go:embed static/base.js
 var baseJS []byte
+
+// Shared and event-page stylesheets (#1901), linked from base.html and
+// event.html with a ?v= cache-buster instead of being inlined per response.
+//
+//go:embed static/base.css
+var baseCSS []byte
+
+//go:embed static/event.css
+var eventCSS []byte
 
 // Vendored Leaflet/leaflet.markercluster (#1329): the exact same pinned
 // bytes previously loaded from unpkg.com in ~15 templates -- verified
@@ -1250,15 +1265,16 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			ShowVenueUpcoming:      epd.showVenueUpcoming,
 		})
 		// OGImage: use JPEG variant so WhatsApp/Facebook/some messengers can
-		// render it (#1721). The generated banner is used when no event image
-		// exists but a series/org image would apply.
+		// render it (#1721). Without an own image the generated banner is used
+		// (#1897): series or org banner, else a plain per-event canvas.
 		ogImg := event.ImageURL
-		if ogImg == "" && (epd.seriesImageURL != "" || (epd.org != nil && epd.org.ImageURL != "")) {
+		if ogImg == "" {
 			ogImg = fmt.Sprintf("/api/v1/event-banner/%d", event.ID)
 		}
-		if ogImg != "" {
-			ogImg += "?format=jpeg"
-		}
+		ogImg += "?format=jpeg"
+		td.OGImageAlt = event.Title
+		td.OGType = "article"
+		td.OGLocale = ogLocale(lang)
 		renderPage(w, cfg, tmpls.event, td, eventMetaDesc(event, epd.posts, lang), ogImg)
 	}
 }
@@ -1390,7 +1406,10 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 		}
 
 		handle := "@" + slug + "@" + cfg.Domain
-		td := tmplData(r, cfg, i18n, org.Name, OrgData{
+		// #1894: title and description name the place and the next dates.
+		seoStrs, seoLang, seoDateFormat := entitySEOLang(i18n, r)
+		orgTitle := orgSEOTitle(seoStrs, org.Name, allEvents)
+		td := tmplData(r, cfg, i18n, orgTitle, OrgData{
 			Org:             org,
 			UpcomingEvents:  upcoming,
 			PastEvents:      past,
@@ -1401,7 +1420,11 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 			FollowerCount:   followerCount,
 			RecurringSeries: recurringSeriesFromEvents(upcoming),
 		})
-		renderPage(w, cfg, tmpls.org, td, metaDesc(org.Description, metaDescMaxLen), org.ImageURL)
+		orgDesc := entityDescription(seoStrs, "seo_entity_desc", org.Name, upcoming, seoLang, seoDateFormat, org.Description)
+		if orgDesc == "" {
+			orgDesc = orgTitle
+		}
+		renderPage(w, cfg, tmpls.org, td, orgDesc, org.ImageURL)
 	}
 }
 
@@ -1491,7 +1514,9 @@ func locationPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			hint = nearbyHint(r.Context(), client, *loc.Latitude, *loc.Longitude, title)
 		}
 
-		td := tmplData(r, cfg, i18n, title, LocationPageData{
+		// #1894: title and description name the town and the next dates.
+		seoStrs, seoLang, seoDateFormat := entitySEOLang(i18n, r)
+		td := tmplData(r, cfg, i18n, venueSEOTitle(seoStrs, title, loc.Town), LocationPageData{
 			Location:        loc,
 			Events:          events,
 			PastEvents:      pastEvents,
@@ -1505,7 +1530,15 @@ func locationPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 		if loc.Country != "" {
 			parts = append(parts, loc.Country)
 		}
-		renderPage(w, cfg, tmpls.location, td, strings.Join(parts, ", "), "")
+		venueName := title
+		if loc.Town != "" && !strings.Contains(title, loc.Town) {
+			venueName = title + ", " + loc.Town
+		}
+		locDesc := entityDescription(seoStrs, "seo_venue_desc", venueName, events, seoLang, seoDateFormat, "")
+		if locDesc == "" {
+			locDesc = strings.Join(parts, ", ")
+		}
+		renderPage(w, cfg, tmpls.location, td, locDesc, "")
 	}
 }
 
@@ -1992,4 +2025,16 @@ func legalPageHandler(cfg *Config, tmpls *Templates, i18n *I18n, file, titleKey 
 		title := i18n.T(r, titleKey)
 		renderTemplate(w, tmpls.impressum, tmplData(r, cfg, i18n, title, body))
 	}
+}
+
+// ogLocaleByLang maps the UI language codes to Open Graph locales (#1898).
+var ogLocaleByLang = map[string]string{
+	"br": "br_FR", "ca": "ca_ES", "cs": "cs_CZ", "de": "de_DE", "en": "en_GB",
+	"es": "es_ES", "fr": "fr_FR", "it": "it_IT", "nl": "nl_NL", "pl": "pl_PL",
+	"pt": "pt_PT", "uk": "uk_UA",
+}
+
+// ogLocale returns the og:locale value for lang, or "" when lang is unknown.
+func ogLocale(lang string) string {
+	return ogLocaleByLang[lang]
 }

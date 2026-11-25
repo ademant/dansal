@@ -3,6 +3,7 @@ package main
 import (
 	"html"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -32,7 +33,10 @@ func truncate(s string, maxLen int) string {
 			break
 		}
 	}
-	return string(cut) + "…"
+	// Drop trailing dots and punctuation so the appended "…" does not follow
+	// an existing "..." or a dangling comma/dash (#1896).
+	text := strings.TrimRight(string(cut), " .…,;:–-")
+	return text + "…"
 }
 
 // metaDesc returns the first maxLen chars of s with markdown syntax stripped,
@@ -89,23 +93,26 @@ var tagDisplayNames = map[string]string{
 // posts is the list of active board posts for the event; when non-empty a
 // compact board note ("📌 N") is appended if space remains (#1723).
 func eventMetaDesc(event Event, posts []ContactPost, lang string) string {
-	var parts []string
+	// The event name leads: it is the distinctive search term (#1899).
+	parts := []string{event.Title}
 
-	// Lead with format/type tag if present.
+	// Format/type tag next, with all level tags merged into one suffix.
 	for _, tag := range event.Tags {
 		if name, ok := tagDisplayNames[tag]; ok {
+			var levels []string
 			for _, t2 := range event.Tags {
 				switch t2 {
 				case "beginners", "intermediate", "advanced":
-					name += " (" + t2 + ")"
+					levels = append(levels, t2)
 				}
+			}
+			if len(levels) > 0 {
+				sort.Strings(levels)
+				name += " (" + strings.Join(levels, ", ") + ")"
 			}
 			parts = append(parts, name)
 			break
 		}
-	}
-	if len(parts) == 0 {
-		parts = append(parts, event.Title)
 	}
 
 	// Date.

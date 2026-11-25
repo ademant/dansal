@@ -65,7 +65,10 @@ func instructorHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n
 			HasPast:        len(past) > 0,
 			IncludePast:    includePast,
 		})
-		td.MetaDescription = metaDesc(instructor.Bio, metaDescMaxLen)
+		// #1894: the description names the next workshops' dates; the bio follows
+		// when it still fits. Without either, the site default applies.
+		seoStrs, seoLang, seoDateFormat := entitySEOLang(i18n, r)
+		td.MetaDescription = entityDescription(seoStrs, "seo_entity_desc", instructor.Name, upcoming, seoLang, seoDateFormat, instructor.Bio)
 		renderTemplate(w, tmpls.instructor, td)
 	}
 }

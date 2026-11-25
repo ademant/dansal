@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"github.com/ademant/dansal/internal/logging"
 	"image"
@@ -72,9 +74,11 @@ func init() {
 }
 
 // eventBannerTier reports which generated-banner fallback tier applies to
-// event, or "" if none does (own image present, or neither series nor org
-// has a banner to derive from). Shared between the serving handler and the
-// prune-images validity check so the two can never drift.
+// event, or "" when the event has its own image. An event with no own image
+// gets the series or org banner when one exists, and otherwise the "plain"
+// tier (#1897): a neutral canvas carrying the event's title, date and venue,
+// so no two events share one fallback image. Shared between the serving
+// handler and the prune-images validity check so the two can never drift.
 func eventBannerTier(event Event) string {
 	if hasImage(event.ID) {
 		return ""
@@ -85,7 +89,53 @@ func eventBannerTier(event Event) string {
 	if event.OrganizationID != nil && hasOrgImage(*event.OrganizationID) {
 		return "org"
 	}
-	return ""
+	return "plain"
+}
+
+// plainBannerBackground is the site's theme colour (base.html theme-color),
+// the canvas behind a plain-tier banner.
+var plainBannerBackground = color.RGBA{0x1a, 0x6e, 0xb5, 0xff}
+
+// plainBannerWidth/Height is the plain-tier canvas: close to the 1.91:1 social
+// card ratio, so link previews crop it little.
+const (
+	plainBannerWidth  = eventBannerWidth
+	plainBannerHeight = 402
+)
+
+// plainBannerHash fingerprints the text drawn on a plain-tier banner. It is
+// part of the cache file name, so a changed title, date or venue writes a new
+// file and the old one is pruned as stale (#1897).
+func plainBannerHash(event Event) string {
+	venue := ""
+	if event.Location != nil {
+		venue = event.Location.Location
+	}
+	sum := sha256.Sum256([]byte(event.Title + "\x00" + eventBannerDateTime(event) + "\x00" + venue))
+	return hex.EncodeToString(sum[:6])
+}
+
+// plainBannerCachePath is the cache file for event's plain-tier banner.
+func plainBannerCachePath(event Event) string {
+	return filepath.Join(config.Server.ImagesDir, fmt.Sprintf("banner-plain-%d-%s.jpg", event.ID, plainBannerHash(event)))
+}
+
+// eventBannerCachePathFor returns the cache file for event under tier.
+func eventBannerCachePathFor(event Event, tier string) string {
+	if tier == "plain" {
+		return plainBannerCachePath(event)
+	}
+	return eventBannerCachePath(event.ID, tier)
+}
+
+// plainBannerFileValid reports whether a banner-plain-{id}-{hash}.jpg file
+// still matches the event's current text (#1897).
+func plainBannerFileValid(id int, hash string) bool {
+	event, err := getEventByID(db, id)
+	if err != nil {
+		return false
+	}
+	return eventBannerTier(event) == "plain" && plainBannerHash(event) == hash
 }
 
 // eventBannerCachePath returns the on-disk path for event's generated banner
@@ -132,7 +182,7 @@ func getEventBannerImage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "No banner available", http.StatusNotFound)
 		return
 	}
-	cachePath := eventBannerCachePath(id, tier)
+	cachePath := eventBannerCachePathFor(event, tier)
 	if _, err := os.Stat(cachePath); err != nil {
 		if err := generateEventBannerImage(event, tier, cachePath); err != nil {
 			logging.Errorf("event-banner %d: generate: %v", id, err)
@@ -148,29 +198,35 @@ func getEventBannerImage(w http.ResponseWriter, r *http.Request) {
 // generateEventBannerImage renders the series- or org-banner-derived
 // fallback image for event and writes it to cachePath as a JPEG.
 func generateEventBannerImage(event Event, tier, cachePath string) error {
-	var srcDir string
-	var srcID int
+	var canvas *image.RGBA
 	switch tier {
-	case "series":
-		srcDir, srcID = seriesImagesDir, *event.SeriesID
-	case "org":
-		srcDir, srcID = orgImagesDir, *event.OrganizationID
+	case "series", "org":
+		var srcDir string
+		var srcID int
+		if tier == "series" {
+			srcDir, srcID = seriesImagesDir, *event.SeriesID
+		} else {
+			srcDir, srcID = orgImagesDir, *event.OrganizationID
+		}
+		srcPath, _, found := imagePathForID(srcDir, strconv.Itoa(srcID))
+		if !found {
+			return fmt.Errorf("source image for tier %s id %d not found", tier, srcID)
+		}
+		data, err := os.ReadFile(srcPath)
+		if err != nil {
+			return err
+		}
+		img, err := decodeImageSafely(data)
+		if err != nil {
+			return err
+		}
+		canvas = prepareBannerCanvas(img, eventBannerWidth)
+	case "plain":
+		canvas = image.NewRGBA(image.Rect(0, 0, plainBannerWidth, plainBannerHeight))
+		draw.Draw(canvas, canvas.Bounds(), image.NewUniform(plainBannerBackground), image.Point{}, draw.Src)
 	default:
 		return fmt.Errorf("unknown banner tier %q", tier)
 	}
-	srcPath, _, found := imagePathForID(srcDir, strconv.Itoa(srcID))
-	if !found {
-		return fmt.Errorf("source image for tier %s id %d not found", tier, srcID)
-	}
-	data, err := os.ReadFile(srcPath)
-	if err != nil {
-		return err
-	}
-	img, err := decodeImageSafely(data)
-	if err != nil {
-		return err
-	}
-	canvas := prepareBannerCanvas(img, eventBannerWidth)
 
 	dt := eventBannerDateTime(event)
 	var lines []string

@@ -189,7 +189,9 @@ func main() {
 		r.HandleFunc("GET /.well-known/dnt", dntStatusHandler(cfg))
 		r.HandleFunc("GET /health", healthHandler())
 		r.HandleFunc("GET /robots.txt", robotsTxtHandler(cfg))
-		r.HandleFunc("GET /sitemap.xml", sitemapHandler(cfg, client))
+		r.HandleFunc("GET /sitemap.xml", sitemapHandler(cfg, client, sitemapIndexName))
+		r.HandleFunc("GET /sitemap-current.xml", sitemapHandler(cfg, client, sitemapCurrentName))
+		r.HandleFunc("GET /sitemap-archive.xml", sitemapHandler(cfg, client, sitemapArchiveName))
 		r.HandleFunc("GET /{name}", indexNowKeyFileHandler)
 		r.HandleFunc("GET /llms.txt", llmsTxtHandler(cfg))
 		r.HandleFunc("GET /manifest.json", manifestHandler(cfg))
@@ -288,6 +290,12 @@ func main() {
 			// every page depends on for basic interactivity — a stub would
 			// break the page rather than just skip an optional feature.
 			serveNegotiatedStatic(w, r, "application/javascript", baseJSMin, baseJSMinGzip, baseJSMinBrotli)
+		})
+		r.HandleFunc("GET /static/base.css", func(w http.ResponseWriter, r *http.Request) {
+			serveNegotiatedStatic(w, r, "text/css; charset=utf-8", baseCSSMin, baseCSSMinGzip, baseCSSMinBrotli)
+		})
+		r.HandleFunc("GET /static/event.css", func(w http.ResponseWriter, r *http.Request) {
+			serveNegotiatedStatic(w, r, "text/css; charset=utf-8", eventCSSMin, eventCSSMinGzip, eventCSSMinBrotli)
 		})
 		// Vendored Leaflet/markercluster (#1329) -- see frontend.go's embed
 		// comment for why these are the exact same bytes unpkg.com served.

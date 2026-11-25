@@ -78,8 +78,9 @@ func TestEventBannerTierSelection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("insert event: %v", err)
 	}
-	if tier := eventBannerTier(mustFetchEvent(t, eventID)); tier != "" {
-		t.Fatalf("tier = %q, want \"\" (no series/org banner)", tier)
+	// No series/org banner → the plain tier (#1897), not "" (no banner).
+	if tier := eventBannerTier(mustFetchEvent(t, eventID)); tier != "plain" {
+		t.Fatalf("tier = %q, want \"plain\" (no series/org banner)", tier)
 	}
 
 	// Org banner present → org tier.
@@ -143,8 +144,8 @@ func TestGetEventBannerImageSeriesTier(t *testing.T) {
 	req.SetPathValue("event_id", strconv.Itoa(eventID))
 	w := httptest.NewRecorder()
 	getEventBannerImage(w, req)
-	if w.Code != 404 {
-		t.Fatalf("before series assignment: status = %d, want 404 (body=%s)", w.Code, w.Body.String())
+	if w.Code != 200 || w.Header().Get("Content-Type") != "image/jpeg" {
+		t.Fatalf("before series assignment: status = %d type = %q, want plain-tier 200 image/jpeg (body=%s)", w.Code, w.Header().Get("Content-Type"), w.Body.String())
 	}
 
 	if _, err := db.Exec("UPDATE events SET series_id=? WHERE id=?", sid, eventID); err != nil {
@@ -224,5 +225,46 @@ func TestEventBannerFileStillValid(t *testing.T) {
 	// A non-existent event is never valid.
 	if eventBannerFileStillValid(999999, "series") {
 		t.Fatalf("expected non-existent event to be invalid")
+	}
+}
+
+// TestPlainBannerInvalidatedByTextChange checks the plain tier (#1897): the
+// cache file name carries a fingerprint of the drawn text, so a title change
+// makes the old file stale while the new one is generated on the next request.
+func TestPlainBannerInvalidatedByTextChange(t *testing.T) {
+	setupDedupTestDB(t)
+	setupEventBannerTestDirs(t)
+
+	eventID, _, _, err := insertEvent(db, EventInput{Title: "Plain Before", StartTime: 2000000000, EndTime: 2000003600, IsPublished: true})
+	if err != nil {
+		t.Fatalf("insert event: %v", err)
+	}
+	before := mustFetchEvent(t, eventID)
+	oldPath := plainBannerCachePath(before)
+
+	req := httptest.NewRequest("GET", "/api/v1/event-banner/"+strconv.Itoa(eventID), nil)
+	req.SetPathValue("event_id", strconv.Itoa(eventID))
+	w := httptest.NewRecorder()
+	getEventBannerImage(w, req)
+	if w.Code != 200 {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	if _, err := os.Stat(oldPath); err != nil {
+		t.Fatalf("plain banner not cached at %s: %v", oldPath, err)
+	}
+	oldHash := plainBannerHash(before)
+	if !plainBannerFileValid(eventID, oldHash) {
+		t.Fatal("fresh plain banner reported stale")
+	}
+
+	if _, err := db.Exec("UPDATE events SET title='Plain After' WHERE id=?", eventID); err != nil {
+		t.Fatalf("rename event: %v", err)
+	}
+	if plainBannerFileValid(eventID, oldHash) {
+		t.Fatal("plain banner still valid after the title changed")
+	}
+	after := mustFetchEvent(t, eventID)
+	if plainBannerCachePath(after) == oldPath {
+		t.Fatal("cache path did not change with the title")
 	}
 }

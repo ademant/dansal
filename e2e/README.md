@@ -126,3 +126,68 @@ dispatch, and gates the release packaging job.
 Tag a journey as smoke with `test("title", { tag: "@smoke" }, async ...)`.
 Keep the smoke set small and green; the full suite is where new coverage
 goes first.
+
+## Other engines: `@public-smoke` (#1906)
+
+The full suite runs on Chromium only (`desktop`, `mobile`). Tests tagged
+`@public-smoke` — an anonymous visitor, no login — also run on Firefox and
+WebKit, through three extra projects that `grep` for the tag:
+
+| project | device |
+|---|---|
+| `firefox` | Desktop Firefox |
+| `webkit` | Desktop Safari |
+| `webkit-iphone` | iPhone 14 |
+
+The set lives in `tests/journeys/public-pages-js-errors.spec.ts` (static
+public pages, path list in `fixtures/public-paths.ts`) and
+`tests/journeys/public-smoke.spec.ts` (detail pages on seeded data, home
+list and map tiles, event title/venue, `.ics`, phone map tab). Keep it short
+(about 25 tests, under a minute per engine); new coverage still goes into
+the Chromium suite first.
+
+```bash
+npx playwright install --with-deps firefox webkit   # once (make e2e-install does all three)
+npx playwright test --project=firefox --project=webkit --project=webkit-iphone --reporter=line --workers=1
+```
+
+`make e2e-smoke` and CI's smoke tier run Chromium `@smoke` plus these
+three projects. A failure that only one engine shows gets its own issue and
+
+```ts
+test.fixme(browserName === "webkit", "#NNNN");
+```
+
+in the test — never a silent skip.
+
+## Ladybird (report-only)
+
+Playwright can't drive Ladybird, so `ladybird/run.ts` talks plain W3C
+WebDriver to Ladybird's own WebDriver server and walks the same path list
+plus the first event, venue, organization, city and musician page linked
+from the list pages. For each page it waits for `readyState == complete`,
+checks a key selector (`.leaflet-container` on `/` and `/festivals`, the
+event title on event pages, otherwise `h1`) and reports JS errors collected
+by an injected `error`/`unhandledrejection` listener.
+
+The listener is injected after load (classic WebDriver has no preload hook),
+so a parse-time throw isn't caught directly; it shows up as the missing key
+selector instead.
+
+The run is **report-only**: it always exits 0 until Ladybird's WebDriver
+support is stable (`LADYBIRD_STRICT=1` makes failures exit 1).
+
+Setup on the test host (not installed yet):
+
+1. Build Ladybird (https://github.com/LadybirdBrowser/ladybird, see its
+   `Documentation/BuildInstructions.md`); the build produces both the
+   `Ladybird` browser and a `WebDriver` server binary.
+2. Start the WebDriver server on a free port, e.g.
+   `./Build/release/bin/WebDriver --port 4444` (check `WebDriver --help` for
+   the flags of your build; it launches Ladybird itself per session).
+3. With the e2e stack up (`make e2e-up`):
+   `make e2e-smoke-ladybird` (or
+   `cd e2e && BASE_URL=… LADYBIRD_WEBDRIVER=http://127.0.0.1:4444 npx tsx ladybird/run.ts`).
+
+Detail pages are taken from whatever the target already has; on an empty
+database they're reported as `SKIP`.

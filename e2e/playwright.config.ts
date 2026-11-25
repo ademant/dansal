@@ -57,5 +57,24 @@ export default defineConfig({
       name: "mobile",
       use: { ...devices["Pixel 7"] },
     },
+    // #1906: the other engines run only the anonymous-visitor smoke set;
+    // the full suite stays Chromium-only. `--project=all` in the Makefile
+    // means "no --project flag", so these also join a full run — their grep
+    // keeps that to the tagged tests.
+    {
+      name: "firefox",
+      grep: /@public-smoke/,
+      use: { ...devices["Desktop Firefox"] },
+    },
+    {
+      name: "webkit",
+      grep: /@public-smoke/,
+      use: { ...devices["Desktop Safari"] },
+    },
+    {
+      name: "webkit-iphone",
+      grep: /@public-smoke/,
+      use: { ...devices["iPhone 14"] },
+    },
   ],
 });
